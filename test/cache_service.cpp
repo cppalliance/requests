@@ -8,12 +8,16 @@
 #include <boost/requests/detail/cache_service.hpp>
 #include "doctest.h"
 
+#include <boost/beast.hpp>
+
 TEST_CASE("http-cache-service")
 {
     using namespace boost;
 
     boost::asio::io_context ctx;
-    auto & cache = use_service<requests::detail::implicit_session_service>(ctx);
+    //auto & cache = use_service<requests::detail::implicit_session_service>(ctx);
+    boost::beast::http::response<boost::beast::http::string_body> res;
+    //res.body()
 }
 
 

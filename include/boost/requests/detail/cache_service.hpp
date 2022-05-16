@@ -7,23 +7,34 @@
 
 #include <boost/asio/execution.hpp>
 #include <boost/asio/execution_context.hpp>
+#include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/ssl/stream.hpp>
+#include <boost/unordered_map.hpp>
+
 
 namespace boost::requests::detail
 {
 
-struct implicit_session_service : asio::execution_context::service
+template<typename ExecutionContext>
+struct basic_cache_service : asio::execution_context::service
 {
     inline static asio::execution_context::id id{};
 
-        template <typename ExecutionContext>
-    explicit implicit_session_service(ExecutionContext& context,
+    explicit basic_cache_service(ExecutionContext& context,
                                       typename asio::constraint<asio::is_convertible<ExecutionContext&, asio::execution_context&>::value >::type = 0)
         : asio::execution_context::service(context)
     {
     }
 
+    using socket_type = asio::basic_socket<asio::ip::tcp, typename ExecutionContext::excutor_type>;
+
+    boost::unordered_multimap<std::string, socket_type> http_sessions;
+    boost::unordered_multimap<std::string, asio::ssl::stream<socket_type>> https_sessions;
+
     void shutdown()
     {
+        http_sessions.clear();
+        https_sessions.clear();
     }
 };
 
