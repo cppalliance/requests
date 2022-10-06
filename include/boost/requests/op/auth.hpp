@@ -31,7 +31,7 @@ struct basic_auth
             res.resize(sizeof("Basic") + sz);
             constexpr beast::string_view prefix = "Basic ";
             auto itr = std::copy(prefix.begin(), prefix.end(), res.begin());
-            const auto data = username.to_string() + ":" + password.to_string();
+            const auto data = std::string(username) + ":" + std::string(password);
             beast::detail::base64::encode(&*itr, data.data(), data.size());
             lazy_buffer = std::move(res);
         }
@@ -52,7 +52,7 @@ struct bearer
     void prepare(beast::http::request<Body, Fields> & req)
     {
         if (lazy_buffer.empty())
-            lazy_buffer = "Bearer " + token.to_string();
+            lazy_buffer = "Bearer " + std::string(token);
         req.set(beast::http::field::authorization, lazy_buffer);
     }
 

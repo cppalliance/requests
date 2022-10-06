@@ -11,7 +11,6 @@
 #include <variant>
 #include <vector>
 
-#include <boost/requests/cookies.hpp>
 
 namespace boost::requests
 {

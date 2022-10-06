@@ -7,7 +7,7 @@
 #define BOOST_REQUESTS_BASIC_SESSION_HPP
 
 #include <boost/asio/any_io_executor.hpp>
-#include <boost/requests/optional_ssl.hpp>
+#include <boost/requests/connection.hpp>
 #include <boost/beast/http/message.hpp>
 
 namespace boost::requests
@@ -53,6 +53,8 @@ struct basic_session
 
   private:
     executor_type executor_;
+    //boost::unordered_multimap<std::string, basic_http_connection<Executor>> http_connections_;
+    //boost::unordered_multimap<std::string, basic_https_connection<Executor>> https_connections_;
 };
 
 typedef basic_session<> session;

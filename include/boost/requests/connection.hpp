@@ -5,10 +5,14 @@
 #ifndef BOOST_REQUESTS_CONNECTION_HPP
 #define BOOST_REQUESTS_CONNECTION_HPP
 
+#include <boost/asem/guarded.hpp>
+#include <boost/asem/st.hpp>
+#include <boost/asem/guarded.hpp>
 #include <boost/asio/any_io_executor.hpp>
 #include <boost/asio/experimental/parallel_group.hpp>
 #include <boost/asio/ip/basic_resolver.hpp>
 #include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/prepend.hpp>
 #include <boost/asio/ssl/stream.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/beast/core/flat_buffer.hpp>
@@ -17,7 +21,6 @@
 #include <boost/beast/http/string_body.hpp>
 #include <boost/beast/http/write.hpp>
 #include <boost/beast/websocket/stream.hpp>
-#include <boost/requests/async_semaphore.hpp>
 #include <boost/requests/options.hpp>
 #include <boost/requests/traits.hpp>
 #include <boost/smart_ptr/allocate_unique.hpp>
@@ -67,6 +70,8 @@ struct basic_connection
         return next_layer_;
     }
 
+    constexpr static auto protocol = is_ssl_stream<next_layer_type>::value ? "https" : "http";
+
     /// Construct a stream.
     /**
      * @param arg The argument to be passed to initialise the underlying stream.
@@ -80,6 +85,7 @@ struct basic_connection
 
     template<typename Arg>
     explicit basic_connection(Arg && arg) : next_layer_(std::forward<Arg>(arg)) {}
+
 
     template<typename NextLayer>
     explicit basic_connection(basic_connection<NextLayer> && prev) : next_layer_(std::move(prev.next_layer())) {}
@@ -104,52 +110,32 @@ struct basic_connection
             : next_layer_(context, ctx_)
     {
     }
-    void connect(urls::string_view url)
-    {
-        connect(urls::parse_uri(url).value());
-    }
-    void connect(boost::urls::url_view url)
+    void connect_to_host(urls::string_view url,
+                         urls::string_view service = protocol)
     {
         auto & sock = next_layer_.lowest_layer();
 
-        auto service = url.scheme();
-        if (url.has_port())
-            service = url.port();
-        else if (service == "wss")
-            service = "https";
-        else if (service == "ws")
-            service = "http";
-
-        host = url.encoded_host().to_string();
+        host = url.to_string();
 
         // prob can optimize this a bit more with more insight for boost.url
+        // we also resolve everytime because this will lead to different endpoints
+        // it there should be a better strategy to balance IPs, but naively evenly spreading them out
+        // prob wouldn't do it either. big TODO.
         asio::ip::basic_resolver<typename lowest_layer_type::protocol_type, executor_type> reser{next_layer_.get_executor()};
         auto res = reser.resolve(host, {service.data(), service.size()});
         sock.connect(*res.begin());
         handshake_(next_layer_, is_ssl_stream<next_layer_type>{});
     }
-    void connect(urls::string_view url, system::error_code & ec)
+    void connect_to_host(urls::string_view url, system::error_code & ec)
     {
-        auto uri = urls::parse_uri(url);
-        if (uri.error())
-            ec = uri.error();
-        else
-            connect(urls::parse_uri(url).value());
+        connect_to_host(url, protocol, ec);
     }
 
-    void connect(boost::urls::url_view url, system::error_code & ec)
+    void connect_to_host(urls::string_view url, urls::string_view service, system::error_code & ec)
     {
         auto & sock = next_layer_.lowest_layer();
 
-        auto service = url.scheme();
-        if (url.has_port())
-            service = url.port();
-        else if (service == "wss")
-            service = "https";
-        else if (service == "ws")
-            service = "http";
-
-        host = url.encoded_host().to_string();
+        host = url.to_string();
         // prob can optimize this a bit more with more insight for boost.url
         asio::ip::basic_resolver<typename lowest_layer_type::protocol_type, executor_type> reser{next_layer_.get_executor()};
         auto res = reser.resolve(host, {service.data(), service.size()}, ec);
@@ -166,14 +152,10 @@ struct basic_connection
             BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                        void (boost::system::error_code))
-         async_connect(urls::string_view url,
-                       CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+     async_connect_to_host(urls::string_view url,
+                   CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
     {
-        auto uri = urls::parse_uri(url);
-        if (uri.has_error())
-            return asio::post(asio::experimental::prepend(std::forward<CompletionToken>(completion_token), uri.error()));
-        else
-            return async_connect(urls::parse_uri(url).value(), std::forward<CompletionToken>(completion_token));
+        return async_connect_to_host(url, protocol, std::forward<CompletionToken>(completion_token));
     }
 
     template<
@@ -181,12 +163,18 @@ struct basic_connection
             BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                        void (boost::system::error_code))
-        async_connect(boost::urls::url_view url,
-                      CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+    async_connect_to_host(urls::string_view url, urls::string_view service,
+                          CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
     {
+        using allocator_type = asio::associated_allocator_t<CompletionToken>;
+        using c_alloc = typename std::allocator_traits<allocator_type>:: template rebind_alloc<char>;
+        auto alloc = asio::get_associated_allocator(completion_token);
+        host = url.to_string(c_alloc(alloc));
         return asio::async_compose<CompletionToken, void(system::error_code)>(
-                async_connect_op<asio::associated_allocator_t<CompletionToken>>{
-                    this, asio::get_associated_allocator(completion_token), url}, completion_token, next_layer_);
+                async_connect_op<allocator_type>{
+                    this, std::move(alloc),
+                    service.to_string(c_alloc(asio::get_associated_allocator(completion_token)))},
+                    completion_token, next_layer_);
     }
 
     template<typename ResponseBody = beast::http::string_body,
@@ -194,7 +182,7 @@ struct basic_connection
     auto request(
             beast::http::verb method,
             boost::urls::string_view path,
-            const options & opt,
+            const struct options & opt,
             RequestBody && body,
             Ops && ... ops) -> beast::http::response<ResponseBody>
     {
@@ -229,12 +217,78 @@ struct basic_connection
         return res;
     }
 
+    template<typename ResponseBody = beast::http::string_body, typename ... Ops>
+    auto get(boost::urls::string_view path, const struct options & opt, Ops && ... ops)
+        -> beast::http::response<ResponseBody>
+    {
+        return request(beast::http::verb::get, path, opt, empty{}, std::forward<Ops>(ops)...);
+    }
+
+    template< typename ... Ops>
+    auto head(boost::urls::string_view path, const struct options & opt, Ops && ... ops)
+        -> beast::http::response<beast::http::empty_body>
+    {
+        return request<beast::http::empty_body>(beast::http::verb::head, path, opt, empty{}, std::forward<Ops>(ops)...);
+    }
+
+    template<typename ResponseBody = beast::http::string_body,
+             typename RequestBody, typename ... Ops>
+    auto post(boost::urls::string_view path, const struct options & opt, RequestBody && body, Ops && ... ops)
+        -> beast::http::response<ResponseBody>
+    {
+        return request<ResponseBody>(beast::http::verb::post, path, opt, std::forward<RequestBody>(body), std::forward<Ops>(ops)...);
+    }
+
+    template<typename ResponseBody = beast::http::string_body,
+            typename RequestBody, typename ... Ops>
+    auto put(boost::urls::string_view path, const struct options & opt, RequestBody && body, Ops && ... ops)
+        -> beast::http::response<ResponseBody>
+    {
+        return request<ResponseBody>(beast::http::verb::put, path, opt, std::forward<RequestBody>(body), std::forward<Ops>(ops)...);
+    }
+
+    template<typename ResponseBody = beast::http::string_body, typename ... Ops>
+    auto delete_(boost::urls::string_view path, const struct options & opt, Ops && ... ops)
+        -> beast::http::response<ResponseBody>
+    {
+        return request<ResponseBody>(beast::http::verb::delete_, path, opt, empty{}, std::forward<Ops>(ops)...);
+    }
+
+    template<typename ResponseBody = beast::http::string_body, typename ... Ops>
+    auto connect(boost::urls::string_view path, const struct options & opt, Ops && ... ops)
+        -> beast::http::response<ResponseBody>
+    {
+        return request<ResponseBody>(beast::http::verb::connect, path, opt, empty{}, std::forward<Ops>(ops)...);
+    }
+
+    template<typename ResponseBody = beast::http::string_body, typename ... Ops>
+    auto options(boost::urls::string_view path, const struct  options & opt, Ops && ... ops)
+    -> beast::http::response<ResponseBody>
+    {
+        return request<ResponseBody>(beast::http::verb::options, path, opt, empty{}, std::forward<Ops>(ops)...);
+    }
+
+    template<typename ... Ops>
+    auto trace(boost::urls::string_view path, const struct options & opt, Ops && ... ops)
+        -> beast::http::response<beast::http::empty_body>
+    {
+        return request<beast::http::empty_body>(beast::http::verb::trace, path, opt, empty{}, std::forward<Ops>(ops)...);
+    }
+
+    template<typename ResponseBody = beast::http::string_body,
+            typename RequestBody, typename ... Ops>
+    auto patch(boost::urls::string_view path, const struct options & opt, RequestBody && body, Ops && ... ops)
+        -> beast::http::response<ResponseBody>
+    {
+        return request<ResponseBody>(beast::http::verb::patch, path, opt, std::forward<RequestBody>(body), std::forward<Ops>(ops)...);
+    }
+
     template<typename ResponseBody = beast::http::string_body,
             typename RequestBody, typename ... Ops>
     auto request(
             beast::http::verb method,
             boost::urls::string_view path,
-            const options & opt,
+            const struct options & opt,
             RequestBody && body,
             system::error_code & ec,
             Ops && ... ops) -> beast::http::response<ResponseBody>
@@ -274,6 +328,71 @@ struct basic_connection
         return res;
     }
 
+    template<typename ResponseBody = beast::http::string_body, typename ... Ops>
+    auto get(boost::urls::string_view path, const struct options & opt, system::error_code & ec, Ops && ... ops)
+        -> beast::http::response<ResponseBody>
+    {
+        return request(beast::http::verb::get, path, opt, empty{}, ec, std::forward<Ops>(ops)...);
+    }
+
+    template< typename ... Ops>
+    auto head(boost::urls::string_view path, const struct options & opt, system::error_code & ec, Ops && ... ops)
+    -> beast::http::response<beast::http::empty_body>
+    {
+        return request<beast::http::empty_body>(beast::http::verb::head, path, opt, empty{}, ec, std::forward<Ops>(ops)...);
+    }
+
+    template<typename ResponseBody = beast::http::string_body,
+            typename RequestBody, typename ... Ops>
+    auto post(boost::urls::string_view path, const struct options & opt, RequestBody && body, system::error_code & ec, Ops && ... ops)
+    -> beast::http::response<ResponseBody>
+    {
+        return request<ResponseBody>(beast::http::verb::post, path, opt, std::forward<RequestBody>(body), ec, std::forward<Ops>(ops)...);
+    }
+
+    template<typename ResponseBody = beast::http::string_body,
+            typename RequestBody, typename ... Ops>
+    auto put(boost::urls::string_view path, const struct options & opt, RequestBody && body, system::error_code & ec, Ops && ... ops)
+    -> beast::http::response<ResponseBody>
+    {
+        return request<ResponseBody>(beast::http::verb::put, path, opt, std::forward<RequestBody>(body), ec, std::forward<Ops>(ops)...);
+    }
+
+    template<typename ResponseBody = beast::http::string_body, typename ... Ops>
+    auto delete_(boost::urls::string_view path, const struct options & opt, system::error_code & ec, Ops && ... ops)
+    -> beast::http::response<ResponseBody>
+    {
+        return request<ResponseBody>(beast::http::verb::delete_, path, opt, empty{}, ec, std::forward<Ops>(ops)...);
+    }
+
+    template<typename ResponseBody = beast::http::string_body, typename ... Ops>
+    auto connect(boost::urls::string_view path, const struct options & opt, system::error_code & ec, Ops && ... ops)
+    -> beast::http::response<ResponseBody>
+    {
+        return request<ResponseBody>(beast::http::verb::connect, path, opt, empty{}, ec, std::forward<Ops>(ops)...);
+    }
+
+    template<typename ResponseBody = beast::http::string_body, typename ... Ops>
+    auto options(boost::urls::string_view path, const struct  options & opt, system::error_code & ec, Ops && ... ops)
+    -> beast::http::response<ResponseBody>
+    {
+        return request<ResponseBody>(beast::http::verb::options, path, opt, empty{}, ec, std::forward<Ops>(ops)...);
+    }
+
+    template<typename ... Ops>
+    auto trace(boost::urls::string_view path, const struct options & opt,  system::error_code & ec,Ops && ... ops)
+    -> beast::http::response<beast::http::empty_body>
+    {
+        return request<beast::http::empty_body>(beast::http::verb::trace, path, opt, empty{}, ec, std::forward<Ops>(ops)...);
+    }
+
+    template<typename ResponseBody = beast::http::string_body,
+            typename RequestBody, typename ... Ops>
+    auto patch(boost::urls::string_view path, const struct options & opt, RequestBody && body, system::error_code & ec, Ops && ... ops)
+    -> beast::http::response<ResponseBody>
+    {
+        return request<ResponseBody>(beast::http::verb::patch, path, opt, std::forward<RequestBody>(body), ec, std::forward<Ops>(ops)...);
+    }
 
     template<typename ResponseBody = beast::http::string_body,
              typename RequestBody,
@@ -284,7 +403,7 @@ struct basic_connection
                                        void (boost::system::error_code, beast::http::response<ResponseBody>))
     async_request(beast::http::verb method,
                   boost::urls::string_view path,
-                  const options & opt,
+                  const struct options & opt,
                   RequestBody && body,
                   CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type),
                   Ops && ... ops)
@@ -305,6 +424,165 @@ struct basic_connection
                        }, completion_token, next_layer_);
     }
 
+    template<typename ResponseBody = beast::http::string_body,
+            BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, beast::http::response<ResponseBody>)) CompletionToken
+            BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type),
+            typename ... Ops>
+    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
+                                       void (boost::system::error_code, beast::http::response<ResponseBody>))
+    async_get(boost::urls::string_view path,
+              const struct options & opt,
+              CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type),
+              Ops && ... ops)
+    {
+        return async_request<ResponseBody>(beast::http::verb::get,
+                                           opt, empty{},
+                                           std::forward<CompletionToken>(completion_token),
+                                           std::forward<Ops>(ops)...);
+    }
+
+
+    template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, beast::http::response<beast::http::empty_body>)) CompletionToken
+             BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type),
+             typename ... Ops>
+    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
+                                       void (boost::system::error_code, beast::http::response<ResponseBody>))
+    async_head(boost::urls::string_view path,
+               const struct options & opt,
+               CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type),
+               Ops && ... ops)
+    {
+        return async_request<beast::http::empty_body>(beast::http::verb::head,
+                                           opt, empty{},
+                                           std::forward<CompletionToken>(completion_token),
+                                           std::forward<Ops>(ops)...);
+    }
+
+    template<typename ResponseBody = beast::http::string_body,
+            typename RequestBody,
+            BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, beast::http::response<ResponseBody>)) CompletionToken
+            BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type),
+            typename ... Ops>
+    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
+                                       void (boost::system::error_code, beast::http::response<ResponseBody>))
+    async_post(   boost::urls::string_view path,
+                  const struct options & opt,
+                  RequestBody && body,
+                  CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type),
+                  Ops && ... ops)
+    {
+       return async_request<ResponseBody>(beast::http::verb::post,
+                                          opt, std::forward<RequestBody>(body),
+                                          std::forward<CompletionToken>(completion_token),
+                                          std::forward<Ops>(ops)...);
+    }
+
+    template<typename ResponseBody = beast::http::string_body,
+            typename RequestBody,
+            BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, beast::http::response<ResponseBody>)) CompletionToken
+            BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type),
+            typename ... Ops>
+    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
+                                       void (boost::system::error_code, beast::http::response<ResponseBody>))
+    async_put(boost::urls::string_view path,
+              const struct options & opt,
+              RequestBody && body,
+              CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type),
+              Ops && ... ops)
+    {
+        return async_request<ResponseBody>(beast::http::verb::put,
+                                           opt, std::forward<RequestBody>(body),
+                                           std::forward<CompletionToken>(completion_token),
+                                           std::forward<Ops>(ops)...);
+    }
+
+    template<typename ResponseBody = beast::http::string_body,
+            BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, beast::http::response<ResponseBody>)) CompletionToken
+            BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type),
+            typename ... Ops>
+    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
+                                       void (boost::system::error_code, beast::http::response<ResponseBody>))
+    async_delete(boost::urls::string_view path,
+                 const struct options & opt,
+                 CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type),
+                 Ops && ... ops)
+    {
+        return async_request<ResponseBody>(beast::http::verb::delete_,
+                                           opt, empty{},
+                                           std::forward<CompletionToken>(completion_token),
+                                           std::forward<Ops>(ops)...);
+    }
+
+    template<typename ResponseBody = beast::http::string_body,
+            BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, beast::http::response<ResponseBody>)) CompletionToken
+            BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type),
+            typename ... Ops>
+    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
+                                       void (boost::system::error_code, beast::http::response<ResponseBody>))
+    async_connect(boost::urls::string_view path,
+                  const struct options & opt,
+                  CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type),
+                  Ops && ... ops)
+    {
+        return async_request<ResponseBody>(beast::http::verb::connect,
+                                           opt, empty{},
+                                           std::forward<CompletionToken>(completion_token),
+                                           std::forward<Ops>(ops)...);
+    }
+
+    template<typename ResponseBody = beast::http::string_body,
+            BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, beast::http::response<ResponseBody>)) CompletionToken
+            BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type),
+            typename ... Ops>
+    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
+                                       void (boost::system::error_code, beast::http::response<ResponseBody>))
+    async_options(boost::urls::string_view path,
+                  const struct options & opt,
+                  CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type),
+                  Ops && ... ops)
+    {
+        return async_request<ResponseBody>(beast::http::verb::options,
+                                           opt, empty{},
+                                           std::forward<CompletionToken>(completion_token),
+                                           std::forward<Ops>(ops)...);
+    }
+
+
+    template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, beast::http::response<empty>)) CompletionToken
+             BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type),
+             typename ... Ops>
+    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
+                                       void (boost::system::error_code, beast::http::response<ResponseBody>))
+    async_trace(boost::urls::string_view path,
+                const struct options & opt,
+                CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type),
+                Ops && ... ops)
+    {
+        return async_request<empty>(beast::http::verb::trace,
+                                    opt, empty{},
+                                    std::forward<CompletionToken>(completion_token),
+                                    std::forward<Ops>(ops)...);
+    }
+
+    template<typename ResponseBody = beast::http::string_body,
+            typename RequestBody,
+            BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, beast::http::response<ResponseBody>)) CompletionToken
+            BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type),
+            typename ... Ops>
+    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
+                                       void (boost::system::error_code, beast::http::response<ResponseBody>))
+    async_patch(   boost::urls::string_view path,
+                  const struct options & opt,
+                  RequestBody && body,
+                  CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type),
+                  Ops && ... ops)
+    {
+        return async_request<ResponseBody>(beast::http::verb::patch,
+                                           opt, std::forward<RequestBody>(body),
+                                           std::forward<CompletionToken>(completion_token),
+                                           std::forward<Ops>(ops)...);
+    }
+
 #if defined(BOOST_ASIO_HAS_CONCEPTS)
 
     template<typename ResponseBody = beast::http::string_body,
@@ -315,7 +593,7 @@ struct basic_connection
                 && (sizeof...(Ops) > 0))
     auto async_request(beast::http::verb method,
                        boost::urls::string_view path,
-                       const options & opt,
+                       const struct options & opt,
                        RequestBody && body,
                        Ops && ... ops)
     {
@@ -338,14 +616,116 @@ struct basic_connection
                        }, completion_token, next_layer_);
     }
 
-#endif
-    //get, head, post, put, delete, connect, options, trace, patch
 
+    template<typename ResponseBody = beast::http::string_body, typename ... Ops>
+    auto async_get(boost::urls::string_view path,
+              const struct options & opt,
+              Ops && ... ops)
+    {
+        return async_request<ResponseBody>(beast::http::verb::get,
+                                           opt, empty{},
+                                           std::forward<Ops>(ops)...);
+    }
+
+
+    template<typename ... Ops>
+    auto async_head(boost::urls::string_view path,
+                    const struct options & opt,
+                    Ops && ... ops)
+    {
+        return async_request<beast::http::empty_body>(beast::http::verb::head,
+                                                      opt, empty{},
+                                                      std::forward<Ops>(ops)...);
+    }
+
+    template<typename ResponseBody = beast::http::string_body,
+             typename RequestBody,
+             typename ... Ops>
+    auto async_post(   boost::urls::string_view path,
+                  const struct options & opt,
+                  RequestBody && body,
+                  Ops && ... ops)
+    {
+        return async_request<ResponseBody>(beast::http::verb::post,
+                                           opt, std::forward<RequestBody>(body),
+                                           std::forward<Ops>(ops)...);
+    }
+
+    template<typename ResponseBody = beast::http::string_body,
+            typename RequestBody,
+            typename ... Ops>
+    auto async_put(boost::urls::string_view path,
+                   const struct options & opt,
+                   RequestBody && body,
+                   Ops && ... ops)
+    {
+        return async_request<ResponseBody>(beast::http::verb::put,
+                                           opt, std::forward<RequestBody>(body),
+                                           std::forward<Ops>(ops)...);
+    }
+
+    template<typename ResponseBody = beast::http::string_body,
+            typename ... Ops>
+    auto async_delete(boost::urls::string_view path,
+                      const struct options & opt,
+                      Ops && ... ops)
+    {
+        return async_request<ResponseBody>(beast::http::verb::delete_,
+                                           opt, empty{},
+                                           std::forward<Ops>(ops)...);
+    }
+
+    template<typename ResponseBody = beast::http::string_body,
+            typename ... Ops>
+    auto async_connect(boost::urls::string_view path,
+                       const struct options & opt,
+                       Ops && ... ops)
+    {
+        return async_request<ResponseBody>(beast::http::verb::connect,
+                                           opt, empty{},
+                                           std::forward<Ops>(ops)...);
+    }
+
+    template<typename ResponseBody = beast::http::string_body,
+            typename ... Ops>
+    auto async_options(boost::urls::string_view path,
+                       const struct options & opt,
+                       Ops && ... ops)
+    {
+        return async_request<ResponseBody>(beast::http::verb::options,
+                                           opt, empty{},
+                                           std::forward<Ops>(ops)...);
+    }
+
+
+    template<typename ... Ops>
+    auto async_trace(boost::urls::string_view path,
+                     const struct options & opt,
+                     Ops && ... ops)
+    {
+        return async_request<empty>(beast::http::verb::trace,
+                                    opt, empty{},
+                                    std::forward<Ops>(ops)...);
+    }
+
+    template<typename ResponseBody = beast::http::string_body,
+            typename RequestBody,
+            typename ... Ops>
+    auto async_patch(boost::urls::string_view path,
+                     const struct options & opt,
+                     RequestBody && body,
+                     Ops && ... ops)
+    {
+        return async_request<ResponseBody>(beast::http::verb::patch,
+                                           opt, std::forward<RequestBody>(body),
+                                           std::forward<Ops>(ops)...);
+    }
+#endif
 
     template<typename ... Ops>
     auto handshake(
             boost::urls::string_view path,
-            const options &,
+            const struct options &,
             Ops && ... ops) && -> beast::websocket::stream<next_layer_type>
     {
         using ws_t = beast::websocket::stream<next_layer_type >;
@@ -368,7 +748,7 @@ struct basic_connection
     template<typename ... Ops>
     auto handshake(
             boost::urls::string_view path,
-            const options &,
+            const struct options &,
             system::error_code & ec,
             Ops && ... ops) && -> beast::websocket::stream<next_layer_type>
     {
@@ -395,7 +775,7 @@ struct basic_connection
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                        void (boost::system::error_code, beast::websocket::stream<next_layer_type>))
     async_handshake(boost::urls::string_view url,
-                    const options &,
+                    const struct options &,
                     CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type),
                     Ops && ... ops) &&
     {
@@ -408,6 +788,9 @@ struct basic_connection
                     this, alloc, url.to_string(c_alloc(alloc)),
                     {std::forward<Ops>(ops)...}}, completion_token, next_layer_);
     }
+
+    bool available_for_read()  const {return read_sem_.value() > 0;}
+    bool available_for_write() const {return write_sem_.value() > 0;}
   private:
     template<typename Allocator>
     struct async_connect_op
@@ -415,25 +798,15 @@ struct basic_connection
         basic_connection * this_;
         Allocator alloc;
         using char_alloc = typename std::allocator_traits<Allocator>::template rebind_alloc<char>;
-        boost::urls::url_view url;
+        std::basic_string<char, std::char_traits<char>, char_alloc> service{char_alloc{alloc}};
+
         using resolver_type =  asio::ip::basic_resolver<typename lowest_layer_type::protocol_type, executor_type>;
         std::unique_ptr<resolver_type, alloc_deleter<resolver_type, Allocator>> resolver{nullptr, alloc_deleter<resolver_type, Allocator>{alloc}};
 
-        std::basic_string<char, std::char_traits<char>, char_alloc> service{char_alloc{alloc}};
         template<typename Self>
         void operator()(Self && self)
         {
             auto & sock = this_->next_layer_.lowest_layer();
-
-            service = url.scheme().to_string(char_alloc{alloc});
-            if (url.has_port())
-                service = url.port().to_string(char_alloc{alloc});
-            else if (service == "wss")
-                service = "https";
-            else if (service == "ws")
-                service = "http";
-
-            this_->host = url.encoded_host().to_string();
 
             resolver = allocate_unique<resolver_type>(alloc, this_->next_layer_.get_executor());
             resolver->async_resolve(this_->host, service, std::move(self));
@@ -446,7 +819,7 @@ struct basic_connection
                 return self.complete(ec);
             this_->next_layer_.lowest_layer()
                  .async_connect(*result.begin(),
-                                asio::experimental::prepend(std::move(self), is_ssl_stream<next_layer_type>{}));
+                                asio::prepend(std::move(self), is_ssl_stream<next_layer_type>{}));
         }
 
         template<typename Self>
@@ -474,7 +847,7 @@ struct basic_connection
     {
         basic_connection * this_;
         Allocator alloc;
-        options opt;
+        struct options opt;
 
         using request_body_type = deduced_body_t<std::decay_t<RequestBody>>;
         using c_alloc = typename std::allocator_traits<Allocator>::template rebind_alloc<char>;
@@ -495,7 +868,7 @@ struct basic_connection
         template<typename Self>
         void operator()(Self && self)
         {
-            asio::dispatch(this_->get_executor(), asio::experimental::prepend(std::move(self), dispatched_t{}));
+            asio::dispatch(this_->get_executor(), asio::prepend(std::move(self), dispatched_t{}));
         }
 
         template<typename Self>
@@ -512,12 +885,12 @@ struct basic_connection
         void perform_request(Self && self)
         {
             req->prepare_payload();
-            synchronized(this_->write_sem_,
+            asem::guarded(this_->write_sem_,
                          [self = this_, req = req.get()](auto && token)
                          {
                             return beast::http::async_write(self->next_layer_, *req, std::move(token));
                          },
-                         asio::experimental::prepend(std::move(self), &*req));
+                         asio::prepend(std::move(self), &*req));
         }
 
         template<typename Self>
@@ -529,12 +902,12 @@ struct basic_connection
             if (!res)
                 res = allocate_unique<response_type>(alloc);
 
-            synchronized(this_->read_sem_,
+            asem::guarded(this_->read_sem_,
                          [self = this_, &res = *res, buf = buffer.get()](auto && token)
                          {
                              return beast::http::async_read(self->next_layer_, *buf, res, std::move(token));
                          },
-                         asio::experimental::prepend(std::move(self), &*res));
+                         asio::prepend(std::move(self), &*res));
         }
         template<typename Self>
         void operator()(Self && self, response_type * res, system::error_code ec, std::size_t)
@@ -579,7 +952,7 @@ struct basic_connection
         template<typename Self>
         void operator()(Self && self)
         {
-            asio::dispatch(this_->get_executor(), asio::experimental::prepend(std::move(self), dispatched_t{}));
+            asio::dispatch(this_->get_executor(), asio::prepend(std::move(self), dispatched_t{}));
         }
 
         template<typename Self>
@@ -614,8 +987,8 @@ struct basic_connection
                     ));
 
             // we stole the connection, so let's just fire up the semaphores
-            this_->write_sem_.release_all();
-            this_->read_sem_.release_all();
+            // this_->write_sem_.release_all();
+            // this_->read_sem_.release_all();
 
             ws->async_handshake(*res, this_->host, path, std::move(self));
         }
@@ -664,14 +1037,24 @@ struct basic_connection
     }
 
     Stream next_layer_;
-    basic_async_semaphore<executor_type> read_sem_{asio::make_strand(next_layer_.get_executor()), 1},
-                                        write_sem_{asio::make_strand(next_layer_.get_executor()), 1};
+    boost::asem::basic_semaphore<boost::asem::st, executor_type>
+            read_sem_{next_layer_.get_executor(), 1},
+            write_sem_{next_layer_.get_executor(), 1};
+
+
     std::string host;
     beast::flat_buffer buffer_;
 };
 
-using http_connection  = basic_connection<asio::ip::tcp::socket>;
-using https_connection = basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>;
+template<typename Executor = asio::any_io_executor>
+using basic_http_connection  = basic_connection<asio::basic_stream_socket<asio::ip::tcp, Executor>>;
+
+template<typename Executor = asio::any_io_executor>
+using basic_https_connection = basic_connection<asio::ssl::stream<asio::basic_stream_socket<asio::ip::tcp, Executor>>>;
+
+
+using http_connection  = basic_http_connection<>;
+using https_connection = basic_https_connection<>;
 
 }
 }

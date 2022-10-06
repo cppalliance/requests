@@ -28,7 +28,7 @@ TEST_CASE("sync-rget-exception")
 
     requests::https_connection conn{ctx, sslctx};
 
-    conn.connect(url);
+    conn.connect_to_host(urls::parse_uri(url)->encoded_host());
     auto res = conn.request(
             beast::http::verb::get,
             "/get?foo=bar",
@@ -80,7 +80,7 @@ TEST_CASE("sync-rget-error_code")
 
     system::error_code ec;
 
-    conn.connect(url, ec);
+    conn.connect_to_host(urls::parse_uri(url)->encoded_host(), ec);
     REQUIRE(ec == system::error_code{});
     auto res = conn.request(
             beast::http::verb::get,
@@ -96,11 +96,9 @@ TEST_CASE("sync-rget-error_code")
 
 
 
-    res = conn.request(
-            beast::http::verb::get,
+    res = conn.get(
             "/redirect-to?url=%2Fget%3Fredirect%3Dworked&status_code=301",
-            {.follow_redirects=true},
-            requests::empty{}, ec);
+            {.follow_redirects=true}, ec);
     REQUIRE(ec == system::error_code{});
 
     MESSAGE(res.body());
@@ -135,7 +133,7 @@ asio::awaitable<void> async_rget()
     asio::ssl::context sslctx{asio::ssl::context::tls_client};
     conn_type conn{co_await asio::this_coro::executor, sslctx};
 
-    co_await conn.async_connect(url);
+    co_await conn.async_connect_to_host(urls::parse_uri(url)->encoded_host());
     auto res = co_await conn.async_request(
             beast::http::verb::get,
             "/get?foo=bar",
@@ -190,7 +188,7 @@ TEST_CASE("sync-ws-exception")
     asio::io_context ctx;
     requests::http_connection conn{ctx};
 
-    conn.connect(url);
+    conn.connect_to_host(urls::parse_uri(url)->encoded_host());
     auto res = std::move(conn).handshake("/", {});
     res.write(asio::buffer("test-string"));
 
@@ -210,7 +208,7 @@ TEST_CASE("sync-ws-error_code")
 
     system::error_code ec;
 
-    conn.connect(url, ec);
+    conn.connect_to_host(urls::parse_uri(url)->encoded_host(), ec);
     REQUIRE(ec == system::error_code{});
     auto res = std::move(conn).handshake("/", {}, ec);
     REQUIRE(ec == system::error_code{});
@@ -229,7 +227,7 @@ asio::awaitable<void> async_ws()
 
     auto conn = asio::use_awaitable.as_default_on(requests::http_connection{co_await asio::this_coro::executor});
 
-    co_await conn.async_connect(url);
+    co_await conn.async_connect_to_host(urls::parse_uri(url)->encoded_host());
     auto res = co_await std::move(conn).async_handshake(url, {});
     co_await res.async_write(asio::buffer("test-string"));
 
@@ -245,8 +243,6 @@ TEST_CASE("async-ws")
     ctx.run();
     CHECK_NOTHROW(ft.get());
 }
-
-
 
 
 TEST_SUITE_END();
