@@ -9,6 +9,7 @@
 #define BOOST_REQUESTS_KEEP_ALIVE_HPP
 
 #include <boost/beast/http.hpp>
+#include <boost/requests/detail/config.hpp>
 #include <boost/url/detail/config.hpp>
 #include <boost/system/result.hpp>
 
@@ -23,11 +24,17 @@ struct keep_alive
     std::size_t max{std::numeric_limits<std::size_t>::max()};
 };
 
-BOOST_URL_DECL system::result<keep_alive>  parse_keep_alive_field(
+BOOST_REQUESTS_DECL system::result<keep_alive>  parse_keep_alive_field(
         core::string_view value,
         std::chrono::system_clock::time_point now = std::chrono::system_clock::now());
 
 }
 }
+
+
+#if defined(BOOST_REQUESTS_HEADER_ONLY)
+#include <boost/requests/fields/impl/keep_alive.ipp>
+#endif
+
 
 #endif //BOOST_REQUESTS_KEEP_ALIVE_HPP

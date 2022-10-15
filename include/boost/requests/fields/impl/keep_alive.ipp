@@ -8,11 +8,19 @@
 #ifndef BOOST_REQUESTS_IMPL_KEEP_ALIVE_IPP
 #define BOOST_REQUESTS_IMPL_KEEP_ALIVE_IPP
 
-#include "boost/requests/fields/keep_alive.hpp"
+#include <boost/requests/fields/keep_alive.hpp>
 
 #include <boost/url/grammar/parse.hpp>
 #include <boost/url/grammar/variant_rule.hpp>
 #include <boost/url/grammar/digit_chars.hpp>
+#include <boost/url/grammar/alnum_chars.hpp>
+#include <boost/url/grammar/alpha_chars.hpp>
+#include <boost/url/grammar/ci_string.hpp>
+#include <boost/url/grammar/lut_chars.hpp>
+#include <boost/url/grammar/token_rule.hpp>
+#include <boost/url/grammar/tuple_rule.hpp>
+#include <boost/url/grammar/literal_rule.hpp>
+#include <boost/url/grammar/range_rule.hpp>
 
 namespace boost
 {

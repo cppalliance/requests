@@ -8,6 +8,7 @@
 #ifndef BOOST_REQUESTS_RFC_DATES_HPP
 #define BOOST_REQUESTS_RFC_DATES_HPP
 
+#include <boost/requests/detail/config.hpp>
 #include <boost/url/grammar/literal_rule.hpp>
 #include <boost/url/grammar/variant_rule.hpp>
 
@@ -49,7 +50,7 @@ struct date_1123_t
 {
     using value_type = std::chrono::system_clock::time_point;
 
-    BOOST_URL_DECL auto
+    BOOST_REQUESTS_DECL auto
     parse(
             char const*& it,
             char const* end
@@ -101,7 +102,7 @@ struct date_850_t
 {
   using value_type = std::chrono::system_clock::time_point;
 
-  BOOST_URL_DECL auto
+  BOOST_REQUESTS_DECL auto
   parse(
       char const*& it,
       char const* end
@@ -147,7 +148,7 @@ struct date_asctime_t
 {
   using value_type = std::chrono::system_clock::time_point;
 
-  BOOST_URL_DECL auto
+  BOOST_REQUESTS_DECL auto
   parse(
       char const*& it,
       char const* end
@@ -166,7 +167,7 @@ struct http_date_t
 {
   using value_type = std::chrono::system_clock::time_point;
 
-  BOOST_URL_DECL auto
+  BOOST_REQUESTS_DECL auto
   parse(
       char const*& it,
       char const* end
@@ -181,5 +182,9 @@ constexpr http_date_t http_date;
 }
 }
 }
+
+#if defined(BOOST_REQUESTS_HEADER_ONLY)
+#include <boost/requests/rfc/impl/dates.ipp>
+#endif
 
 #endif //BOOST_REQUESTS_RFC_DATES_HPP

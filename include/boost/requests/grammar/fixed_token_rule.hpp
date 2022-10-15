@@ -6,6 +6,7 @@
 #define BOOST_REQUESTS_COOKIES_GRAMMAR_FIXED_TOKEN_RULE_HPP
 
 #include <boost/url/grammar.hpp>
+#include <boost/requests/detail/config.hpp>
 
 namespace boost {
 namespace requests {
@@ -63,16 +64,14 @@ struct fixed_token_rule_t
     {
         const auto it0 = it;
         if(std::distance(it, end) < Size)
-        {
-            BOOST_URL_RETURN_EC(
+            BOOST_REQUESTS_RETURN_EC(
                     urls::grammar::error::need_more);
-        }
 
         const auto e = std::next(it, Size);
         it = (urls::grammar::find_if_not)(it, e, cs_);
         if(it == e)
             return core::string_view(it0, it - it0);
-        BOOST_URL_RETURN_EC(
+        BOOST_REQUESTS_RETURN_EC(
                 urls::grammar::error::mismatch);
     }
 

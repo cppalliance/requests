@@ -5,6 +5,7 @@
 #ifndef BOOST_REQUESTS_COOKIES_SET_COOKIE_HPP
 #define BOOST_REQUESTS_COOKIES_SET_COOKIE_HPP
 
+#include <boost/requests/detail/config.hpp>
 #include <boost/core/detail/string_view.hpp>
 #include <boost/range/adaptor/filtered.hpp>
 #include <boost/range/adaptor/map.hpp>
@@ -21,7 +22,7 @@ struct set_cookie
 
     struct extensions_only
     {
-        BOOST_URL_DECL bool operator()(const core::string_view & ra) const;
+        BOOST_REQUESTS_DECL bool operator()(const core::string_view & ra) const;
     };
 
     using attributes_type = urls::grammar::range<urls::string_view>;
@@ -46,11 +47,15 @@ struct set_cookie
 
 };
 
-BOOST_URL_DECL
+BOOST_REQUESTS_DECL
 system::result<set_cookie> parse_set_cookie_field(core::string_view value);
 
 
 }
 }
+
+#if defined(BOOST_REQUESTS_HEADER_ONLY)
+#include <boost/requests/fields/impl/set_cookie.ipp>
+#endif
 
 #endif //BOOST_REQUESTS_COOKIES_SET_COOKIE_HPP

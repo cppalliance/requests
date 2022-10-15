@@ -6,6 +6,7 @@
 #define BOOST_REQUESTS_REDIRECT_HPP
 
 #include <boost/requests/public_suffix.hpp>
+#include <boost/requests/detail/config.hpp>
 #include <boost/url/scheme.hpp>
 #include <boost/url/url_view.hpp>
 
@@ -31,7 +32,7 @@ enum redirect_mode
     any
 };
 
-BOOST_URL_DECL bool should_redirect(
+BOOST_REQUESTS_DECL bool should_redirect(
         redirect_mode mode,
         urls::url_view current,
         urls::url_view target,
@@ -39,5 +40,9 @@ BOOST_URL_DECL bool should_redirect(
 
 }
 }
+
+#if defined(BOOST_REQUESTS_HEADER_ONLY)
+#include <boost/requests/impl/redirect.ipp>
+#endif
 
 #endif //BOOST_REQUESTS_REDIRECT_HPP
