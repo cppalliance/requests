@@ -3,11 +3,11 @@
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-#include <boost/requests/cookies/public_suffix.hpp>
-#include <boost/requests/cookies/jar.hpp>
+#include "boost/requests/cookie_jar.hpp"
+#include "boost/requests/public_suffix.hpp"
 #include <thread>
 
-namespace rcp = boost::requests::cookies;
+namespace rcp = boost::requests;
 
 #include "doctest.h"
 
@@ -36,7 +36,7 @@ TEST_CASE("domain-match")
 
 TEST_CASE("cookie-jar")
 {
-    rcp::jar j;
+    rcp::cookie_jar j;
     j.set(rcp::parse_set_cookie_field("userid=sup3r4n0m-us3r-1d3nt1f13r").value(), "boost.org");
     j.set(rcp::parse_set_cookie_field("lib=requests; Max-Age=10").value(), "boost.org");
     j.set(rcp::parse_set_cookie_field("doc=foobar; Max-Age=0").value(), "boost.org");

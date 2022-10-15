@@ -11,8 +11,6 @@
 
 namespace boost {
 namespace requests {
-namespace cookies
-{
 namespace grammar
 {
 
@@ -81,7 +79,6 @@ constexpr non_zero_digit_t non_zero_digit{};
 #endif
 
 } // grammar
-} // cookies
 } // requests
 } // boost
 

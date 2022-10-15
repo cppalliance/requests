@@ -10,8 +10,6 @@
 
 namespace boost {
 namespace requests {
-namespace cookies
-{
 namespace grammar
 {
 
@@ -53,10 +51,10 @@ struct cookie_octets_t
     operator()(char c) const noexcept
     {
         return c == '\x21'
-               || (c >= '\x23' && c <= '\x2B')
-               || (c >= '\x2D' && c <= '\x3A')
-               || (c >= '\x3C' && c <= '\x5B')
-               || (c >= '\x5D' && c <= '\x7E');
+           || (c >= '\x23' && c <= '\x2B')
+           || (c >= '\x2D' && c <= '\x3A')
+           || (c >= '\x3C' && c <= '\x5B')
+           || (c >= '\x5D' && c <= '\x7E');
     }
 
 #ifdef BOOST_URL_USE_SSE2
@@ -86,9 +84,7 @@ constexpr cookie_octets_t cookie_octets{};
 #endif
 
 } // grammar
-} // cookies
 } // requests
 } // boost
-
 
 #endif //BOOST_REQUESTS_COOKIES_GRAMMAR_COOKIE_OCTET_HPP

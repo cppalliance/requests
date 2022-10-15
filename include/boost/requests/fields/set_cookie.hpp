@@ -5,15 +5,14 @@
 #ifndef BOOST_REQUESTS_COOKIES_SET_COOKIE_HPP
 #define BOOST_REQUESTS_COOKIES_SET_COOKIE_HPP
 
+#include <boost/core/detail/string_view.hpp>
 #include <boost/range/adaptor/filtered.hpp>
 #include <boost/range/adaptor/map.hpp>
-#include <boost/core/detail/string_view.hpp>
-#include <boost/core/detail/string_view.hpp>
 #include <boost/system/result.hpp>
+#include <boost/url/grammar/range_rule.hpp>
 
 namespace boost {
 namespace requests {
-namespace cookies {
 
 struct set_cookie
 {
@@ -50,7 +49,7 @@ struct set_cookie
 BOOST_URL_DECL
 system::result<set_cookie> parse_set_cookie_field(core::string_view value);
 
-}
+
 }
 }
 

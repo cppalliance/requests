@@ -18,6 +18,8 @@ namespace boost::requests
 struct options
 {
     bool follow_redirects{true};
+    bool enforce_https{true};
+
 };
 
 }

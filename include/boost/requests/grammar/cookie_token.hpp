@@ -5,14 +5,11 @@
 #ifndef BOOST_REQUESTS_COOKIES_GRAMMAR_TOKEN_HPP
 #define BOOST_REQUESTS_COOKIES_GRAMMAR_TOKEN_HPP
 
-
 #include <boost/url/detail/config.hpp>
-#include <boost/url/grammar/detail/charset.hpp>
+#include <boost/url/grammar/charset.hpp>
 
 namespace boost {
 namespace requests {
-namespace cookies
-{
 namespace grammar
 {
 
@@ -52,7 +49,7 @@ namespace grammar
 constexpr __implementation_defined__ token;
 #else
 
-struct token_t
+struct cookie_token_t
 {
     constexpr
     bool
@@ -90,11 +87,10 @@ struct token_t
 #endif
 };
 
-constexpr token_t token{};
+constexpr cookie_token_t cookie_token{};
 #endif
 
 } // grammar
-} // cookies
 } // requests
 } // boost
 

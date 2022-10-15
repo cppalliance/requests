@@ -5,13 +5,12 @@
 #ifndef BOOST_REQUESTS_COOKIES_COOKIE_HPP
 #define BOOST_REQUESTS_COOKIES_COOKIE_HPP
 
-#include <string>
+#include "boost/requests/fields/set_cookie.hpp"
 #include <boost/core/detail/string_view.hpp>
-#include <boost/requests/cookies/set_cookie.hpp>
+#include <string>
 
 namespace boost {
 namespace requests {
-namespace cookies {
 
 template<typename Allocator>
 struct basic_cookie ;
@@ -95,7 +94,6 @@ std::basic_string<char, std::char_traits<char>, Allocator>
 }
 
 
-}
 }
 }
 

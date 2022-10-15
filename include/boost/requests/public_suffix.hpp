@@ -12,8 +12,7 @@
 
 namespace boost {
 namespace requests {
-namespace cookies
-{
+
 
 struct public_suffix_list
 {
@@ -28,7 +27,7 @@ BOOST_URL_DECL public_suffix_list load_public_suffix_list(core::string_view map)
 BOOST_URL_DECL bool is_public_suffix(core::string_view value,
                                      const public_suffix_list & pse = default_public_suffix_list());
 
-}
+
 }
 }
 

@@ -5,13 +5,15 @@
 #ifndef BOOST_REQUESTS_COOKIES_JAR_HPP
 #define BOOST_REQUESTS_COOKIES_JAR_HPP
 
+#include <boost/requests/fields/set_cookie.hpp>
+#include <boost/requests/cookie.hpp>
+#include <boost/requests/public_suffix.hpp>
 #include <boost/unordered_map.hpp>
-#include <chrono>
-#include <boost/requests/cookies/cookie.hpp>
-#include <boost/requests/cookies/set_cookie.hpp>
-#include <boost/url/segments_encoded_view.hpp>
-#include <boost/url/parse_path.hpp>
+#include <boost/unordered_set.hpp>
 #include <boost/url/grammar/ci_string.hpp>
+#include <boost/url/parse_path.hpp>
+#include <boost/url/segments_encoded_view.hpp>
+#include <chrono>
 
 #include <boost/beast/http/message.hpp>
 
@@ -19,7 +21,6 @@
 
 namespace boost {
 namespace requests {
-namespace cookies {
 
 // https://www.rfc-editor.org/rfc/rfc6265#section-5.3
 // the string needs to be normalized to lower-case!
@@ -91,7 +92,7 @@ struct cookie_equal
 };
 
 template<typename Allocator = std::allocator<void>>
-struct basic_jar
+struct basic_cookie_jar
 {
     using allocator_type = Allocator;
     using cookie_type = basic_cookie<typename std::allocator_traits<allocator_type>::template rebind_alloc<char>>;
@@ -223,11 +224,11 @@ struct basic_jar
     }
 };
 
-using jar = basic_jar<>;
+using cookie_jar = basic_cookie_jar<>;
 
 template<typename Alloc, typename Allocator>
 void prepare(beast::http::header<true, Alloc> & fields,
-             const basic_jar<Allocator> & jar,
+             const basic_cookie_jar<Allocator> & jar,
              core::string_view request_host,
              bool is_secure)
 {
@@ -238,7 +239,7 @@ void prepare(beast::http::header<true, Alloc> & fields,
 
 template<typename Alloc, typename Allocator>
 void receive(const beast::http::header<false, Alloc> & fields,
-             basic_jar<Allocator> & jar,
+             basic_cookie_jar<Allocator> & jar,
              core::string_view request_host,
              bool is_secure,
              core::string_view target,
@@ -253,10 +254,9 @@ void receive(const beast::http::header<false, Alloc> & fields,
         ec = sc.error();
         return;
     }
-    jar.set(sc.value(), request_host, false, target);
+    jar.set(*sc, request_host, false, target);
 }
 
-}
 }
 }
 

@@ -9,9 +9,10 @@
 #include <boost/url/grammar.hpp>
 #include <boost/url/rfc/pchars.hpp>
 
+#include <boost/requests/detail/define.hpp>
+
 namespace boost {
 namespace requests {
-namespace cookies {
 namespace grammar {
 
 /** Match a fixed-sized string of characters from a set
@@ -97,7 +98,6 @@ struct domain_t
     {
 
 
-#define STATE(Name) if (false) Name:
         namespace ug = urls::grammar;
 
         // RFC 6265 allows ignoring leading `.`
@@ -157,7 +157,6 @@ struct domain_t
         return core::string_view(it0, it);
     }
 
-#undef STATE
 
     constexpr
     domain_t() = default;
@@ -168,8 +167,8 @@ domain_t domain;
 #endif
 
 } // grammar
-} // cookies
 } // requests
 } // boost
 
+#include <boost/requests/detail/undef.hpp>
 #endif //BOOST_REQUESTS_COOKIES_GRAMMAR_DOMAIN_HPP

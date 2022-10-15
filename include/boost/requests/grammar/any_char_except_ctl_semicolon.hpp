@@ -2,20 +2,15 @@
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-#ifndef BOOST_REQUESTS_ANY_CHAR_EXCEPT_HPP
-#define BOOST_REQUESTS_ANY_CHAR_EXCEPT_HPP
-
-
+#ifndef BOOST_REQUESTS_ANY_CHAR_EXCEPT_CTL_SEMICOLON_HPP
+#define BOOST_REQUESTS_ANY_CHAR_EXCEPT_CTL_SEMICOLON_HPP
 
 #include <boost/url/detail/config.hpp>
 #include <boost/url/grammar/detail/charset.hpp>
 
 namespace boost {
 namespace requests {
-namespace cookies
-{
-namespace grammar
-{
+namespace grammar {
 
 /** The set of any-char values in cookies
 
@@ -43,10 +38,10 @@ namespace grammar
         @ref token_rule.
 */
 #ifdef BOOST_URL_DOCS
-constexpr __implementation_defined__ non_zero_digit;
+constexpr __implementation_defined__ any_char_except_ctl_semicolon;
 #else
 
-struct any_char_except_t
+struct any_char_except_ctl_semicolon_t
 {
     constexpr
     bool
@@ -78,14 +73,13 @@ struct any_char_except_t
 #endif
 };
 
-constexpr any_char_except_t any_char_except{};
+constexpr any_char_except_ctl_semicolon_t any_char_except_ctl_semicolon{};
 #endif
 
 } // grammar
-} // cookies
 } // requests
 } // boost
 
 
 
-#endif //BOOST_REQUESTS_ANY_CHAR_EXCEPT_HPP
+#endif // BOOST_REQUESTS_ANY_CHAR_EXCEPT_CTL_SEMICOLON_HPP

@@ -10,6 +10,7 @@
 
 #include <boost/beast/http/basic_dynamic_body.hpp>
 #include <boost/beast/http/basic_file_body.hpp>
+#include <boost/beast/http/string_body.hpp>
 #include <boost/beast/http/empty_body.hpp>
 #include <boost/beast/http/span_body.hpp>
 #include <boost/beast/http/vector_body.hpp>
@@ -18,18 +19,6 @@ namespace boost
 {
 namespace requests
 {
-
-
-template<typename Socket>
-struct is_stream_socket : std::false_type
-{
-};
-
-template<typename Protocol, typename Executor>
-struct is_stream_socket<asio::basic_stream_socket < Protocol, Executor>> : std::true_type
-{
-};
-
 
 template<typename Stream>
 using is_ssl_stream = std::is_base_of <asio::ssl::stream_base, std::decay_t<Stream>>;
@@ -93,6 +82,92 @@ struct deduced_body<std::vector<T, Allocator>, void>
 
 template<typename T>
 using deduced_body_t = typename deduced_body<T>::type;
+
+
+
+template<typename T>
+struct request_body_traits;
+
+template<typename T>
+struct response_body_traits;
+
+template<typename Char, typename Traits, typename Alloc>
+struct request_body_traits<std::basic_string<Char, Traits, Alloc>>
+{
+    template<typename Alloc_>
+    void set_content_type(beast::http::basic_fields<Alloc_> & fields,
+                          system::error_code & ec)
+    {
+        auto itr = fields.find(beast::http::field::content_type);
+        if (itr == fields.end())
+            fields.set(beast::http::field::content_type, "text/plain");
+    }
+
+    using body_type = beast::http::basic_string_body<Char, Traits, Alloc>;
+
+    body_type make_body(const std::basic_string<Char, Traits, Alloc> & str)
+    {
+        return body_type(str);
+    }
+
+    body_type make_body(std::basic_string<Char, Traits, Alloc> && str)
+    {
+        return body_type(std::move(str));
+    }
+};
+
+template<typename Char, typename Traits, typename Alloc>
+struct response_body_traits<std::basic_string<Char, Traits, Alloc>>
+{
+    template<typename Alloc_>
+    void set_accepted_content_type(beast::http::basic_fields<Alloc_> & fields,
+                                   system::error_code & ec)
+    {
+        fields.set(beast::http::field::accept, "text/*, application/*");
+    }
+
+    using body_type = beast::http::basic_string_body<Char, Traits, Alloc>;
+    using result_type = std::basic_string<Char, Traits, Alloc>;
+
+    body_type make_body(Alloc alloc = Alloc{})
+    {
+        return body_type(std::move(alloc));
+    }
+
+    body_type make_body(const result_type & res)
+    {
+        return body_type(res.get_allocator());
+    }
+
+    template<typename Fields>
+    result_type make_result(beast::http::response<body_type, Fields> & res)
+    {
+        return std::move(res.body());
+    }
+};
+
+// this if for capture by ref
+template<typename Char, typename Traits, typename Alloc>
+struct response_body_traits<std::basic_string<Char, Traits, Alloc>&>
+        : response_body_traits<std::basic_string<Char, Traits, Alloc>>
+{
+    using result_type = void;
+};
+
+template<>
+struct request_body_traits<beast::http::empty_body::value_type>
+{
+    template<typename Alloc_>
+    void set_content_type(beast::http::basic_fields<Alloc_> & fields, system::error_code & ec)
+    {
+    }
+
+    using body_type = beast::http::empty_body;
+    body_type make_body(const beast::http::empty_body::value_type &)
+    {
+        return body_type();
+    }
+};
 
 }
 }

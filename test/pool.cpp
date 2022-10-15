@@ -21,7 +21,7 @@ using namespace boost;
 using asio::experimental::awaitable_operators::operator&&;
 
 TEST_SUITE_BEGIN("pool");
-
+/*
 asio::awaitable<void> async_test()
 {
     std::string url = "https://httpbin.org/";
@@ -113,6 +113,6 @@ TEST_CASE("async-ws")
     ctx.run();
     CHECK_NOTHROW(ft.get());
 }
-
+*/
 
 TEST_SUITE_END();

@@ -5,17 +5,16 @@
 #ifndef BOOST_REQUESTS_COOKIES_IMPL_PUBLIC_SUFFIX_IPP
 #define BOOST_REQUESTS_COOKIES_IMPL_PUBLIC_SUFFIX_IPP
 
-#include <boost/requests/cookies/public_suffix.hpp>
-#include <boost/core/detail/string_view.hpp>
-#include <boost/url/grammar/range_rule.hpp>
-#include <boost/url/grammar/literal_rule.hpp>
-#include <boost/url/grammar/token_rule.hpp>
-#include <boost/url/grammar/alnum_chars.hpp>
+#include "boost/requests/public_suffix.hpp"
 #include <boost/algorithm/string/trim.hpp>
+#include <boost/core/detail/string_view.hpp>
+#include <boost/url/grammar/alnum_chars.hpp>
+#include <boost/url/grammar/literal_rule.hpp>
+#include <boost/url/grammar/range_rule.hpp>
+#include <boost/url/grammar/token_rule.hpp>
 
 namespace boost {
 namespace requests {
-namespace cookies {
 
 const public_suffix_list & default_public_suffix_list()
 {
@@ -89,7 +88,6 @@ bool is_public_suffix(core::string_view value,
 
 }
 
-}
 }
 }
 

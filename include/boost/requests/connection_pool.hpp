@@ -12,7 +12,7 @@
 
 namespace boost::requests
 {
-
+/*
 
 template<typename Stream>
 struct basic_connection_pool
@@ -116,7 +116,7 @@ struct basic_connection_pool
                 std::decay_t<ResponseBody>, std::decay_t<RequestBody>, Ops...>{
                        this, method, opt,
                        {std::forward<Ops>(ops)...}, std::forward<RequestBody>(body),
-                       path.to_string(c_alloc(asio::get_associated_allocator(completion_token)))
+                       path
                }, completion_token, semaphore_);
     }
 
@@ -306,7 +306,7 @@ struct basic_connection_pool
                 std::decay_t<ResponseBody>, std::decay_t<RequestBody>, Ops...>{
                        this, method, opt,
                        {std::forward<Ops>(ops)...}, std::forward<RequestBody>(body),
-                       path.to_string(c_alloc(asio::get_associated_allocator(completion_token)))
+                       path
                }, completion_token, semaphore_);
     }
 
@@ -434,7 +434,7 @@ struct basic_connection_pool
         return asio::async_compose<CompletionToken,
                 void(boost::system::error_code, beast::websocket::stream<Stream>)>(
                 async_handshake_op<asio::associated_allocator_t<CompletionToken>, Ops...>{
-                       this, alloc, url.to_string(c_alloc(alloc)),
+                       this, alloc, url,
                        {std::forward<Ops>(ops)...}}, completion_token, semaphore_);
     }
 
@@ -455,7 +455,7 @@ struct basic_connection_pool
         return asio::async_compose<CompletionToken,
                 void(boost::system::error_code, beast::websocket::stream<Stream>)>(
                 async_handshake_op<asio::associated_allocator_t<CompletionToken>, Ops...>{
-                       this, alloc, url.to_string(c_alloc(alloc)),
+                       this, alloc, url,
                        {std::forward<Ops>(ops)...}}, completion_token, semaphore_);
     }
 #endif
@@ -495,7 +495,9 @@ struct basic_connection_pool
                                     this_->connections_.end(),
                                     [](const connection_type & conn)
                                     {
-                                        return conn.available_for_read();
+                                      throw "FOOBAR";
+                                        return true ;
+                                        //return conn.available_for_read();
                                     });
             if (itr != this_->connections_.end())
                 std::apply(
@@ -594,7 +596,6 @@ struct basic_connection_pool
     std::conditional_t<is_ssl_stream<Stream>::value, asio::ssl::context&, blank> sslctx_{};
 };
 
-
 template<typename Executor = asio::any_io_executor>
 using basic_http_connection_pool  = basic_connection_pool<asio::basic_stream_socket<asio::ip::tcp, Executor>>;
 
@@ -604,6 +605,7 @@ using basic_https_connection_pool = basic_connection_pool<asio::ssl::stream<asio
 
 using http_connection_pool  = basic_http_connection_pool<>;
 using https_connection_pool = basic_https_connection_pool<>;
+*/
 
 
 

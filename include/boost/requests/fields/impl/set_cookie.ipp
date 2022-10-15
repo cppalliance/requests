@@ -5,16 +5,15 @@
 #ifndef BOOST_REQUESTS_SET_COOKIE_IPP
 #define BOOST_REQUESTS_SET_COOKIE_IPP
 
-#include <boost/requests/cookies/set_cookie.hpp>
-#include <boost/requests/cookies/grammar/cookie_octet.hpp>
-#include <boost/requests/cookies/grammar/token.hpp>
-#include <boost/requests/cookies/grammar/any_char_except.hpp>
-#include <boost/requests/cookies/grammar/domain.hpp>
-#include <boost/requests/cookies/grammar/sane_cookie_date.hpp>
+#include "boost/requests/fields/set_cookie.hpp"
+#include "boost/requests/grammar/any_char_except_ctl_semicolon.hpp"
+#include "boost/requests/grammar/cookie_octet.hpp"
+#include "boost/requests/grammar/cookie_token.hpp"
+#include "boost/requests/grammar/domain.hpp"
+#include <boost/requests/rfc/dates.hpp>
 
 namespace boost {
 namespace requests {
-namespace cookies {
 
 bool set_cookie::extensions_only::operator()(const core::string_view & ra) const
 {
@@ -34,13 +33,13 @@ system::result<set_cookie> parse_set_cookie_field(core::string_view input)
     auto res = urls::grammar::parse(
             input,
             ug::tuple_rule(
-                    ug::token_rule(grammar::token),
+                    ug::token_rule(grammar::cookie_token),
                     ug::squelch(ug::literal_rule("=")),
                     ug::token_rule(grammar::cookie_octets),
                     ug::range_rule(
                         ug::tuple_rule(
                             ug::squelch(ug::literal_rule("; ")),
-                            ug::token_rule(grammar::any_char_except)
+                            ug::token_rule(grammar::any_char_except_ctl_semicolon)
                         )
                     )
                 )
@@ -49,11 +48,11 @@ system::result<set_cookie> parse_set_cookie_field(core::string_view input)
     if (res.has_error())
         return res.error();
 
-    const auto & value = res.value();
+    const auto & value = *res;
     set_cookie sc{
         std::get<0>(value),
         std::get<1>(value),
-        std::get<2>(res.value())
+        std::get<2>(value)
     };
 
     for (auto ra : sc.attributes)
@@ -64,11 +63,11 @@ system::result<set_cookie> parse_set_cookie_field(core::string_view input)
             sc.http_only = true;
         else if (ug::ci_is_equal(ra.substr(0, 8), "Expires="))
         {
-            auto ires = ug::parse(ra.substr(8), grammar::sane_cookie_date);
+            auto ires = ug::parse(ra.substr(8), rfc::sane_cookie_date);
             if (ires.has_error())
                 return ires.error();
             else
-                sc.expires = ires.value();
+                sc.expires = *ires;
         }
         else if (ug::ci_is_equal(ra.substr(0, 8), "Max-Age="))
         {
@@ -76,7 +75,7 @@ system::result<set_cookie> parse_set_cookie_field(core::string_view input)
             if (ires.has_error())
                 return ires.error();
             else
-                sc.max_age = std::chrono::seconds(std::stoull(ires.value()));
+                sc.max_age = std::chrono::seconds(std::stoull(*ires));
         }
         else if (ug::ci_is_equal(ra.substr(0, 7), "Domain="))
         {
@@ -84,15 +83,15 @@ system::result<set_cookie> parse_set_cookie_field(core::string_view input)
             if (ires.has_error())
                 return ires.error();
             else
-                sc.domain = ires.value();
+                sc.domain = *ires;
         }
         else if (ug::ci_is_equal(ra.substr(0, 5), "Path="))
         {
-            auto ires = ug::parse(ra.substr(5), ug::token_rule(grammar::any_char_except));
+            auto ires = ug::parse(ra.substr(5), ug::token_rule(grammar::any_char_except_ctl_semicolon));
             if (ires.has_error())
                 return ires.error();
             else
-                sc.path = ires.value();
+                sc.path = *ires;
         }
 
     }
@@ -101,7 +100,6 @@ system::result<set_cookie> parse_set_cookie_field(core::string_view input)
 }
 
 
-}
 }
 }
 #endif //BOOST_REQUESTS_SET_COOKIE_IPP

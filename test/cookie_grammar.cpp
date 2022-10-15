@@ -3,87 +3,39 @@
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-#include <boost/requests/cookies/grammar/any_char_except.hpp>
-#include <boost/requests/cookies/grammar/non_zero_digit.hpp>
-#include <boost/requests/cookies/grammar/sane_cookie_date.hpp>
-#include <boost/requests/cookies/grammar/domain.hpp>
-#include <boost/requests/cookies/grammar/fixed_token_rule.hpp>
+#include <boost/requests/fields/set_cookie.hpp>
+#include <boost/requests/grammar/any_char_except_ctl_semicolon.hpp>
+#include <boost/requests/grammar/domain.hpp>
+#include <boost/requests/grammar/fixed_token_rule.hpp>
+#include <boost/requests/grammar/non_zero_digit.hpp>
+#include <array>
+#include <boost/requests/rfc/dates.hpp>
 #include <boost/url/error_types.hpp>
-#include <boost/url/string_view.hpp>
-#include <boost/url/grammar/token_rule.hpp>
-#include <boost/url/grammar/parse.hpp>
 #include <boost/url/grammar/literal_rule.hpp>
+#include <boost/url/grammar/parse.hpp>
+#include <boost/url/grammar/token_rule.hpp>
 #include <boost/url/grammar/tuple_rule.hpp>
-#include <boost/requests/cookies/set_cookie.hpp>
+#include <boost/url/string_view.hpp>
+#include "string_maker.hpp"
 
 using namespace boost;
 
+#include "boost/requests/cookie.hpp"
 #include "doctest.h"
-#include "boost/requests/cookies/cookie.hpp"
+#include "string_maker.hpp"
 
-namespace doctest
-{
-
-template<>
-struct StringMaker<urls::string_view>
-{
-    static String convert(urls::string_view sv)
-    {
-        return String(sv.data(), sv.size());
-    }
-};
-
-template<>
-struct StringMaker<system::error_code>
-{
-    static String convert(system::error_code ec)
-    {
-        return toString(ec.message());
-    }
-};
-
-template<typename T>
-struct StringMaker<urls::result<T>>
-{
-    static String convert(const urls::result<T> & res)
-    {
-        if(res.has_value())
-            return toString(res.value());
-        else
-            return toString(res.error());
-    }
-};
-
-
-template<>
-struct StringMaker<boost::requests::cookies::set_cookie::extensions_type>
-{
-    static String convert(const boost::requests::cookies::set_cookie::extensions_type & res)
-    {
-        std::string val;
-        for (auto && attr : res)
-        {
-            val += attr;
-            val += "; ";
-        }
-        return String(val.data(), val.size());
-    }
-};
-
-
-}
 TEST_SUITE_BEGIN("cookie-grammar");
 
 TEST_CASE("non-zero-digit")
 {
-    CHECK(urls::grammar::parse("1234", urls::grammar::token_rule(requests::cookies::grammar::non_zero_digit)));
+    CHECK(urls::grammar::parse("1234", urls::grammar::token_rule(requests::grammar::non_zero_digit)));
 }
 
 TEST_CASE("any-char-except")
 {
-    CHECK(urls::grammar::parse("1234", urls::grammar::token_rule(requests::cookies::grammar::any_char_except)));
+    CHECK(urls::grammar::parse("1234", urls::grammar::token_rule(requests::grammar::any_char_except_ctl_semicolon)));
 
-    auto res = urls::grammar::parse("1234;", urls::grammar::token_rule(requests::cookies::grammar::any_char_except));
+    auto res = urls::grammar::parse("1234;", urls::grammar::token_rule(requests::grammar::any_char_except_ctl_semicolon));
     CHECK(res == urls::grammar::error::leftover);
 }
 
@@ -91,7 +43,7 @@ TEST_CASE("path-av")
 {
     constexpr auto rule = urls::grammar::tuple_rule(
             urls::grammar::squelch(urls::grammar::literal_rule("Path=")),
-            urls::grammar::token_rule(requests::cookies::grammar::any_char_except)
+            urls::grammar::token_rule(requests::grammar::any_char_except_ctl_semicolon)
             );
 
 
@@ -108,23 +60,23 @@ TEST_CASE("path-av")
 TEST_CASE("sane-cookie-date")
 {
     CHECK(std::chrono::system_clock::time_point(std::chrono::seconds(784111777)) ==
-          urls::grammar::parse("Sun, 06 Nov 1994 08:49:37 GMT", requests::cookies::grammar::sane_cookie_date));
-    CHECK(urls::grammar::error::mismatch == urls::grammar::parse("Mon, 06 Nov 1994 08:49:37 GMT", requests::cookies::grammar::sane_cookie_date));
+          urls::grammar::parse("Sun, 06 Nov 1994 08:49:37 GMT", requests::rfc::sane_cookie_date));
+    CHECK(urls::grammar::error::mismatch == urls::grammar::parse("Mon, 06 Nov 1994 08:49:37 GMT", requests::rfc::sane_cookie_date));
 
     CHECK(std::chrono::system_clock::time_point(std::chrono::seconds(1696335075)) ==
-          urls::grammar::parse("Tue, 03 Oct 2023 12:11:15 GMT", requests::cookies::grammar::sane_cookie_date));
+          urls::grammar::parse("Tue, 03 Oct 2023 12:11:15 GMT", requests::rfc::sane_cookie_date));
 
     CHECK(urls::grammar::error::mismatch ==
-          urls::grammar::parse("Sun, 03 Oct 2023 12:11:15 GMT", requests::cookies::grammar::sane_cookie_date));
+          urls::grammar::parse("Sun, 03 Oct 2023 12:11:15 GMT", requests::rfc::sane_cookie_date));
 
     CHECK(std::chrono::system_clock::time_point(std::chrono::seconds(1623233894)) ==
-          urls::grammar::parse("Wed, 09 Jun 2021 10:18:14 GMT", requests::cookies::grammar::sane_cookie_date));
+          urls::grammar::parse("Wed, 09 Jun 2021 10:18:14 GMT", requests::rfc::sane_cookie_date));
 
     CHECK(std::chrono::system_clock::time_point(std::chrono::seconds(1)) ==
-          urls::grammar::parse("Thu, 01 Jan 1970 00:00:01 GMT",  requests::cookies::grammar::sane_cookie_date));
+          urls::grammar::parse("Thu, 01 Jan 1970 00:00:01 GMT",  requests::rfc::sane_cookie_date));
 
     CHECK(std::chrono::system_clock::time_point(std::chrono::seconds(1)) ==
-          urls::grammar::parse("Thu, 01 Jan 1970 00:00:01 GMT",  requests::cookies::grammar::sane_cookie_date));
+          urls::grammar::parse("Thu, 01 Jan 1970 00:00:01 GMT",  requests::rfc::sane_cookie_date));
 
 }
 
@@ -132,7 +84,7 @@ TEST_CASE("sane-cookie-date")
 TEST_CASE("fixed-token")
 {
     constexpr auto rule =
-            requests::cookies::grammar::fixed_token_rule<2>(urls::grammar::digit_chars);
+            requests::grammar::fixed_token_rule<2>(urls::grammar::digit_chars);
 
     CHECK("12" == urls::grammar::parse("12", rule));
     CHECK(urls::grammar::error::leftover == urls::grammar::parse("123", rule   ));
@@ -141,7 +93,7 @@ TEST_CASE("fixed-token")
 
 TEST_CASE("domain")
 {
-    constexpr auto & rule = requests::cookies::grammar::domain;
+    constexpr auto & rule = requests::grammar::domain;
 
     CHECK(!urls::grammar::parse("12", rule));
     CHECK("b12" == urls::grammar::parse("b12", rule));
@@ -152,9 +104,9 @@ TEST_CASE("domain")
 
 TEST_CASE("set-cookie")
 {
-    constexpr auto & rule = requests::cookies::grammar::domain;
+    constexpr auto & rule = requests::grammar::domain;
 
-    auto v1 = requests::cookies::parse_set_cookie_field("theme=light");
+    auto v1 = requests::parse_set_cookie_field("theme=light");
     CHECK(v1);
     CHECK(v1->name == "theme");
     CHECK(v1->value == "light");
@@ -166,7 +118,7 @@ TEST_CASE("set-cookie")
     CHECK(!v1->secure);
     CHECK(!v1->http_only);
 
-    auto v2 = requests::cookies::parse_set_cookie_field("sessionToken=abc123; Expires=Wed, 09 Jun 2021 10:18:14 GMT");
+    auto v2 = requests::parse_set_cookie_field("sessionToken=abc123; Expires=Wed, 09 Jun 2021 10:18:14 GMT");
     CHECK(v2);
     CHECK(v2->name == "sessionToken");
     CHECK(v2->value == "abc123");
@@ -179,7 +131,7 @@ TEST_CASE("set-cookie")
     CHECK(!v2->http_only);
 
 
-    auto v4 = requests::cookies::parse_set_cookie_field("LSID=DQAAAKEaem_vYg; Path=/accounts; Expires=Wed, 13 Jan 2021 22:23:01 GMT; Secure; HttpOnly");
+    auto v4 = requests::parse_set_cookie_field("LSID=DQAAAKEaem_vYg; Path=/accounts; Expires=Wed, 13 Jan 2021 22:23:01 GMT; Secure; HttpOnly");
     CHECK(v4);
     CHECK(v4->name == "LSID");
     CHECK(v4->value == "DQAAAKEaem_vYg");
@@ -191,7 +143,7 @@ TEST_CASE("set-cookie")
     CHECK(v4->secure);
     CHECK(v4->http_only);
 
-    auto v5 = requests::cookies::parse_set_cookie_field("HSID=AYQEVnDKrdst; Domain=.foo.com; Path=/; Expires=Wed, 13 Jan 2021 22:23:01 GMT; HttpOnly");
+    auto v5 = requests::parse_set_cookie_field("HSID=AYQEVnDKrdst; Domain=.foo.com; Path=/; Expires=Wed, 13 Jan 2021 22:23:01 GMT; HttpOnly");
     CHECK(v5);
     CHECK(v5->name == "HSID");
     CHECK(v5->value == "AYQEVnDKrdst");
@@ -203,7 +155,7 @@ TEST_CASE("set-cookie")
     CHECK(!v5->secure);
     CHECK(v5->http_only);
 
-    auto v6 = requests::cookies::parse_set_cookie_field("SSID=Ap4PGTEq; Domain=foo.com; Path=/; Expires=Wed, 13 Jan 2021 22:23:01 GMT; Secure; HttpOnly");
+    auto v6 = requests::parse_set_cookie_field("SSID=Ap4PGTEq; Domain=foo.com; Path=/; Expires=Wed, 13 Jan 2021 22:23:01 GMT; Secure; HttpOnly");
     CHECK(v6);
     CHECK(v6->name == "SSID");
     CHECK(v6->value == "Ap4PGTEq");
@@ -215,7 +167,7 @@ TEST_CASE("set-cookie")
     CHECK(v6->secure);
     CHECK(v6->http_only);
 
-    auto v7 = requests::cookies::parse_set_cookie_field("lu=Rg3vHJZnehYLjVg7qi3bZjzg; Expires=Tue, 15 Jan 2013 21:47:38 GMT; Path=/; Domain=.example.com; HttpOnly");
+    auto v7 = requests::parse_set_cookie_field("lu=Rg3vHJZnehYLjVg7qi3bZjzg; Expires=Tue, 15 Jan 2013 21:47:38 GMT; Path=/; Domain=.example.com; HttpOnly");
     CHECK(v7);
     CHECK(v7->name == "lu");
     CHECK(v7->value == "Rg3vHJZnehYLjVg7qi3bZjzg");
@@ -228,7 +180,7 @@ TEST_CASE("set-cookie")
     CHECK(v7->http_only);
 
 
-    auto v8 = requests::cookies::parse_set_cookie_field("made_write_conn=1295214458; Path=/; Domain=.example.com");
+    auto v8 = requests::parse_set_cookie_field("made_write_conn=1295214458; Path=/; Domain=.example.com");
     CHECK(v8);
     CHECK(v8->name == "made_write_conn");
     CHECK(v8->value == "1295214458");
@@ -241,7 +193,7 @@ TEST_CASE("set-cookie")
     CHECK(!v8->http_only);
 
 
-    auto v9 = requests::cookies::parse_set_cookie_field("reg_fb_gate=deleted; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Path=/; Domain=.example.thingy; HttpOnly");
+    auto v9 = requests::parse_set_cookie_field("reg_fb_gate=deleted; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Path=/; Domain=.example.thingy; HttpOnly");
     CHECK(v9);
     CHECK(v9->name == "reg_fb_gate");
     CHECK(v9->value == "deleted");
@@ -253,9 +205,9 @@ TEST_CASE("set-cookie")
     CHECK(!v9->secure);
     CHECK(v9->http_only);
 
-    std::array<requests::cookies::set_cookie, 8> cks = {*v1, *v2, *v4, *v5, *v6, *v7, *v8, *v9};
+    std::array<requests::set_cookie, 8> cks = {*v1, *v2, *v4, *v5, *v6, *v7, *v8, *v9};
 
-    CHECK(requests::cookies::make_cookie_field(cks)
+    CHECK(requests::make_cookie_field(cks)
         == "theme=light; sessionToken=abc123; LSID=DQAAAKEaem_vYg; HSID=AYQEVnDKrdst; SSID=Ap4PGTEq; lu=Rg3vHJZnehYLjVg7qi3bZjzg; made_write_conn=1295214458; reg_fb_gate=deleted"
     );
 }

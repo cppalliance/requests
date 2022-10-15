@@ -22,7 +22,9 @@ struct basic_auth
     std::string lazy_buffer;
 
     template<typename Body, typename Fields>
-    void prepare(beast::http::request<Body, Fields> & req)
+    void prepare(beast::http::request<Body, Fields> & req,
+                 core::string_view request_host = "/",
+                 bool is_https = false)
     {
         if (lazy_buffer.empty())
         {
@@ -39,7 +41,9 @@ struct basic_auth
     }
 
     template<typename Body, typename Fields>
-    void complete(beast::http::response<Body, Fields> & ) {}
+    void complete(beast::http::response<Body, Fields> & ,
+                  core::string_view request_host = "/",
+                  bool is_https = false) {}
 
 };
 
@@ -49,15 +53,19 @@ struct bearer
     std::string lazy_buffer;
 
     template<typename Body, typename Fields>
-    void prepare(beast::http::request<Body, Fields> & req)
+    void prepare(beast::http::request<Body, Fields> & req,
+                 core::string_view request_host = "/",
+                 bool is_https = false)
     {
         if (lazy_buffer.empty())
-            lazy_buffer = "Bearer " + std::string(token);
+            lazy_buffer = "Bearer " + std::string(token );
         req.set(beast::http::field::authorization, lazy_buffer);
     }
 
     template<typename Body, typename Fields>
-    void complete(beast::http::response<Body, Fields> & ) {}
+    void complete(beast::http::response<Body, Fields> &,
+                  core::string_view request_host = "/",
+                  bool is_https = false) {}
 
 };
 

@@ -9,7 +9,6 @@
 
 namespace boost {
 namespace requests {
-namespace cookies {
 namespace grammar {
 
 /** Match a fixed-sized string of characters from a set
@@ -108,7 +107,6 @@ fixed_token_rule_t<Size, CharSet>
 #endif
 
 } // grammar
-} // cookies
 } // requests
 } // boost
 
