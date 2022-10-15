@@ -5,18 +5,10 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#undef CHECK_ERROR_1
-#undef CHECK_ERROR_N
-#undef CHECK_ERROR
-
-#undef STATE
-
-#undef AINIT
-
-#undef ASTATE_1
-#undef ASTATE_N
-#undef ASTATE
-
-#undef ANEXT_1
-#undef ANEXT_N
-#undef ANEXT
+#undef checked_call
+#undef state
+#undef async_init
+#undef async_state
+#undef async_next
+#undef async_goto
+#undef async_complete

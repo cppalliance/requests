@@ -17,6 +17,7 @@
 #include <boost/url/grammar/ci_string.hpp>
 
 #include <boost/requests/detail/define.hpp>
+#include <boost/requests/detail/state_machine.hpp>
 
 #include <boost/asio/yield.hpp>
 
@@ -171,11 +172,11 @@ void basic_connection<Stream>::single_request(
 
   // INIT
   {
-    CHECK_ERROR(lock = lock_type, write_mtx_);
+    checked_call(lock = lock_type, write_mtx_);
     goto write_init;
   }
 
-  STATE(write_init)
+  state(write_init)
   {
     if (is_open() && keep_alive_set_.timeout < std::chrono::system_clock::now())
       goto disconnect;
@@ -185,26 +186,26 @@ void basic_connection<Stream>::single_request(
       goto do_write;
   }
 
-  STATE(disconnect)
+  state(disconnect)
   {
-    CHECK_ERROR(alock = lock_type, read_mtx_);
+    checked_call(alock = lock_type, read_mtx_);
     detail::close_impl(next_layer_, ec);
     ec.clear();
     goto connect ;
   }
 
-  STATE(connect)
+  state(connect)
   {
     if (!alock)
-      CHECK_ERROR(alock = lock_type, read_mtx_);
+      checked_call(alock = lock_type, read_mtx_);
 
-    CHECK_ERROR(detail::connect_impl, next_layer_, endpoint_);
+    checked_call(detail::connect_impl, next_layer_, endpoint_);
     alock = {};
 
     goto do_write ;
   }
 
-  STATE(do_write)
+  state(do_write)
   {
     req.set(beast::http::field::host, host_);
     req.set(beast::http::field::user_agent, "Requests-" BOOST_BEAST_VERSION_STRING);
@@ -213,11 +214,11 @@ void basic_connection<Stream>::single_request(
     if (ec == asio::error::broken_pipe || ec == asio::error::connection_reset)
       goto connect ;
 
-    CHECK_ERROR(lock = lock_type, read_mtx_);
+    checked_call(lock = lock_type, read_mtx_);
     goto read_done ;
   }
 
-  STATE(read_done)
+  state(read_done)
   {
     beast::http::read(next_layer_, buffer_, res, ec);
     now = std::chrono::system_clock::now();
@@ -240,7 +241,7 @@ void basic_connection<Stream>::single_request(
     }
   }
 
-  STATE(close_after)
+  state(close_after)
   {
     boost::system::error_code ec_;
     lock_type rlock{write_mtx_, ec_};
@@ -431,23 +432,23 @@ struct basic_connection<Stream>::async_single_request_op : boost::asio::coroutin
 
 
 
-  AINIT
+  async_init
   {
-    asem::async_lock(this_->write_mtx_, ANEXT(write_init));
+    asem::async_lock(this_->write_mtx_, async_next(write_init));
   };
 
-  ASTATE(write_init, system::error_code ec, lock_type write_lock)
+  async_state(write_init, system::error_code ec, lock_type write_lock)
   {
     if (ec)
-      ACOMPLETE(ec);
+      async_complete(ec);
 
 
     if (this_->is_open() && this_->keep_alive_set_.timeout < std::chrono::system_clock::now())
-      return asem::async_lock(this_->read_mtx_, ANEXT(disconnect, std::move(write_lock)));
+      return asem::async_lock(this_->read_mtx_, async_next(disconnect, std::move(write_lock)));
     else if (!this_->is_open())
-      return asem::async_lock(this_->read_mtx_, ANEXT(connect, std::move(write_lock)));
+      return asem::async_lock(this_->read_mtx_, async_next(connect, std::move(write_lock)));
     else
-      AGOTO(do_write, {}, {}, std::move(write_lock));
+      async_goto(do_write, {}, {}, std::move(write_lock));
   }
 
   template<typename next_tag, typename Self>
@@ -461,7 +462,7 @@ struct basic_connection<Stream>::async_single_request_op : boost::asio::coroutin
                 {
                   str.close(ec);
                   return asio::deferred.values(ec);
-                }))(ANEXT(next, std::move(read_lock), std::move(write_lock)));
+                }))(async_next(next, std::move(read_lock), std::move(write_lock)));
   }
 
   template<typename next_tag, typename Self>
@@ -469,67 +470,67 @@ struct basic_connection<Stream>::async_single_request_op : boost::asio::coroutin
                      std::false_type)
   {
     beast::get_lowest_layer(this_->next_layer_).close(ec);
-    AGOTO(next, ec, std::move(read_lock), std::move(write_lock));
+    async_goto(next, ec, std::move(read_lock), std::move(write_lock));
   }
 
-  ASTATE(disconnect, system::error_code ec, lock_type read_lock, lock_type write_lock)
+  async_state(disconnect, system::error_code ec, lock_type read_lock, lock_type write_lock)
   {
     if (ec)
-      ACOMPLETE(ec);
+      async_complete(ec);
     do_disconnect<connect_tag>(std::move(self), ec, std::move(read_lock), std::move(write_lock),
                                detail::has_ssl<next_layer_type>{});
   }
 
-  ASTATE(connect, system::error_code ec, lock_type read_lock, lock_type write_lock)
+  async_state(connect, system::error_code ec, lock_type read_lock, lock_type write_lock)
   {
     if (ec)
-      ACOMPLETE(ec);
+      async_complete(ec);
 
     using next_tag = std::conditional_t<detail::has_ssl_v<next_layer_type>, do_handshake_tag, do_write_tag>;
     beast::get_lowest_layer(this_->next_layer_).async_connect(this_->endpoint_,
-                         ANEXT(next, std::move(read_lock), std::move(write_lock)));
+                         async_next(next, std::move(read_lock), std::move(write_lock)));
   }
 
-  ASTATE(do_handshake, system::error_code ec, lock_type read_lock, lock_type write_lock)
+  async_state(do_handshake, system::error_code ec, lock_type read_lock, lock_type write_lock)
   {
     if (ec)
-      ACOMPLETE(ec);
+      async_complete(ec);
     detail::get_ssl_layer(this_->next_layer_)
         ->async_handshake(asio::ssl::stream_base::client,
-                          ANEXT(disconnect, std::move(read_lock), std::move(write_lock)));
+                          async_next(disconnect, std::move(read_lock), std::move(write_lock)));
   }
 
-  ASTATE(do_write, system::error_code ec, lock_type read_lock, lock_type write_lock)
+  async_state(do_write, system::error_code ec, lock_type read_lock, lock_type write_lock)
   {
     if (ec)
-      ACOMPLETE(ec);
+      async_complete(ec);
 
     request.set(beast::http::field::host, this_->host_);
     request.set(beast::http::field::user_agent, "Requests-" BOOST_BEAST_VERSION_STRING);
 
-    beast::http::async_write(this_->next_layer_, request, ANEXT(cpl_write, std::move(write_lock)));
+    beast::http::async_write(this_->next_layer_, request, async_next(cpl_write, std::move(write_lock)));
   }
 
-  ASTATE(cpl_write, system::error_code ec, std::size_t, lock_type write_lock)
+  async_state(cpl_write, system::error_code ec, std::size_t, lock_type write_lock)
   {
     if (ec == asio::error::broken_pipe || ec == asio::error::connection_reset)
-      asem::async_lock(this_->read_mtx_, ANEXT(connect, std::move(write_lock)));
+      asem::async_lock(this_->read_mtx_, async_next(connect, std::move(write_lock)));
     else if (ec)
-      ACOMPLETE(ec);
+      async_complete(ec);
     else
-      asem::async_lock(this_->read_mtx_, ANEXT(read_ready, std::move(write_lock)));
+      asem::async_lock(this_->read_mtx_, async_next(read_ready, std::move(write_lock)));
 
   }
 
-  ASTATE(read_ready, system::error_code ec, lock_type read_lock, lock_type write_lock)
+  async_state(read_ready, system::error_code ec, lock_type read_lock, lock_type write_lock)
   {
     if (ec)
-      ACOMPLETE(ec);
+      async_complete(ec);
 
     beast::http::async_read(this_->next_layer_, this_->buffer_, response,
-                            ANEXT(read_done, std::move(read_lock)));
+                            async_next(read_done, std::move(read_lock)));
   }
-  ASTATE(read_done, system::error_code ec, std::size_t, lock_type read_lock)
+  async_state(read_done, system::error_code ec, std::size_t, lock_type read_lock)
   {
     now = std::chrono::system_clock::now();
     const auto conn_itr = response.find(beast::http::field::connection);
@@ -537,15 +538,15 @@ struct basic_connection<Stream>::async_single_request_op : boost::asio::coroutin
     {
       this_->keep_alive_set_.timeout = std::chrono::system_clock::time_point::min();
       this_->keep_alive_set_.max = 0ull;
-      return asem::async_lock(this_->write_mtx_, ANEXT(close_after, std::move(read_lock)));
+      return asem::async_lock(this_->write_mtx_, async_next(close_after, std::move(read_lock)));
     }
 
     if (urls::grammar::ci_is_equal(conn_itr->value(), "close"))
-      return asem::async_lock(this_->write_mtx_, ANEXT(close_after, std::move(read_lock)));
+      return asem::async_lock(this_->write_mtx_, async_next(close_after, std::move(read_lock)));
 
 
     if (!urls::grammar::ci_is_equal(conn_itr->value(), "keep-alive"))
-      ACOMPLETE(asio::error::invalid_argument);
+      async_complete(asio::error::invalid_argument);
 
     const auto kl_itr = response.find(beast::http::field::keep_alive);
     if (kl_itr == response.end())
@@ -560,177 +561,23 @@ struct basic_connection<Stream>::async_single_request_op : boost::asio::coroutin
         this_->keep_alive_set_ = *rr;
 
       if (this_->keep_alive_set_.timeout < now)
-        return asem::async_lock(this_->write_mtx_, ANEXT(close_after, std::move(read_lock)));
+        return asem::async_lock(this_->write_mtx_, async_next(close_after, std::move(read_lock)));
     }
-    ACOMPLETE(ec);
+    async_complete(ec);
   }
 
-  ASTATE(close_after, system::error_code ec,  lock_type write_lock, lock_type read_lock)
+  async_state(close_after, system::error_code ec,  lock_type write_lock, lock_type read_lock)
   {
     if (ec)
-      ACOMPLETE(ec);
+      async_complete(ec);
     do_disconnect<finish_tag>(std::move(self), ec, std::move(read_lock), std::move(write_lock),
                               detail::has_ssl<next_layer_type>{});
   }
 
-  ASTATE(finish, system::error_code ec, lock_type , lock_type)
+  async_state(finish, system::error_code ec, lock_type , lock_type)
   {
-    ACOMPLETE(ec);
+    async_complete(ec);
   }
-/*
-
-  template<typename Self>
-  auto async_handshake(Self && self, std::nullptr_t, lock_guard &&, lock_guard &&) {}
-
-  template<typename Self, typename Stream_>
-  auto async_handshake(Self && self, Stream_ * ssl, lock_guard lock, lock_guard rlock)
-  {
-    return ssl->async_handshake(asio::ssl::stream_base::client,
-                                asio::append(std::move(self), std::move(lock), std::move(rlock)));
-  }
-
-  template<typename Self>
-  auto async_shutdown(Self && self, std::nullptr_t, lock_guard &&, lock_guard &&) {}
-
-  template<typename Self, typename Stream_>
-  auto async_shutdown(Self && self, Stream_ * ssl, lock_guard lock, lock_guard rlock)
-  {
-    return ssl->async_shutdown(asio::append(std::move(self), std::move(lock), std::move(rlock)));
-  }
-
-  template<typename Self>
-  void operator()(Self && self,
-                  system::error_code ec,
-                  std::size_t,
-                  lock_guard lock = {},
-                  lock_guard rlock = {})
-  {
-    (*this)(std::move(self), ec, std::move(lock), std::move(rlock));
-  }
-
-  template<typename Self>
-  void operator()(Self && self,
-                  system::error_code ec = {},
-                  lock_guard lock = {},
-                  lock_guard rlock = {})
-  {
-    auto ssl = detail::get_ssl_layer(this_->next_layer_);
-    reenter(this)
-    {
-      yield asem::async_lock(this_->write_mtx_, std::move(self));
-      if (ec)
-        return self.complete(ec);
-
-      if (this_->is_open() && this_->keep_alive_set_.timeout < std::chrono::system_clock::now())
-      {
-        yield asem::async_lock(this_->read_mtx_, asio::append(std::move(self), std::move(lock)));
-        if (ec)
-          return self.complete(ec);
-
-        // reorder the locks, so rlock is the rlock
-        std::swap(lock, rlock);
-        if (ssl)
-          yield async_shutdown(std::move(self), ssl, std::move(lock), std::move(rlock));
-
-        beast::get_lowest_layer(this_->next_layer_).close(ec);
-        if (ec)
-          return self.complete(ec);
-
-        goto do_connect;
-      }
-      else if (!this_->is_open())
-      {
-        yield asem::async_lock(this_->read_mtx_, asio::append(std::move(self), std::move(lock)));
-        if (ec)
-          return self.complete(ec);
-
-        std::swap(lock, rlock);
-      do_connect:
-        yield beast::get_lowest_layer(this_->next_layer_).
-            async_connect(this_->endpoint_, asio::append(std::move(self), std::move(lock), std::move(rlock)));
-        if (ec)
-          return self.complete(ec);
-
-        if (ssl)
-        {
-          yield async_handshake(std::move(self), ssl, std::move(lock), std::move(rlock));
-          if (ec)
-            return self.complete(ec);
-        }
-
-        rlock = {};
-      }
-
-      request.set(beast::http::field::host, this_->host_);
-      request.set(beast::http::field::user_agent, "Requests-" BOOST_BEAST_VERSION_STRING);
-
-      yield beast::http::async_write(this_->next_layer_, request, asio::append(std::move(self), std::move(lock)));
-      if (ec == asio::error::broken_pipe)
-        goto do_connect ;
-      if (ec)
-        return self.complete(ec);
-
-      yield asem::async_lock(this_->read_mtx_, asio::append(std::move(self), std::move(lock)));
-      rlock = {};
-      if (ec)
-        return self.complete(ec);
-
-      yield beast::http::async_read(this_->next_layer_, this_->buffer_, response,
-                                    asio::append(std::move(self), std::move(lock)));
-
-      now = std::chrono::system_clock::now();
-
-      conn_itr = response.find(beast::http::field::connection);
-      if (ec || conn_itr == response.end())
-      {
-        this_->keep_alive_set_.timeout = std::chrono::system_clock::time_point::min();
-        this_->keep_alive_set_.max = 0ull;
-
-        yield asem::async_lock(this_->write_mtx_, asio::append(std::move(self), std::move(lock)));
-        if (ssl)
-          yield async_shutdown(std::move(self), ssl, std::move(lock), std::move(rlock));
-
-        beast::get_lowest_layer(this_->next_layer_).close(ec);
-        return self.complete(system::error_code{});
-      }
-
-      if (urls::grammar::ci_is_equal(conn_itr->value(), "close"))
-      {
-        yield asem::async_lock(this_->write_mtx_, asio::append(std::move(self), std::move(lock)));
-        if (ssl)
-          yield async_shutdown(std::move(self), ssl, std::move(lock), std::move(rlock));
-
-        beast::get_lowest_layer(this_->next_layer_).close(ec);
-        return self.complete(system::error_code{});
-      }
-
-
-      if (!urls::grammar::ci_is_equal(conn_itr->value(), "keep-alive"))
-        return self.complete(asio::error::invalid_argument);
-
-      kl_itr = response.find(beast::http::field::keep_alive);
-      if (kl_itr == response.end())
-        this_->keep_alive_set_ = keep_alive{}; // set to max
-      else
-      {
-        rr = parse_keep_alive_field(kl_itr->value(), now);
-        if (rr.has_error())
-          ec = rr.error();
-        else
-          this_->keep_alive_set_ = *rr;
-
-        if (this_->keep_alive_set_.timeout < now)
-        {
-          yield asem::async_lock(this_->write_mtx_, asio::append(std::move(self), std::move(lock)));
-          if (ssl)
-            yield async_shutdown(std::move(self), ssl, std::move(lock), std::move(rlock));
-
-          beast::get_lowest_layer(this_->next_layer_).close(ec);
-        }
-      }
-      return self.complete(ec);
-    }
-  }*/
 };
 
 

@@ -10,6 +10,7 @@
 #include <boost/url/rfc/pchars.hpp>
 
 #include <boost/requests/detail/define.hpp>
+#include <boost/requests/detail/state_machine.hpp>
 
 namespace boost {
 namespace requests {
@@ -120,7 +121,7 @@ struct domain_t
         else
             goto labelN;
 
-        STATE(labelN)
+        state(labelN)
         {
             valid_until = ++it ;
             if (eoi())
@@ -133,7 +134,7 @@ struct domain_t
                 goto subdomain;
         }
 
-        STATE(labelN_1)
+        state(labelN_1)
         {
             it ++;
             if (eoi())
@@ -144,7 +145,7 @@ struct domain_t
                 goto labelN;
         }
 
-        STATE(subdomain)
+        state(subdomain)
         {
             it ++;
             if (eoi())
