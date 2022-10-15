@@ -21,6 +21,7 @@
 #include <boost/beast/http/string_body.hpp>
 #include <boost/beast/http/write.hpp>
 #include <boost/beast/websocket/stream.hpp>
+#include <boost/requests/detail/ssl.hpp>
 #include <boost/requests/options.hpp>
 #include <boost/requests/traits.hpp>
 #include <boost/smart_ptr/allocate_unique.hpp>
@@ -76,41 +77,12 @@ struct basic_connection
 
     /// Construct a stream.
     /**
-     * @param arg The argument to be passed to initialise the underlying stream.
+     * @param args The arguments to be passed to initialise the underlying stream.
      *
      * Everything else will be default constructed
      */
-
-    explicit basic_connection(const executor_type & ex) : next_layer_(ex) {}
-    explicit basic_connection(const executor_type & ex, asio::ssl::context& ctx_) : next_layer_(ex, ctx_) {}
-
-    template<typename Arg>
-    explicit basic_connection(Arg && arg) : next_layer_(std::forward<Arg>(arg)) {}
-
-
-    template<typename NextLayer>
-    explicit basic_connection(basic_connection<NextLayer> && prev) : next_layer_(std::move(prev.next_layer())) {}
-
-
-    template <typename ExecutionContext>
-    explicit basic_connection(ExecutionContext& context,
-                    typename asio::constraint<
-                            asio::is_convertible<ExecutionContext&, asio::execution_context&>::value
-                    >::type = 0)
-            : next_layer_(context)
-    {
-    }
-
-    template <typename ExecutionContext>
-    explicit basic_connection(ExecutionContext& context,
-                    asio::ssl::context& ctx_,
-                    typename asio::constraint<
-                            is_ssl_stream<next_layer_type>::value &&
-                            asio::is_convertible<ExecutionContext&, asio::execution_context&>::value
-                    >::type = 0)
-            : next_layer_(context, ctx_)
-    {
-    }
+    template<typename ... Args>
+    explicit basic_connection(Args && ... args) : next_layer_(std::forward<Args>(args)...) {}
 
     void connect(endpoint_type ep)
     {
@@ -238,6 +210,11 @@ using basic_https_connection = basic_connection<asio::ssl::stream<asio::basic_st
 
 using http_connection  = basic_http_connection<>;
 using https_connection = basic_https_connection<>;
+
+#if !defined(BOOST_REQUESTS_HEADER_ONLY)
+extern template struct basic_connection<asio::ip::tcp::socket>;
+extern template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>;
+#endif
 
 }
 }
