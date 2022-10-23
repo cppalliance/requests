@@ -7,8 +7,3 @@
 
 #undef checked_call
 #undef state
-#undef async_init
-#undef async_state
-#undef async_next
-#undef async_goto
-#undef async_complete

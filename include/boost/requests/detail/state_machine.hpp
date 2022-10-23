@@ -34,7 +34,7 @@
     BOOST_PP_IF(BOOST_PP_EQUAL(BOOST_PP_VARIADIC_SIZE(__VA_ARGS__), 1), BOOST_REQUESTS_CHECK_ERROR_1, BOOST_REQUESTS_CHECK_ERROR_N)(__VA_ARGS__)
 
 #define BOOST_REQUESTS_STATE(Name) if (false) Name:
-
+/*
 #define BOOST_REQUESTS_AINIT template<typename Self> void operator()(Self && self)
 
 #define BOOST_REQUESTS_ASTATE_1(Name)  \
@@ -71,7 +71,7 @@
   BOOST_PP_IF(BOOST_PP_EQUAL(BOOST_PP_VARIADIC_SIZE(__VA_ARGS__), 1), BOOST_REQUESTS_AGOTO_1, BOOST_REQUESTS_AGOTO_N)(__VA_ARGS__)
 
 #define BOOST_REQUESTS_ACOMPLETE(...) \
-  return self.complete(__VA_ARGS__)
+  return self.complete(__VA_ARGS__)*/
 
 
 #endif // BOOST_REQUESTS_STATE_MACHINE_HPP
