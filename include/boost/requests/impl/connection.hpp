@@ -17,6 +17,7 @@
 #include <boost/container/pmr/monotonic_buffer_resource.hpp>
 #include <boost/requests/detail/define.hpp>
 #include <boost/requests/detail/state_machine.hpp>
+#include <boost/requests/request.hpp>
 #include <boost/smart_ptr/allocate_unique.hpp>
 #include <boost/url/grammar/ci_string.hpp>
 
@@ -540,8 +541,9 @@ struct basic_connection<Stream>::async_single_request_op : boost::asio::coroutin
     if (request.base().method() == beast::http::verb::head)
     {
       parser = std::allocate_shared<beast::http::response_parser<ResponseBody, ResponseAllocator>>(self.get_allocator(), response.base());
+      auto p = parser.get();
       beast::http::async_read_header(this_->next_layer_, this_->buffer_,
-                                     *parser,
+                                     *p,
                                      async_next(read_done, std::move(read_lock)));
        // parser
     }
@@ -901,7 +903,7 @@ struct basic_connection<Stream>::async_request_op
     beast::http::verb method;
 
     cookie_jar_base * jar = nullptr;
-    options opts;
+    struct options opts;
     Allocator alloc;
 
     core::string_view path;
@@ -1087,7 +1089,7 @@ struct basic_connection<Stream>::async_download_op
   struct state_t
   {
     cookie_jar_base * jar;
-    options opts;
+    struct options opts;
     Allocator alloc;
 
     core::string_view path;
@@ -1277,6 +1279,14 @@ basic_connection<Stream>::async_download(urls::pct_string_view path,
       next_layer_
   );
 }
+
+
+#if !defined(BOOST_REQUESTS_HEADER_ONLY)
+
+extern template struct basic_connection<asio::ip::tcp::socket>::async_request_op<empty, std::allocator<void>, std::allocator<void>>;
+extern template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_request_op<empty, std::allocator<void>, std::allocator<void>>;
+
+#endif
 
 
 }
