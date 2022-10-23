@@ -55,10 +55,10 @@ inline std::size_t cookie_pair_length(const basic_cookie<Allocator> &  p)
     return p.name.size() + p.value.size() + 1u;
 }
 
-template<typename Allocator>
+template<typename Alloc1, typename Alloc2>
 inline void append_cookie_pair(
-        std::basic_string<char, std::char_traits<char>, Allocator> & res,
-        const basic_cookie<Allocator> & p)
+        std::basic_string<char, std::char_traits<char>, Alloc1> & res,
+        const basic_cookie<Alloc2> & p)
 {
     res += p.name;
     res += "=";

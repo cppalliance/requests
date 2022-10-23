@@ -59,7 +59,7 @@ auto get_ssl_layer(Stream & str)
 }
 
 template<typename Stream>
-using has_ssl = std::is_null_pointer<decltype(std::declval<Stream&>())>;
+using has_ssl = std::bool_constant<!std::is_null_pointer_v<decltype(get_ssl_layer(std::declval<std::decay_t<Stream>&>()))>>;
 
 template<typename Stream>
 constexpr bool has_ssl_v = has_ssl<Stream>::value;

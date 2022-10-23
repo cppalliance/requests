@@ -22,7 +22,7 @@ namespace rfc {
     @par Example
     @code
     result< std::chrono::time_point<std::chrono::system_clock> > rv =
-        parse( "Sun, 06 Nov 1994 08:49:37 GMT", path_av );
+        parse( "Sun, 06 Nov 1994 08:49:37 GMT", date_1123 );
     @endcode
 
     @par BNF
@@ -43,7 +43,7 @@ namespace rfc {
     @li <a href="https://www.rfc-editor.org/rfc/rfc2616#section-3.3.1"
         >3.3.1 Full Date(rfc2616)</a>
 */
-#ifdef BOOST_URL_DOCS
+#ifdef BOOST_REQUESTS_DOCS
 constexpr __implementation_defined__ date_1123;
 #else
 struct date_1123_t
@@ -63,7 +63,7 @@ constexpr date_1123_t date_1123{};
 #endif
 
 /// The date as used by cookies
-#ifdef BOOST_URL_DOCS
+#ifdef BOOST_REQUESTS_DOCS
 constexpr __implementation_defined__ sane_cookie_date{};
 #else
 constexpr date_1123_t sane_cookie_date{};
@@ -95,7 +95,7 @@ constexpr date_1123_t sane_cookie_date{};
     @li <a href="https://www.w3.org/Protocols/HTTP/1.1/draft-ietf-http-v11-spec-01#HTTP-Date"
         >3.3.1 Full Date</a>
 */
-#ifdef BOOST_URL_DOCS
+#ifdef BOOST_REQUESTS_DOCS
 constexpr __implementation_defined__ date_1123;
 #else
 struct date_850_t
@@ -141,7 +141,7 @@ constexpr date_850_t date_850{};
     @li <a href="https://www.w3.org/Protocols/HTTP/1.1/draft-ietf-http-v11-spec-01#HTTP-Date"
         >3.3.1 Full Date</a>
 */
-#ifdef BOOST_URL_DOCS
+#ifdef BOOST_REQUESTS_DOCS
 constexpr __implementation_defined__ date_asctime;
 #else
 struct date_asctime_t
@@ -160,7 +160,7 @@ struct date_asctime_t
 constexpr date_asctime_t date_asctime{};
 #endif
 
-#ifdef BOOST_URL_DOCS
+#ifdef BOOST_REQUESTS_DOCS
 constexpr __implementation_defined__ http_date;
 #else
 struct http_date_t

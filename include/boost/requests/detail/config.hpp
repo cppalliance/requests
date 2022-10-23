@@ -34,4 +34,25 @@
 
 #endif
 
+#if defined (BOOST_REQUESTS_USE_STD_FS)
+#include <filesystem>
+#else
+#include <boost/filesystem/path.hpp>
+#endif
+
+namespace boost
+{
+namespace requests
+{
+
+#if defined (BOOST_REQUESTS_USE_STD_FS)
+namespace filesystem = std::filesystem ;
+#else
+namespace filesystem = boost::filesystem ;
+#endif
+
+}
+}
+
+
 #endif // BOOST_REQUESTS_DETAIL_HPP

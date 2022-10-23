@@ -5,23 +5,23 @@
 #ifndef BOOST_REQUESTS_OPTIONS_HPP
 #define BOOST_REQUESTS_OPTIONS_HPP
 
-#include <filesystem>
-#include <string>
-#include <utility>
-#include <variant>
-#include <vector>
+#include <boost/requests/redirect.hpp>
 
+namespace boost {
+namespace requests {
 
-namespace boost::requests
-{
-
+/// The basic options attached to any request
 struct options
 {
-    bool follow_redirects{true};
-    bool enforce_https{true};
+  /// Only allow SSL requests
+  bool enforce_tls{true};
+  /// The allowed redirect mode.
+  redirect_mode redirect{private_domain};
+  /// The maximum of allowed redirectse
+  std::size_t max_redirects{12};
 
 };
 
 }
-
+}
 #endif //BOOST_REQUESTS_OPTIONS_HPP

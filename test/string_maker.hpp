@@ -13,6 +13,8 @@
 #include <boost/core/detail/string_view.hpp>
 #include <boost/requests/fields/set_cookie.hpp>
 #include <boost/system/result.hpp>
+#include <boost/json.hpp>
+
 
 namespace doctest
 {
@@ -63,6 +65,63 @@ struct StringMaker<boost::requests::set_cookie::extensions_type>
   }
 };
 
+template<>
+struct StringMaker<boost::json::value>
+{
+  static String convert(const boost::json::value & v)
+  {
+    auto sv = boost::json::serialize(v);
+    return String(sv.data(), sv.size());
+  }
+};
+
+template<>
+struct StringMaker<boost::json::array>
+{
+  static String convert(const boost::json::array & v)
+  {
+    auto sv = boost::json::serialize(v);
+    return String(sv.data(), sv.size());
+  }
+};
+
+template<>
+struct StringMaker<boost::json::object>
+{
+  static String convert(const boost::json::object & v)
+  {
+    auto sv = boost::json::serialize(v);
+    return String(sv.data(), sv.size());
+  }
+};
+
+template<>
+struct StringMaker<boost::json::string>
+{
+  static String convert(const boost::json::string & sv)
+  {
+    return String(sv.data(), sv.size());
+  }
+};
+
+
+template<>
+struct StringMaker<std::exception_ptr>
+{
+  static String convert(std::exception_ptr e)
+  {
+    if (e)
+        try {
+          std::rethrow_exception(e);
+        }
+        catch(std::exception & ex)
+        {
+          return ex.what();
+        }
+    else
+        return "<null>";
+  }
+};
 
 }
 

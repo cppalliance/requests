@@ -8,10 +8,10 @@
 #ifndef BOOST_REQUESTS_KEEP_ALIVE_HPP
 #define BOOST_REQUESTS_KEEP_ALIVE_HPP
 
-#include <boost/beast/http.hpp>
+#include <boost/core/detail/string_view.hpp>
 #include <boost/requests/detail/config.hpp>
-#include <boost/url/detail/config.hpp>
 #include <boost/system/result.hpp>
+#include <boost/url/detail/config.hpp>
 
 namespace boost
 {

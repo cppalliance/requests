@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(requests)
 
-find_package(Boost REQUIRED system )
+find_package(Boost REQUIRED system container)
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
 

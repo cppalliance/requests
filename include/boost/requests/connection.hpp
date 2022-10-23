@@ -5,7 +5,6 @@
 #ifndef BOOST_REQUESTS_CONNECTION_HPP
 #define BOOST_REQUESTS_CONNECTION_HPP
 
-#include "boost/requests/fields/keep_alive.hpp"
 #include <boost/asem/guarded.hpp>
 #include <boost/asem/st.hpp>
 #include <boost/asio/any_io_executor.hpp>
@@ -21,9 +20,12 @@
 #include <boost/beast/http/string_body.hpp>
 #include <boost/beast/http/write.hpp>
 #include <boost/beast/websocket/stream.hpp>
+#include <boost/requests/body_traits.hpp>
 #include <boost/requests/detail/ssl.hpp>
+#include <boost/requests/facade.hpp>
+#include <boost/requests/fields/keep_alive.hpp>
 #include <boost/requests/options.hpp>
-#include <boost/requests/traits.hpp>
+#include <boost/requests/redirect.hpp>
 #include <boost/smart_ptr/allocate_unique.hpp>
 #include <boost/url/url_view.hpp>
 
@@ -33,7 +35,8 @@ namespace requests
 {
 
 template<typename Stream>
-struct basic_connection
+struct basic_connection : facade<basic_connection<Stream>, urls::pct_string_view,
+                                 typename std::remove_reference_t<Stream>::executor_type>
 {
     /// The type of the next layer.
     typedef typename std::remove_reference<Stream>::type next_layer_type;
@@ -119,7 +122,7 @@ struct basic_connection
                                        void (boost::system::error_code))
     async_close(CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
 
-    template<typename RequestBody, typename RequestAllocator,
+    template<typename RequestBody,  typename RequestAllocator,
              typename ResponseBody, typename ResponseAllocator>
     void single_request(
             beast::http::request<RequestBody, beast::http::basic_fields<RequestAllocator>> & req,
@@ -131,8 +134,8 @@ struct basic_connection
         urls::detail::throw_system_error(ec);
     }
 
-    template<typename RequestBody, typename RequestAllocator,
-              typename ResponseBody, typename ResponseAllocator>
+    template<typename RequestBody,  typename RequestAllocator,
+             typename ResponseBody, typename ResponseAllocator>
     void single_request(
         beast::http::request<RequestBody, beast::http::basic_fields<RequestAllocator>> &req,
         beast::http::response<ResponseBody, beast::http::basic_fields<ResponseAllocator>> & res,
@@ -154,7 +157,7 @@ struct basic_connection
     }
 
     // Endpoint
-    const endpoint_type & endpoint() const {return endpoint_;}
+    endpoint_type endpoint() const {return endpoint_;}
 
     // Timeout of the connection-alive
     std::chrono::system_clock::time_point timeout() const
@@ -179,8 +182,75 @@ struct basic_connection
     }
 
     void set_host(core::string_view sv, system::error_code & ec);
+    core::string_view host() const {return host_;}
+    constexpr static redirect_mode supported_redirect_mode() {return redirect_mode::endpoint;}
 
-    const std::string & host() const {return host_;}
+    template<typename RequestBody, typename Allocator = std::allocator<char>>
+    auto request(beast::http::verb method,
+                 urls::pct_string_view path,
+                 RequestBody && body,
+                 basic_request<Allocator> req,
+                 system::error_code & ec) -> basic_response<Allocator>;
+
+    template<typename RequestBody, typename Allocator = std::allocator<char>>
+    auto request(beast::http::verb method,
+                 urls::pct_string_view path,
+                 RequestBody && body,
+                 basic_request<Allocator> req)
+        -> basic_response<Allocator>
+    {
+      boost::system::error_code ec;
+      auto res = request(method, path, std::move(body), std::move(req), ec);
+      if (ec)
+        throw_exception(system::system_error(ec, "request"));
+      return res;
+    }
+
+    template<typename RequestBody,
+             typename Allocator = std::allocator<char>,
+        BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+                                               basic_response<Allocator>)) CompletionToken
+            BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
+                                    void (boost::system::error_code,
+                                          basic_response<Allocator>))
+    async_request(beast::http::verb method,
+                  urls::pct_string_view path,
+                  RequestBody && body,
+                  basic_request<Allocator> req,
+                  CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
+
+    template<typename Allocator = std::allocator<char>>
+    auto download(urls::pct_string_view path,
+                  basic_request<Allocator> req,
+                  const filesystem::path & download_path,
+                  system::error_code & ec) -> basic_response<Allocator>;
+
+
+    template<typename Allocator= std::allocator<char> >
+    auto download(urls::pct_string_view path,
+                  basic_request<Allocator> req,
+                  const filesystem::path & download_path) -> basic_response<Allocator>
+    {
+      boost::system::error_code ec;
+      auto res = download(path, std::move(req), download_path, ec);
+      if (ec)
+        throw_exception(system::system_error(ec, "request"));
+      return res;
+    }
+
+    template<typename Allocator = std::allocator<char>,
+              BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+                                                   basic_response<Allocator>)) CompletionToken
+                  BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
+                                       void (boost::system::error_code,
+                                            basic_response<Allocator>))
+    async_download(urls::pct_string_view path,
+                   basic_request<Allocator> req,
+                   const filesystem::path & download_path,
+                   CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
+
   private:
 
     Stream next_layer_;
@@ -193,12 +263,18 @@ struct basic_connection
     std::size_t ongoing_requests_{0u};
     keep_alive keep_alive_set_;
     endpoint_type endpoint_;
-
     struct async_close_op;
     struct async_connect_op;
     template<typename RequestBody, typename RequestAllocator,
              typename ResponseBody, typename ResponseAllocator>
     struct async_single_request_op;
+
+
+    template<typename RequestBody, typename Allocator, typename CplAlloc>
+    struct async_request_op;
+
+    template<typename Allocator, typename CplAlloc>
+    struct async_download_op;
 };
 
 template<typename Executor = asio::any_io_executor>

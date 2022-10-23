@@ -14,12 +14,13 @@
 
 #include <boost/asio/ssl/host_name_verification.hpp>
 #include <boost/asem/lock_guard.hpp>
+#include <boost/container/pmr/monotonic_buffer_resource.hpp>
 #include <boost/url/grammar/ci_string.hpp>
 
 #include <boost/requests/detail/define.hpp>
 #include <boost/requests/detail/state_machine.hpp>
 
-#include <boost/asio/yield.hpp>
+#include <boost/smart_ptr/allocate_unique.hpp>
 
 /*
 
@@ -50,7 +51,6 @@
 namespace boost {
 namespace requests {
 namespace detail {
-namespace {
 
 struct tracker
 {
@@ -64,6 +64,8 @@ struct tracker
     std::swap(cnt, lhs.cnt);
   }
 };
+
+namespace {
 
 template <typename Stream>
 void set_verify(Stream *stream, const std::string &host, system::error_code &ec)
@@ -108,9 +110,6 @@ void close_impl(Stream & stream,
                 system::error_code & ec)
 {
   detail::shutdown(detail::get_ssl_layer(stream), ec);
-  if (ec)
-    return ;
-
   beast::get_lowest_layer(stream).close(ec);
 }
 
@@ -209,7 +208,8 @@ void basic_connection<Stream>::single_request(
   {
     req.set(beast::http::field::host, host_);
     req.set(beast::http::field::user_agent, "Requests-" BOOST_BEAST_VERSION_STRING);
-    beast::http::write(next_layer_, req,ec);
+
+    beast::http::write(next_layer_, req, ec);
 
     if (ec == asio::error::broken_pipe || ec == asio::error::connection_reset)
       goto connect ;
@@ -220,19 +220,30 @@ void basic_connection<Stream>::single_request(
 
   state(read_done)
   {
-    beast::http::read(next_layer_, buffer_, res, ec);
+    if (req.base().method() == beast::http::verb::head)
+    {
+      beast::http::response_parser<ResponseBody, ResponseAllocator> ps{std::move(res.base())};
+      beast::http::read_header(next_layer_, buffer_, ps, ec);
+      res = std::move(ps.get());
+    }
+    else
+      beast::http::read(next_layer_, buffer_, res, ec);
+
+
     now = std::chrono::system_clock::now();
     const auto conn_itr = res.find(beast::http::field::connection);
-    if (ec || conn_itr == res.end())
+    if (ec)
     {
       keep_alive_set_.timeout = std::chrono::system_clock::time_point::min();
       keep_alive_set_.max = 0ull;
       goto close_after;
     }
 
+    if (conn_itr == res.end())
+      return ;
+
     if (urls::grammar::ci_is_equal(conn_itr->value(), "close"))
       goto close_after;
-
 
     if (!urls::grammar::ci_is_equal(conn_itr->value(), "keep-alive"))
     {
@@ -424,6 +435,7 @@ struct basic_connection<Stream>::async_single_request_op : boost::asio::coroutin
   detail::tracker t{this_->ongoing_requests_};
   std::chrono::system_clock::time_point now;
   system::result<keep_alive> rr;
+  std::shared_ptr<beast::http::response_parser<ResponseBody, ResponseAllocator>> parser;
   typename beast::http::response<ResponseBody, beast::http::basic_fields<ResponseAllocator>>::iterator conn_itr, kl_itr;
 
   using mutex_type = asem::basic_mutex<boost::asem::st, executor_type>;
@@ -497,7 +509,7 @@ struct basic_connection<Stream>::async_single_request_op : boost::asio::coroutin
       async_complete(ec);
     detail::get_ssl_layer(this_->next_layer_)
         ->async_handshake(asio::ssl::stream_base::client,
-                          async_next(disconnect, std::move(read_lock), std::move(write_lock)));
+                          async_next(do_write, std::move(read_lock), std::move(write_lock)));
   }
 
   async_state(do_write, system::error_code ec, lock_type read_lock, lock_type write_lock)
@@ -527,26 +539,47 @@ struct basic_connection<Stream>::async_single_request_op : boost::asio::coroutin
     if (ec)
       async_complete(ec);
 
-    beast::http::async_read(this_->next_layer_, this_->buffer_, response,
-                            async_next(read_done, std::move(read_lock)));
+    if (request.base().method() == beast::http::verb::head)
+    {
+      parser = std::allocate_shared<beast::http::response_parser<ResponseBody, ResponseAllocator>>(self.get_allocator(), response.base());
+      beast::http::async_read_header(this_->next_layer_, this_->buffer_,
+                                     *parser,
+                                     async_next(read_done, std::move(read_lock)));
+       // parser
+    }
+    else
+      beast::http::async_read(this_->next_layer_, this_->buffer_, response,
+                              async_next(read_done, std::move(read_lock)));
   }
+
   async_state(read_done, system::error_code ec, std::size_t, lock_type read_lock)
   {
+    if (parser)
+      response = std::move(parser->get());
+
     now = std::chrono::system_clock::now();
     const auto conn_itr = response.find(beast::http::field::connection);
-    if (ec || conn_itr == response.end())
+    if (ec)
     {
       this_->keep_alive_set_.timeout = std::chrono::system_clock::time_point::min();
       this_->keep_alive_set_.max = 0ull;
+      printf("CLOSE AFTER %d %d %s\n", __LINE__, ec.value(), ec.message().c_str());
       return asem::async_lock(this_->write_mtx_, async_next(close_after, std::move(read_lock)));
     }
+    if (conn_itr == response.end())
+      async_complete(ec);
 
     if (urls::grammar::ci_is_equal(conn_itr->value(), "close"))
-      return asem::async_lock(this_->write_mtx_, async_next(close_after, std::move(read_lock)));
+    {
+      printf("CLOSE AFTER %d\n", __LINE__);
+      return asem::async_lock(this_->write_mtx_, async_next(close_after , std::move(read_lock)));
+    }
 
 
     if (!urls::grammar::ci_is_equal(conn_itr->value(), "keep-alive"))
+    {
       async_complete(asio::error::invalid_argument);
+    }
 
     const auto kl_itr = response.find(beast::http::field::keep_alive);
     if (kl_itr == response.end())
@@ -561,15 +594,26 @@ struct basic_connection<Stream>::async_single_request_op : boost::asio::coroutin
         this_->keep_alive_set_ = *rr;
 
       if (this_->keep_alive_set_.timeout < now)
+      {
+        async_complete(asio::error::invalid_argument);
         return asem::async_lock(this_->write_mtx_, async_next(close_after, std::move(read_lock)));
+      }
+
+
     }
     async_complete(ec);
   }
 
   async_state(close_after, system::error_code ec,  lock_type write_lock, lock_type read_lock)
   {
+    printf("Doing disconnect\n");
     if (ec)
+    {
+      boost::system::error_code ec_;
+      beast::get_lowest_layer(this_->next_layer_).close(ec_);
       async_complete(ec);
+    }
+
     do_disconnect<finish_tag>(std::move(self), ec, std::move(read_lock), std::move(write_lock),
                               detail::has_ssl<next_layer_type>{});
   }
@@ -600,13 +644,646 @@ basic_connection<Stream>::async_single_request(
 }
 
 
+template<typename Stream>
+template<typename RequestBody, typename Allocator>
+auto basic_connection<Stream>::request(
+            beast::http::verb method,
+            urls::pct_string_view path,
+            RequestBody && body,
+            basic_request<Allocator> req,
+            system::error_code & ec) -> basic_response<Allocator>
+{
+  using body_traits = request_body_traits<std::decay_t<RequestBody>>;
+  using body_type = typename body_traits::body_type;
+  using fields_type = beast::http::basic_fields<Allocator>;
+  constexpr auto is_secure = detail::has_ssl_v<Stream>;
+  const auto alloc = req.get_allocator();
+  using response_type = basic_response<Allocator> ;
+  response_type res{alloc};
 
+  if (!is_secure && req.opts.enforce_tls)
+  {
+    static constexpr auto loc((BOOST_CURRENT_LOCATION));
+    ec.assign(error::insecure, &loc);
+    return res;
+  }
+
+  {
+    const auto nm = body_traits::default_content_type(body);
+    auto itr = req.fields.find(http::field::content_type);
+    if (itr == req.fields.end() && !nm.empty()) {
+      const auto nm = body_traits::default_content_type(body);
+      if (!nm.empty())
+        req.fields.set(http::field::content_type, nm);
+    }
+  }
+
+  if (req.jar)
+  {
+    unsigned char buf[4096];
+    boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
+    auto cc = req.jar->get(host(),  &memres, is_secure, path);
+    if (!cc.empty())
+      req.fields.set(http::field::cookie, cc);
+  }
+
+  beast::http::request<body_type, fields_type> hreq{method, path, 11,
+                                                    body_traits::make_body(std::forward<RequestBody>(body), ec),
+                                                    std::move(req.fields)};
+  hreq.prepare_payload();
+  using res_body = beast::http::basic_dynamic_body<beast::basic_flat_buffer<Allocator>>;
+  beast::http::response<res_body, fields_type> rres{http::response_header<fields_type>{alloc},
+                                                    beast::basic_flat_buffer<Allocator>{alloc}};
+
+  single_request(hreq, rres, ec);
+
+  using response_type = basic_response<Allocator>;
+
+  auto rc = rres.base().result();
+  while (!ec &&
+         (req.opts.redirect >= redirect_mode::endpoint)
+         && ((rc == http::status::moved_permanently)
+          || (rc == http::status::found)
+          || (rc == http::status::temporary_redirect)
+          || (rc == http::status::permanent_redirect)))
+  {
+    auto loc_itr = rres.base().find(http::field::location);
+    if (loc_itr != rres.base().end())
+    {
+      static constexpr auto loc((BOOST_CURRENT_LOCATION));
+      ec.assign(error::invalid_redirect, &loc);
+      break ;
+    }
+    const auto & loc = *loc_itr;
+
+    auto url = urls::parse_relative_ref(loc.value());
+    if (url.has_error())
+      url = urls::parse_uri(loc.value());
+
+    if (url.has_error())
+    {
+      ec = url.error();
+      break;
+    }
+    // we don't need to use should_redirect, bc we're on the same host.
+    if (url->has_authority() && !same_host(*url, endpoint()))
+    {
+      static constexpr auto sloc((BOOST_CURRENT_LOCATION));
+      ec.assign(error::forbidden_redirect, &sloc);
+      break ;
+    }
+
+    if (--req.opts.max_redirects == 0)
+    {
+      static constexpr auto sloc((BOOST_CURRENT_LOCATION));
+      ec.assign(error::too_many_redirects, &sloc);
+      break ;
+    }
+    res.history.emplace_back(std::move(rres.base()), std::move(rres.body()));
+
+    hreq.base().target(url->encoded_path());
+    if (req.jar)
+    {
+      unsigned char buf[4096];
+      boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
+      auto cc = req.jar->get(host(), &memres, is_secure, url->encoded_path());
+      if (!cc.empty())
+        hreq.base().set(http::field::cookie, cc);
+    }
+
+
+    single_request(hreq, rres, ec);
+    rc = rres.base().result();
+  }
+
+  res.header = std::move(rres.base());
+  res.buffer = std::move(rres.body());
+
+  return res;
+}
+
+template<typename Stream>
+template<typename Allocator>
+auto basic_connection<Stream>::download(
+            urls::pct_string_view path,
+            basic_request<Allocator> req,
+            const filesystem::path & download_path,
+            system::error_code & ec) -> basic_response<Allocator>
+{
+  using fields_type = beast::http::basic_fields<Allocator>;
+  using response_type = basic_response<Allocator> ;
+
+  const auto alloc = req.get_allocator();
+  constexpr auto is_secure = detail::has_ssl_v<Stream>;
+
+  response_type res{alloc};
+
+  if (!is_secure && req.opts.enforce_tls)
+  {
+    static constexpr auto loc((BOOST_CURRENT_LOCATION));
+    ec.assign(error::insecure, &loc);
+    return res;
+  }
+
+  http::request<http::empty_body, fields_type> hreq{http::verb::head, path, 11,
+                                                    http::empty_body::value_type{}, std::move(req.fields)};
+
+  // set mime-type
+  {
+    auto hitr = hreq.base().find(http::field::accept);
+    if (hitr == hreq.base().end())
+    {
+      const auto ext = download_path.extension().string();
+      const auto & mp = default_mime_type_map();
+      auto itr = mp.find(ext);
+      if (itr != mp.end())
+        hreq.base().set(http::field::accept, itr->second);
+    }
+  }
+  http::response<http::empty_body, fields_type> hres{http::response_header<fields_type>{alloc}};
+  hreq.prepare_payload();
+
+  if (req.jar)
+  {
+    unsigned char buf[4096];
+    boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
+    auto cc = req.jar->get(host(),  &memres, is_secure, path);
+    if (!cc.empty())
+      hreq.base().set(http::field::cookie, cc);
+    else
+      hreq.base().erase(http::field::cookie);
+  }
+
+  single_request(hreq, hres, ec);
+
+  using response_type = basic_response<Allocator>;
+
+
+  auto rc = hres.base().result();
+  while (!ec &&
+         (req.opts.redirect >= redirect_mode::endpoint)
+         && ((rc == http::status::moved_permanently)
+             || (rc == http::status::found)
+             || (rc == http::status::temporary_redirect)
+             || (rc == http::status::permanent_redirect)))
+  {
+    res.history.emplace_back(std::move(hres.base()), (typename response_type::body_type::value_type){alloc});
+
+    auto loc_itr = hres.base().find(http::field::location);
+    if (loc_itr != hres.base().end())
+    {
+      static constexpr auto loc((BOOST_CURRENT_LOCATION));
+      ec.assign(error::invalid_redirect, &loc);
+      break ;
+    }
+    const auto & loc = *loc_itr;
+
+    auto url = urls::parse_relative_ref(loc.value());
+    if (url.has_error())
+      url = urls::parse_uri(loc.value());
+
+    if (url.has_error())
+    {
+      ec = url.error();
+      break;
+    }
+    // we don't need to use should_redirect, bc we're on the same host.
+    if (url->has_authority() && !same_host(*url, endpoint()))
+    {
+      static constexpr auto sloc((BOOST_CURRENT_LOCATION));
+      ec.assign(error::forbidden_redirect, &sloc);
+      break ;
+    }
+
+    if (--req.opts.max_redirects == 0)
+    {
+      static constexpr auto sloc((BOOST_CURRENT_LOCATION));
+      ec.assign(error::too_many_redirects, &sloc);
+      break ;
+    }
+    hreq.base().target(url->encoded_path());
+    if (req.jar)
+    {
+      unsigned char buf[4096];
+      boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
+      auto cc = req.jar->get(host(), &memres, is_secure, url->encoded_path());
+      if (!cc.empty())
+        hreq.base().set(http::field::cookie, cc);
+      else
+          hreq.base().erase(http::field::cookie);
+    }
+
+    single_request(hreq, hres, ec);
+    rc = hres.base().result();
+
+  }
+  hreq.method(beast::http::verb::get);
+
+  http::response<http::file_body, fields_type> fres{http::response_header<fields_type>{alloc}};
+
+  auto str = download_path.string();
+  fres.body().open(str.c_str(), beast::file_mode::write, ec);
+  if (!ec)
+    single_request(hreq, fres, ec);
+
+
+  res.header = std::move(fres.base());
+
+  return res;
+}
+
+template<typename Stream>
+template<typename RequestBody, typename Allocator, typename CplAlloc>
+struct basic_connection<Stream>::async_request_op
+{
+
+  basic_connection<Stream> * this_;
+  constexpr static auto is_secure = detail::has_ssl_v<Stream>;
+
+  struct state_t
+  {
+    beast::http::verb method;
+
+    cookie_jar_base * jar = nullptr;
+    options opts;
+    Allocator alloc;
+
+    core::string_view path;
+    core::string_view default_mime_type;
+
+    using body_traits = request_body_traits<std::decay_t<RequestBody>>;
+    using body_type = typename body_traits::body_type;
+    using fields_type = beast::http::basic_fields<Allocator>;
+    using response_type = basic_response<Allocator> ;
+    response_type res;
+
+    system::error_code ec;
+
+    beast::http::request<body_type, fields_type> hreq;
+    using res_body = beast::http::basic_dynamic_body<beast::basic_flat_buffer<Allocator>>;
+    beast::http::response<res_body, fields_type> rres{http::response_header<fields_type>{alloc},
+                                                      beast::basic_flat_buffer<Allocator>{alloc}};
+
+
+    state_t(beast::http::verb v,
+            urls::pct_string_view path,
+            RequestBody && body,
+            basic_request<Allocator> req)
+        :  method(v), jar(req.jar), opts(req.opts), alloc(req.get_allocator()),  path(path),
+           default_mime_type(body_traits::default_content_type(body)),
+           res{req.get_allocator()},
+           hreq{v, path, 11,
+               body_traits::make_body(std::forward<RequestBody>(body), ec),
+               std::move(req.fields)}
+    {
+    }
+  };
+
+
+  using allocator_type = typename std::allocator_traits<CplAlloc>::template rebind_alloc<state_t>;
+  std::unique_ptr<state_t, boost::alloc_deleter<state_t, allocator_type> > state_;
+
+  template<typename ... Args>
+  async_request_op(allocator_type alloc, basic_connection<Stream> * this_, Args && ... args)
+      : this_(this_), state_(boost::allocate_unique<state_t>(alloc, std::forward<Args>(args)...))
+  {
+  }
+
+
+  template<typename Self>
+  void operator()(Self && self)
+  {
+    if (state_->ec)
+      return asio::post(asio::append(std::move(self), state_->ec));
+    if (!is_secure && state_->opts.enforce_tls)
+    {
+      static constexpr auto loc((BOOST_CURRENT_LOCATION));
+      return asio::post(asio::append(std::move(self), system::error_code(error::insecure, &loc)));
+    }
+    {
+      auto itr = state_->hreq.base().find(http::field::content_type);
+      if (itr == state_->hreq.base().end() && !state_->default_mime_type.empty()) {
+        if (!state_->default_mime_type.empty())
+          state_->hreq.base().set(http::field::content_type, state_->default_mime_type);
+      }
+    }
+    if (state_->jar)
+    {
+      unsigned char buf[4096];
+      boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
+      auto cc = state_->jar->get(this_->host(),  &memres, is_secure, state_->path);
+      if (!cc.empty())
+        state_->hreq.base().set(http::field::cookie, cc);
+      else
+        state_->hreq.base().erase(http::field::cookie);
+    }
+    state_->hreq.prepare_payload();
+    this_->async_single_request(state_->hreq, state_->rres, std::move(self));
+  }
+
+  template<typename Self>
+  void operator()(Self && self, system::error_code ec)
+  {
+    auto rc = state_->rres.base().result();
+
+    if (!ec &&
+       (state_->opts.redirect >= redirect_mode::endpoint)
+       && ((rc == http::status::moved_permanently)
+           || (rc == http::status::found)
+           || (rc == http::status::temporary_redirect)
+           || (rc == http::status::permanent_redirect)))
+    {
+      auto loc_itr = state_->rres.base().find(http::field::location);
+      if (loc_itr != state_->rres.base().end())
+      {
+        static constexpr auto loc((BOOST_CURRENT_LOCATION));
+        ec.assign(error::invalid_redirect, &loc);
+        goto complete;
+      }
+      const auto & loc = *loc_itr;
+
+      const auto redirect_mode = (std::min)(supported_redirect_mode(), state_->opts.redirect);
+      auto url = urls::parse_relative_ref(loc.value());
+      if (url.has_error())
+        url = urls::parse_uri(loc.value());
+
+      if (url.has_error())
+      {
+        ec = url.error();
+        goto complete;
+      }
+      // we don't need to use should_redirect, bc we're on the same host.
+      if (url->has_authority() && !same_host(*url, this_->endpoint()))
+      {
+        static constexpr auto sloc((BOOST_CURRENT_LOCATION));
+        ec.assign(error::forbidden_redirect, &sloc);
+        goto complete;
+      }
+
+      if (--state_->opts.max_redirects == 0)
+      {
+        static constexpr auto sloc((BOOST_CURRENT_LOCATION));
+        ec.assign(error::too_many_redirects, &sloc);
+        goto complete;
+      }
+
+
+      if (state_->jar)
+      {
+        unsigned char buf[4096];
+        boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
+        auto cc = state_->jar->get(this_->host(), &memres, is_secure, url->encoded_path());
+        if (!cc.empty())
+          state_->hreq.base().set(http::field::cookie, cc);
+        else
+          state_->hreq.base().erase(http::field::cookie);
+      }
+
+      state_->res.history.emplace_back(std::move(state_->rres.base()), std::move(state_->rres.body()));
+      state_->hreq.base().target(url->encoded_path());
+
+      return this_->async_single_request(state_->hreq, state_->rres, std::move(self));
+
+    }
+
+    state_->res.header = std::move(state_->rres.base());
+    state_->res.buffer = std::move(state_->rres.body());
+  complete:
+    auto tmp = std::move(state_->res);
+    self.complete(ec, std::move(tmp));
+  }
+
+};
+
+template<typename Stream>
+template<typename RequestBody,
+          typename Allocator,
+          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, basic_response<Allocator>)) CompletionToken>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
+                                   void (boost::system::error_code,
+                                        basic_response<Allocator>))
+basic_connection<Stream>::async_request(beast::http::verb method,
+                                        urls::pct_string_view path,
+                                        RequestBody && body,
+                                        basic_request<Allocator> req,
+                                        CompletionToken && completion_token)
+{
+  using allocator_type = asio::associated_allocator_t<std::decay_t<CompletionToken>>;
+  return asio::async_compose<CompletionToken, void(system::error_code, basic_response<Allocator>)>(
+      async_request_op<RequestBody, Allocator,allocator_type>{
+                                               asio::get_associated_allocator(completion_token),
+                                               this, method, path,
+                                               std::forward<RequestBody>(body),
+                                               std::move(req)},
+      completion_token,
+      next_layer_
+  );
+}
+
+template<typename Stream>
+template<typename Allocator, typename CplAlloc>
+struct basic_connection<Stream>::async_download_op
+{
+  using fields_type = beast::http::basic_fields<Allocator>;
+  using response_type = basic_response<Allocator> ;
+
+  basic_connection<Stream>* this_;
+  constexpr static auto is_secure = detail::has_ssl_v<Stream>;
+
+  struct state_t
+  {
+    cookie_jar_base * jar;
+    options opts;
+    Allocator alloc;
+
+    core::string_view path;
+    core::string_view default_mime_type;
+
+    response_type res{alloc};
+
+    beast::http::request<http::empty_body, fields_type> hreq;
+    using res_body = beast::http::basic_dynamic_body<beast::basic_flat_buffer<Allocator>>;
+    http::response<http::empty_body, fields_type> hres{http::response_header<fields_type>{alloc}};
+    http::response<http::file_body, fields_type> fres{http::response_header<fields_type>{alloc}};
+
+    filesystem::path download_path;
+
+    state_t(urls::pct_string_view path,
+            const filesystem::path & download_path,
+            basic_request<Allocator> req)
+          : jar(req.jar), opts(req.opts), alloc(req.get_allocator()), path(path),
+            hreq{http::verb::head, path, 11,
+                 http::empty_body::value_type{},
+                 std::move(req.fields)},
+            download_path(download_path)
+    {
+    }
+
+  };
+
+
+  using allocator_type = typename std::allocator_traits<CplAlloc>::template rebind_alloc<state_t>;
+  std::unique_ptr<state_t, boost::alloc_deleter<state_t, allocator_type> > state_;
+
+  template<typename ... Args>
+  async_download_op(allocator_type alloc, basic_connection<Stream> * this_, Args && ... args)
+      : this_(this_), state_(boost::allocate_unique<state_t>(alloc, std::forward<Args>(args)...))
+  {
+  }
+
+  template<typename Self>
+  void operator()(Self && self)
+  {
+
+    if (!is_secure && state_->opts.enforce_tls)
+    {
+      static constexpr auto loc((BOOST_CURRENT_LOCATION));
+      return asio::post(asio::append(std::move(self), system::error_code(error::insecure, &loc)));
+    }
+
+    // set mime-type
+    {
+      auto hitr = state_->hreq.base().find(http::field::accept);
+      if (hitr == state_->hreq.base().end())
+      {
+        const auto ext = state_->download_path.extension().string();
+        const auto & mp = default_mime_type_map();
+        auto itr = mp.find(ext);
+        if (itr != mp.end())
+          state_->hreq.base().set(http::field::accept, itr->second);
+      }
+    }
+
+    state_->hreq.prepare_payload();
+
+    if (state_->jar)
+    {
+      unsigned char buf[4096];
+      boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
+      auto cc = state_->jar->get(this_->host(),  &memres, is_secure, state_->path);
+      if (!cc.empty())
+        state_->hreq.base().set(http::field::cookie, cc);
+      else
+        state_->hreq.base().erase(http::field::cookie);
+    }
+
+    this_->async_single_request(state_->hreq, state_->hres, std::move(self));
+  }
+
+  template<typename Self>
+  void operator()(Self && self,
+                  boost::system::error_code ec)
+  {
+    const auto rc = state_->hres.result();
+    printf("Dun: %s -> %d\n", ec.message().c_str(), rc);
+    if (ec)
+      return self.complete(ec, std::move(state_->res));
+
+    if ((state_->opts.redirect >= redirect_mode::endpoint)
+         && ((rc == http::status::moved_permanently)
+          || (rc == http::status::found)
+          || (rc == http::status::temporary_redirect)
+          || (rc == http::status::permanent_redirect)))
+    {
+      state_->res.history.emplace_back(std::move(state_->hres.base()),
+                                       (typename response_type::body_type::value_type){state_->alloc});
+
+      auto loc_itr = state_->hres.base().find(http::field::location);
+      if (loc_itr != state_->hres.base().end())
+      {
+        static constexpr auto loc((BOOST_CURRENT_LOCATION));
+        ec.assign(error::invalid_redirect, &loc);
+        goto complete ;
+      }
+      const auto & loc = *loc_itr;
+
+      auto url = urls::parse_relative_ref(loc.value());
+      if (url.has_error())
+        url = urls::parse_uri(loc.value());
+
+      if (url.has_error())
+      {
+        ec = url.error();
+        goto complete;
+      }
+      // we don't need to use should_redirect, bc we're on the same host.
+      if (url->has_authority() && !same_host(*url, this_->endpoint()))
+      {
+        static constexpr auto sloc((BOOST_CURRENT_LOCATION));
+        ec.assign(error::forbidden_redirect, &sloc);
+        goto complete;
+      }
+
+      if (--state_->opts.max_redirects == 0)
+      {
+        static constexpr auto sloc((BOOST_CURRENT_LOCATION));
+        ec.assign(error::too_many_redirects, &sloc);
+        goto complete;
+      }
+      state_->hreq.base().target(url->encoded_path());
+      if (state_->jar)
+      {
+        unsigned char buf[4096];
+        boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
+        auto cc = state_->jar->get(this_->host(), &memres, is_secure, url->encoded_path());
+        if (!cc.empty())
+          state_->hreq.base().set(http::field::cookie, cc);
+        else
+          state_->hreq.base().erase(http::field::cookie);
+      }
+      return this_->async_single_request(state_->hreq, state_->hres, std::move(self));
+    }
+
+    if (!ec)
+    {
+      auto str = state_->download_path.string();
+      state_->hreq.method(beast::http::verb::get);
+      printf("Open %s\n", str.c_str());
+      state_->fres.body().open(str.c_str(), beast::file_mode::write, ec);
+      if (ec)
+        goto complete;
+      this_->async_single_request(state_->hreq, state_->fres, asio::append(std::move(self), 0));
+    }
+    else complete:
+      return self.complete(ec, std::move(state_->res));
+  }
+
+  template<typename Self>
+  void operator()(Self && self,
+                  boost::system::error_code ec, int)
+  {
+    state_->res.header = std::move(state_->fres.base());
+    self.complete(ec, std::move(state_->res));
+  }
+
+};
+
+
+template<typename Stream>
+template<typename Allocator,
+         BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, basic_response<Allocator>)) CompletionToken>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
+                                   void (boost::system::error_code,
+                                        basic_response<Allocator>))
+basic_connection<Stream>::async_download(urls::pct_string_view path,
+                                         basic_request<Allocator> req,
+                                         const filesystem::path & download_path,
+                                         CompletionToken && completion_token)
+{
+  using allocator_type = asio::associated_allocator_t<std::decay_t<CompletionToken>>;
+  return asio::async_compose<CompletionToken,
+                             void(system::error_code, basic_response<Allocator>)>(
+      async_download_op<Allocator, allocator_type>{asio::get_associated_allocator(completion_token),
+                                   this, path, download_path, std::move(req)},
+      completion_token,
+      next_layer_
+  );
+}
 
 
 }
 }
 
-#include <boost/asio/unyield.hpp>
 #include <boost/requests/detail/undef.hpp>
 
 #endif // BOOST_REQUESTS_IMPL_CONNECTION_HPP

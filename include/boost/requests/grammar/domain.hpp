@@ -82,7 +82,7 @@ namespace grammar {
         @ref alpha_chars,
         @ref parse.
 */
-#ifdef BOOST_URL_DOCS
+#ifdef BOOST_REQUESTS_DOCS
 constexpr
 __implementation_defined__
 domain;

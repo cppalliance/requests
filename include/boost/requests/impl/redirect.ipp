@@ -15,6 +15,25 @@ namespace boost
 namespace requests
 {
 
+std::uint16_t get_port(urls::url_view uv)
+{
+  const auto num = uv.port_number();
+  if (num != 0)
+    return num;
+  const auto scheme = uv.scheme_id();
+
+  switch (scheme)
+  {
+  case urls::scheme::ws:   BOOST_FALLTHROUGH;
+  case urls::scheme::http: BOOST_FALLTHROUGH;
+  case urls::scheme::none:
+    return 80; //default to port 80 for everything
+  case urls::scheme::wss:   BOOST_FALLTHROUGH;
+  case urls::scheme::https: return 443;
+  default: return 0u;
+  }
+};
+
 bool should_redirect(redirect_mode mode,
                      urls::url_view current,
                      urls::url_view target,
@@ -23,25 +42,7 @@ bool should_redirect(redirect_mode mode,
     if (mode == any)
         return true;
 
-    const auto get_port =
-            [](urls::url_view uv) -> std::uint16_t
-            {
-                const auto num = uv.port_number();
-                if (num != 0)
-                    return num;
-                const auto scheme = uv.scheme_id();
 
-                switch (scheme)
-                {
-                    case urls::scheme::ws:   BOOST_FALLTHROUGH;
-                    case urls::scheme::http: BOOST_FALLTHROUGH;
-                    case urls::scheme::none:
-                        return 80; //default to port 80 for everything
-                    case urls::scheme::wss:   BOOST_FALLTHROUGH;
-                    case urls::scheme::https: return 443;
-                    default: return 0u;
-                }
-            };
 
     // TODO: handle encoding/decoding
     const auto target_domain = target.encoded_host();
@@ -96,8 +97,19 @@ bool should_redirect(redirect_mode mode,
         }
         default: return false;
     }
-
 }
+
+bool same_host(const urls::url_view current, const asio::ip::tcp::endpoint ep)
+{
+  return get_port(current) == ep.port();
+}
+
+bool same_host(const urls::url_view current,
+               const asio::local::stream_protocol::endpoint ep)
+{
+  return false; // domain socket can only redirect locally
+}
+
 
 
 }

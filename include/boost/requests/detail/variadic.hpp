@@ -83,6 +83,20 @@ auto tie_args(Ts && ... ts)
     return tie_impl(std::tuple<Ts&&...>(std::forward<Ts>(ts)...), seq{});
 }
 
+template<typename ... Ops>
+struct get_first_variadic;
+
+template<>
+struct get_first_variadic<> {using type = void;};
+
+template<typename Op, typename ... Tail>
+struct get_first_variadic<Op, Tail...> {using type = Op;};
+
+template<typename ... Ops>
+using get_first_variadic_t = mp11::mp_back<mp11::mp_list<Ops...>>;
+
+
+
 
 
 }

@@ -5,6 +5,8 @@
 #ifndef BOOST_REQUESTS_REDIRECT_HPP
 #define BOOST_REQUESTS_REDIRECT_HPP
 
+#include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/local/stream_protocol.hpp>
 #include <boost/requests/public_suffix.hpp>
 #include <boost/requests/detail/config.hpp>
 #include <boost/url/scheme.hpp>
@@ -37,6 +39,15 @@ BOOST_REQUESTS_DECL bool should_redirect(
         urls::url_view current,
         urls::url_view target,
         const public_suffix_list & pse = default_public_suffix_list());
+
+/// Get the port from a url-view
+BOOST_REQUESTS_DECL std::uint16_t get_port(urls::url_view domain);
+
+/// Check if the endpoint is the same as the endpoint
+BOOST_REQUESTS_DECL bool same_host(const urls::url_view current, const asio::ip::tcp::endpoint);
+
+/// Check if the endpoint is the same as the endpoint
+BOOST_REQUESTS_DECL bool same_host(const urls::url_view current, const asio::local::stream_protocol::endpoint);
 
 }
 }

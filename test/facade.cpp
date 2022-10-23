@@ -73,24 +73,19 @@ TEST_CASE("variadics")
     CHECK(a4 == std::make_tuple(42));
     CHECK(a5 == std::make_tuple(42));
 }
-
-struct test_impl : rqs::facade<test_impl>
-{
-
-};
-
+/*
 struct test_op1
 {
 
 };
-/*
 TEST_CASE("Experiment")
 {
     test_impl ti{};
 
     json::storage_ptr ptr;
-    auto res = ti.get("/api/test", ptr, test_op1{});
-}
-*/
+    //auto res = ti.get("/api/test", ptr, test_op1{});
+
+
+}*/
 
 TEST_SUITE_END();

@@ -39,7 +39,7 @@ namespace grammar
         @ref parse,
         @ref token_rule.
 */
-#ifdef BOOST_URL_DOCS
+#ifdef BOOST_REQUESTS_DOCS
 constexpr __implementation_defined__ non_zero_digit;
 #else
 

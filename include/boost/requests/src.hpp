@@ -16,10 +16,18 @@
 #endif
 
 #include <boost/requests/fields/impl/keep_alive.ipp>
+#include <boost/requests/fields/impl/link.ipp>
 #include <boost/requests/fields/impl/set_cookie.ipp>
 #include <boost/requests/impl/connection.ipp>
+#include <boost/requests/impl/cookie_jar.ipp>
+#include <boost/requests/impl/error.ipp>
+#include <boost/requests/impl/mime_types.ipp>
 #include <boost/requests/impl/public_suffix.ipp>
 #include <boost/requests/impl/redirect.ipp>
+#include <boost/requests/impl/request.ipp>
+#include <boost/requests/impl/response.ipp>
 #include <boost/requests/rfc/impl/dates.ipp>
+#include <boost/requests/rfc/impl/link.ipp>
+#include <boost/requests/rfc/impl/quoted_string.ipp>
 
 #endif //BOOST_REQUESTS_SRC_IPP
