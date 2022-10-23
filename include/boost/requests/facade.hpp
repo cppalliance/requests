@@ -37,7 +37,6 @@ struct facade
            basic_request<Allocator> req,
            system::error_code & ec) -> basic_response<Allocator>
   {
-    auto p = static_cast<Derived*>(this);
     return static_cast<Derived*>(this)->request(http::verb::get, target, empty{}, std::move(req), ec);
   }
 
@@ -53,7 +52,6 @@ struct facade
             basic_request<Allocator> req,
             system::error_code & ec) -> basic_response<Allocator>
   {
-    auto p = static_cast<Derived*>(this);
     return static_cast<Derived*>(this)->request(http::verb::head, target, empty{}, std::move(req), ec);
   }
 
@@ -72,7 +70,6 @@ struct facade
             basic_request<Allocator> req,
             system::error_code & ec) -> basic_response<Allocator>
   {
-    auto p = static_cast<Derived*>(this);
     return static_cast<Derived*>(this)->request(http::verb::post, target,
                                            std::forward<RequestBody>(request_body), std::move(req), ec);
   }
@@ -93,7 +90,6 @@ struct facade
            basic_request<Allocator> req,
            system::error_code & ec) -> basic_response<Allocator>
   {
-    auto p = static_cast<Derived*>(this);
     return static_cast<Derived*>(this)->request(http::verb::put, target,
                                            std::forward<RequestBody>(request_body), std::move(req), ec);
   }
@@ -114,7 +110,6 @@ struct facade
              basic_request<Allocator> req,
              system::error_code & ec) -> basic_response<Allocator>
   {
-    auto p = static_cast<Derived*>(this);
     return static_cast<Derived*>(this)->request(http::verb::patch, target,
                                            std::forward<RequestBody>(request_body), std::move(req), ec);
   }
@@ -134,7 +129,6 @@ struct facade
                basic_request<Allocator> req,
                system::error_code & ec) -> basic_response<Allocator>
   {
-    auto p = static_cast<Derived*>(this);
     return static_cast<Derived*>(this)->request(http::verb::delete_, target,
                                            std::forward<RequestBody>(request_body), std::move(req), ec);
   }
@@ -152,7 +146,6 @@ struct facade
                basic_request<Allocator> req,
                system::error_code & ec) -> basic_response<Allocator>
   {
-    auto p = static_cast<Derived*>(this);
     return static_cast<Derived*>(this)->request(http::verb::delete_, target, empty{}, std::move(req), ec);
   }
 
@@ -169,7 +162,6 @@ struct facade
                basic_request<Allocator> req,
                system::error_code & ec) -> basic_response<Allocator>
   {
-    auto p = static_cast<Derived*>(this);
     return static_cast<Derived*>(this)->request(http::verb::connect, target, empty{}, std::move(req), ec);
   }
 
@@ -186,7 +178,6 @@ struct facade
                basic_request<Allocator> req,
                system::error_code & ec) -> basic_response<Allocator>
   {
-    auto p = static_cast<Derived*>(this);
     return static_cast<Derived*>(this)->request(http::verb::options, target, empty{}, std::move(req), ec);
   }
 
@@ -203,7 +194,6 @@ struct facade
              basic_request<Allocator> req,
              system::error_code & ec) -> basic_response<Allocator>
   {
-    auto p = static_cast<Derived*>(this);
     return static_cast<Derived*>(this)->request(http::verb::trace, target, empty{}, std::move(req), ec);
   }
 

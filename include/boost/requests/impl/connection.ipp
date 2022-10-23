@@ -15,9 +15,16 @@
 namespace boost {
 namespace requests {
 
-
 template struct basic_connection<asio::ip::tcp::socket>;
 template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>;
+
+template struct basic_connection<asio::ip::tcp::socket>::                   async_request_op<beast::http::empty_body,  std::allocator<char>, std::allocator<void>>;
+template struct basic_connection<asio::ip::tcp::socket>::                   async_request_op<beast::http::string_body, std::allocator<char>, std::allocator<void>>;
+template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_request_op<beast::http::empty_body,  std::allocator<char>, std::allocator<void>>;
+template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_request_op<beast::http::string_body, std::allocator<char>, std::allocator<void>>;
+
+template struct basic_connection<asio::ip::tcp::socket>::                   async_download_op<std::allocator<char>, std::allocator<void>>;
+template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_download_op<std::allocator<char>, std::allocator<void>>;
 
 }
 }
