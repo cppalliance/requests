@@ -9,6 +9,7 @@
 #include <boost/asio/awaitable.hpp>
 #include <boost/asio/co_spawn.hpp>
 #include <boost/asio/detached.hpp>
+#include <boost/asio/redirect_error.hpp>
 #include <boost/asio/use_awaitable.hpp>
 
 #include "doctest.h"
@@ -117,12 +118,41 @@ TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, reques
   }
 
 
+  SUBCASE("get")
+  {
+    auto hdr = hc.get("/get", {requests::headers({{"Test-Header", "it works"}}), {false}});
+
+    auto hd = hdr.json().at("headers");
+
+    CHECK(hd.at("Host")        == json::value(url));
+    CHECK(hd.at("Test-Header") == json::value("it works"));
+  }
+
+  SUBCASE("get-redirect")
+  {
+    auto hdr = hc.get("/redirect-to?url=%2Fget", {requests::headers({{"Test-Header", "it works"}}), {false}});
+
+    CHECK(hdr.history.size() == 1u);
+    CHECK(hdr.history.at(0u).at(beast::http::field::location) == "/get");
+
+    auto hd = hdr.json().at("headers");
+
+    CHECK(hd.at("Host")        == json::value(url));
+    CHECK(hd.at("Test-Header") == json::value("it works"));
+  }
+
+  SUBCASE("too-many-redirects")
+  {
+    system::error_code ec;
+    auto res = hc.get("/redirect/10", {{}, {false, requests::private_domain, 5}}, ec);
+    CHECK(res.history.size() == 4);
+    CHECK(beast::http::to_status_class(res.header.result()) == beast::http::status_class::redirection);
+    CHECK(ec == requests::error::too_many_redirects);
+  }
+
   SUBCASE("download")
   {
-    auto pt = std::filesystem::temp_directory_path();
-
-    const auto target = pt / "requests-test.png";
-    printf("Target : %s\n", target.c_str());
+    const auto target = std::filesystem::temp_directory_path() / "requests-test.png";
     if (std::filesystem::exists(target))
       std::filesystem::remove(target);
 
@@ -139,6 +169,44 @@ TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, reques
   }
 
 
+  SUBCASE("download-redirect")
+  {
+    const auto target = std::filesystem::temp_directory_path() / "requests-test.png";
+    if (std::filesystem::exists(target))
+      std::filesystem::remove(target);
+
+    CHECK(!std::filesystem::exists(target));
+    auto res = hc.download("/redirect-to?url=%2Fimage", {{}, {false}}, target.string());
+
+    CHECK(res.history.size() == 1u);
+    CHECK(res.history.at(0u).at(beast::http::field::location) == "/image");
+
+    CHECK(std::stoull(res.header.at(beast::http::field::content_length)) > 0u);
+    CHECK(res.string_view().empty());
+    CHECK(res.header.at(beast::http::field::content_type) == "image/png");
+
+    CHECK(std::filesystem::exists(target));
+    std::error_code ec;
+    std::filesystem::remove(target, ec);
+  }
+
+
+  SUBCASE("download-too-many-redirects")
+  {
+    system::error_code ec;
+    const auto target = std::filesystem::temp_directory_path() / "requests-test.html";
+    if (std::filesystem::exists(target))
+      std::filesystem::remove(target);
+    auto res = hc.download("/redirect/10", {{}, {false, requests::private_domain, 3}}, target.string(), ec);
+    CHECK(res.history.size() == 2);
+
+    CHECK(beast::http::to_status_class(res.header.result()) == beast::http::status_class::redirection);
+
+    CHECK(ec == requests::error::too_many_redirects);
+    CHECK(!std::filesystem::exists(target));
+  }
+
+
   SUBCASE("delete")
   {
     auto hdr = hc.delete_("/delete", json::value{{"test-key", "test-value"}}, {{}, {false}});
@@ -146,16 +214,6 @@ TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, reques
     auto js = hdr.json();
     CHECK(beast::http::to_status_class(hdr.header.result()) == beast::http::status_class::successful);
     CHECK(js.at("headers").at("Content-Type") == "application/json");
-  }
-
-  SUBCASE("get")
-  {
-    auto hdr = hc.get("/get", {requests::headers({{"Test-Header", "it works"}}), {false}});
-
-    auto hd = hdr.json().at("headers");
-
-    CHECK(hd.at("Host")        == json::value(url));
-    CHECK(hd.at("Test-Header") == json::value("it works"));
   }
 
   SUBCASE("patch-json")
@@ -301,6 +359,42 @@ asio::awaitable<void> async_https_request()
     CHECK(hd.at("Test-Header") == json::value("it works"));
   }
 
+  SUBCASE("get")
+  {
+    auto hdr = co_await hc.async_get("/get", {requests::headers({{"Test-Header", "it works"}}), {false}});
+
+    auto hd = hdr.json().at("headers");
+
+    CHECK(hd.at("Host")        == json::value(url));
+    CHECK(hd.at("Test-Header") == json::value("it works"));
+  }
+
+
+  SUBCASE("get-redirect")
+  {
+    auto hdr = co_await hc.async_get("/redirect-to?url=%2Fget",
+                                    {requests::headers({{"Test-Header", "it works"}}), {false}});
+
+    CHECK(hdr.history.size() == 1u);
+    CHECK(hdr.history.at(0u).at(beast::http::field::location) == "/get");
+
+    auto hd = hdr.json().at("headers");
+
+    CHECK(hd.at("Host")        == json::value(url));
+    CHECK(hd.at("Test-Header") == json::value("it works"));
+  }
+
+  SUBCASE("too-many-redirects")
+  {
+    system::error_code ec;
+    auto res = co_await hc.async_get("/redirect/10", {{}, {false, requests::private_domain, 5}},
+                                     asio::redirect_error(asio::use_awaitable, ec));
+    CHECK(res.history.size() == 4);
+    CHECK(beast::http::to_status_class(res.header.result()) == beast::http::status_class::redirection);
+    CHECK(ec == requests::error::too_many_redirects);
+  }
+
+
   SUBCASE("download")
   {
     auto pt = std::filesystem::temp_directory_path();
@@ -322,6 +416,45 @@ asio::awaitable<void> async_https_request()
   }
 
 
+  SUBCASE("download-redirect")
+  {
+    const auto target = std::filesystem::temp_directory_path() / "requests-test.png";
+    if (std::filesystem::exists(target))
+      std::filesystem::remove(target);
+
+    CHECK(!std::filesystem::exists(target));
+    auto res = co_await hc.async_download("/redirect-to?url=%2Fimage", {{}, {false}}, target.string());
+
+    CHECK(res.history.size() == 1u);
+    CHECK(res.history.at(0u).at(beast::http::field::location) == "/image");
+
+    CHECK(std::stoull(res.header.at(beast::http::field::content_length)) > 0u);
+    CHECK(res.string_view().empty());
+    CHECK(res.header.at(beast::http::field::content_type) == "image/png");
+
+    CHECK(std::filesystem::exists(target));
+    std::error_code ec;
+    std::filesystem::remove(target, ec);
+  }
+
+
+  SUBCASE("download-too-many-redirects")
+  {
+    system::error_code ec;
+    const auto target = std::filesystem::temp_directory_path() / "requests-test.html";
+    if (std::filesystem::exists(target))
+      std::filesystem::remove(target);
+    auto res = co_await hc.async_download("/redirect/10", {{}, {false, requests::private_domain, 3}}, target.string(),
+                                          asio::redirect_error(asio::use_awaitable, ec));
+    CHECK(res.history.size() == 2);
+
+    CHECK(beast::http::to_status_class(res.header.result()) == beast::http::status_class::redirection);
+
+    CHECK(ec == requests::error::too_many_redirects);
+    CHECK(!std::filesystem::exists(target));
+  }
+
+
   SUBCASE("delete")
   {
     auto hdr = co_await hc.async_delete("/delete", json::value{{"test-key", "test-value"}}, {{}, {false}});
@@ -331,15 +464,6 @@ asio::awaitable<void> async_https_request()
     CHECK(js.at("headers").at("Content-Type") == "application/json");
   }
 
-  SUBCASE("get")
-  {
-    auto hdr = co_await hc.async_get("/get", {requests::headers({{"Test-Header", "it works"}}), {false}});
-
-    auto hd = hdr.json().at("headers");
-
-    CHECK(hd.at("Host")        == json::value(url));
-    CHECK(hd.at("Test-Header") == json::value("it works"));
-  }
 
   SUBCASE("patch-json")
   {

@@ -15,12 +15,10 @@
 #include <boost/asio/ssl/host_name_verification.hpp>
 #include <boost/asem/lock_guard.hpp>
 #include <boost/container/pmr/monotonic_buffer_resource.hpp>
-#include <boost/url/grammar/ci_string.hpp>
-
 #include <boost/requests/detail/define.hpp>
 #include <boost/requests/detail/state_machine.hpp>
-
 #include <boost/smart_ptr/allocate_unique.hpp>
+#include <boost/url/grammar/ci_string.hpp>
 
 /*
 
@@ -563,17 +561,13 @@ struct basic_connection<Stream>::async_single_request_op : boost::asio::coroutin
     {
       this_->keep_alive_set_.timeout = std::chrono::system_clock::time_point::min();
       this_->keep_alive_set_.max = 0ull;
-      printf("CLOSE AFTER %d %d %s\n", __LINE__, ec.value(), ec.message().c_str());
       return asem::async_lock(this_->write_mtx_, async_next(close_after, std::move(read_lock)));
     }
     if (conn_itr == response.end())
       async_complete(ec);
 
     if (urls::grammar::ci_is_equal(conn_itr->value(), "close"))
-    {
-      printf("CLOSE AFTER %d\n", __LINE__);
       return asem::async_lock(this_->write_mtx_, async_next(close_after , std::move(read_lock)));
-    }
 
 
     if (!urls::grammar::ci_is_equal(conn_itr->value(), "keep-alive"))
@@ -606,7 +600,6 @@ struct basic_connection<Stream>::async_single_request_op : boost::asio::coroutin
 
   async_state(close_after, system::error_code ec,  lock_type write_lock, lock_type read_lock)
   {
-    printf("Doing disconnect\n");
     if (ec)
     {
       boost::system::error_code ec_;
@@ -708,7 +701,7 @@ auto basic_connection<Stream>::request(
           || (rc == http::status::permanent_redirect)))
   {
     auto loc_itr = rres.base().find(http::field::location);
-    if (loc_itr != rres.base().end())
+    if (loc_itr == rres.base().end())
     {
       static constexpr auto loc((BOOST_CURRENT_LOCATION));
       ec.assign(error::invalid_redirect, &loc);
@@ -815,7 +808,6 @@ auto basic_connection<Stream>::download(
   }
 
   single_request(hreq, hres, ec);
-
   using response_type = basic_response<Allocator>;
 
 
@@ -823,44 +815,47 @@ auto basic_connection<Stream>::download(
   while (!ec &&
          (req.opts.redirect >= redirect_mode::endpoint)
          && ((rc == http::status::moved_permanently)
-             || (rc == http::status::found)
-             || (rc == http::status::temporary_redirect)
-             || (rc == http::status::permanent_redirect)))
+          || (rc == http::status::found)
+          || (rc == http::status::temporary_redirect)
+          || (rc == http::status::permanent_redirect)))
   {
-    res.history.emplace_back(std::move(hres.base()), (typename response_type::body_type::value_type){alloc});
 
     auto loc_itr = hres.base().find(http::field::location);
-    if (loc_itr != hres.base().end())
+    if (loc_itr == hres.base().end())
     {
       static constexpr auto loc((BOOST_CURRENT_LOCATION));
       ec.assign(error::invalid_redirect, &loc);
-      break ;
+      res.header = std::move(hres.base());
+      return res;
     }
     const auto & loc = *loc_itr;
-
     auto url = urls::parse_relative_ref(loc.value());
+
     if (url.has_error())
       url = urls::parse_uri(loc.value());
 
     if (url.has_error())
     {
       ec = url.error();
-      break;
+      res.header = std::move(hres.base());
+      return res;
     }
     // we don't need to use should_redirect, bc we're on the same host.
     if (url->has_authority() && !same_host(*url, endpoint()))
     {
       static constexpr auto sloc((BOOST_CURRENT_LOCATION));
       ec.assign(error::forbidden_redirect, &sloc);
-      break ;
+      res.header = std::move(hres.base());
+      return res;
     }
-
     if (--req.opts.max_redirects == 0)
     {
       static constexpr auto sloc((BOOST_CURRENT_LOCATION));
       ec.assign(error::too_many_redirects, &sloc);
-      break ;
+      res.header = std::move(hres.base());
+      return res;
     }
+    res.history.emplace_back(std::move(hres.base()), (typename response_type::body_type::value_type){alloc});
     hreq.base().target(url->encoded_path());
     if (req.jar)
     {
@@ -874,15 +869,16 @@ auto basic_connection<Stream>::download(
     }
 
     single_request(hreq, hres, ec);
+
     rc = hres.base().result();
 
   }
   hreq.method(beast::http::verb::get);
-
   http::response<http::file_body, fields_type> fres{http::response_header<fields_type>{alloc}};
 
   auto str = download_path.string();
-  fres.body().open(str.c_str(), beast::file_mode::write, ec);
+  if (!ec)
+    fres.body().open(str.c_str(), beast::file_mode::write, ec);
   if (!ec)
     single_request(hreq, fres, ec);
 
@@ -994,7 +990,7 @@ struct basic_connection<Stream>::async_request_op
            || (rc == http::status::permanent_redirect)))
     {
       auto loc_itr = state_->rres.base().find(http::field::location);
-      if (loc_itr != state_->rres.base().end())
+      if (loc_itr == state_->rres.base().end())
       {
         static constexpr auto loc((BOOST_CURRENT_LOCATION));
         ec.assign(error::invalid_redirect, &loc);
@@ -1027,7 +1023,6 @@ struct basic_connection<Stream>::async_request_op
         goto complete;
       }
 
-
       if (state_->jar)
       {
         unsigned char buf[4096];
@@ -1046,11 +1041,10 @@ struct basic_connection<Stream>::async_request_op
 
     }
 
-    state_->res.header = std::move(state_->rres.base());
     state_->res.buffer = std::move(state_->rres.body());
   complete:
-    auto tmp = std::move(state_->res);
-    self.complete(ec, std::move(tmp));
+    state_->res.header = std::move(state_->rres.base());
+    self.complete(ec, std::move(state_->res));
   }
 
 };
@@ -1175,7 +1169,7 @@ struct basic_connection<Stream>::async_download_op
                   boost::system::error_code ec)
   {
     const auto rc = state_->hres.result();
-    printf("Dun: %s -> %d\n", ec.message().c_str(), rc);
+
     if (ec)
       return self.complete(ec, std::move(state_->res));
 
@@ -1185,14 +1179,13 @@ struct basic_connection<Stream>::async_download_op
           || (rc == http::status::temporary_redirect)
           || (rc == http::status::permanent_redirect)))
     {
-      state_->res.history.emplace_back(std::move(state_->hres.base()),
-                                       (typename response_type::body_type::value_type){state_->alloc});
 
       auto loc_itr = state_->hres.base().find(http::field::location);
-      if (loc_itr != state_->hres.base().end())
+      if (loc_itr == state_->hres.base().end())
       {
         static constexpr auto loc((BOOST_CURRENT_LOCATION));
         ec.assign(error::invalid_redirect, &loc);
+        state_->res.header = std::move(state_->hres);
         goto complete ;
       }
       const auto & loc = *loc_itr;
@@ -1204,6 +1197,7 @@ struct basic_connection<Stream>::async_download_op
       if (url.has_error())
       {
         ec = url.error();
+        state_->res.header = std::move(state_->hres);
         goto complete;
       }
       // we don't need to use should_redirect, bc we're on the same host.
@@ -1211,6 +1205,7 @@ struct basic_connection<Stream>::async_download_op
       {
         static constexpr auto sloc((BOOST_CURRENT_LOCATION));
         ec.assign(error::forbidden_redirect, &sloc);
+        state_->res.header = std::move(state_->hres);
         goto complete;
       }
 
@@ -1218,8 +1213,12 @@ struct basic_connection<Stream>::async_download_op
       {
         static constexpr auto sloc((BOOST_CURRENT_LOCATION));
         ec.assign(error::too_many_redirects, &sloc);
+        state_->res.header = std::move(state_->hres);
         goto complete;
       }
+      state_->res.history.emplace_back(std::move(state_->hres.base()),
+                                       (typename response_type::body_type::value_type){state_->alloc});
+
       state_->hreq.base().target(url->encoded_path());
       if (state_->jar)
       {
@@ -1238,7 +1237,6 @@ struct basic_connection<Stream>::async_download_op
     {
       auto str = state_->download_path.string();
       state_->hreq.method(beast::http::verb::get);
-      printf("Open %s\n", str.c_str());
       state_->fres.body().open(str.c_str(), beast::file_mode::write, ec);
       if (ec)
         goto complete;
