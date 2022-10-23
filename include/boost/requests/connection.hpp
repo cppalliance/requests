@@ -21,22 +21,21 @@
 #include <boost/beast/http/write.hpp>
 #include <boost/beast/websocket/stream.hpp>
 #include <boost/requests/body_traits.hpp>
+#include <boost/requests/request.hpp>
+#include <boost/requests/response.hpp>
 #include <boost/requests/detail/ssl.hpp>
-#include <boost/requests/facade.hpp>
 #include <boost/requests/fields/keep_alive.hpp>
 #include <boost/requests/options.hpp>
 #include <boost/requests/redirect.hpp>
 #include <boost/smart_ptr/allocate_unique.hpp>
 #include <boost/url/url_view.hpp>
 
-namespace boost
-{
-namespace requests
-{
+namespace boost {
+namespace requests {
+
 
 template<typename Stream>
-struct basic_connection : facade<basic_connection<Stream>, urls::pct_string_view,
-                                 typename std::remove_reference_t<Stream>::executor_type>
+struct basic_connection
 {
     /// The type of the next layer.
     typedef typename std::remove_reference<Stream>::type next_layer_type;
@@ -251,6 +250,9 @@ struct basic_connection : facade<basic_connection<Stream>, urls::pct_string_view
                    const filesystem::path & download_path,
                    CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
 
+    using target_view = urls::pct_string_view;
+#include <boost/requests/detail/alias.def>
+
   private:
 
     Stream next_layer_;
@@ -265,10 +267,9 @@ struct basic_connection : facade<basic_connection<Stream>, urls::pct_string_view
     endpoint_type endpoint_;
     struct async_close_op;
     struct async_connect_op;
-    template<typename RequestBody, typename RequestAllocator,
-             typename ResponseBody, typename ResponseAllocator>
-    struct async_single_request_op;
 
+    template<typename, typename, typename, typename>
+    struct async_single_request_op;
 
     template<typename RequestBody, typename Allocator, typename CplAlloc>
     struct async_request_op;
