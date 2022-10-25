@@ -247,7 +247,7 @@ struct basic_connection
                                             basic_response<Allocator>))
     async_download(urls::pct_string_view path,
                    basic_request<Allocator> req,
-                   const filesystem::path & download_path,
+                   filesystem::path download_path,
                    CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
 
     using target_view = urls::pct_string_view;

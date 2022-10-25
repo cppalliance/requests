@@ -19,6 +19,7 @@
 #include <boost/requests/fields/impl/link.ipp>
 #include <boost/requests/fields/impl/set_cookie.ipp>
 #include <boost/requests/impl/connection.ipp>
+#include <boost/requests/impl/connection_pool.ipp>
 #include <boost/requests/impl/cookie_jar.ipp>
 #include <boost/requests/impl/error.ipp>
 #include <boost/requests/impl/mime_types.ipp>

@@ -9,7 +9,6 @@
 #define BOOST_REQUESTS_IMPL_CONNECTION_HPP
 
 #include <boost/requests/connection.hpp>
-#include <boost/requests/detail/lock.hpp>
 #include <boost/requests/detail/ssl.hpp>
 
 #include <boost/asio/ssl/host_name_verification.hpp>
@@ -126,13 +125,11 @@ void basic_connection<Stream>::set_host(core::string_view sv, system::error_code
 template<typename Stream>
 void basic_connection<Stream>::connect(endpoint_type ep, system::error_code & ec)
 {
-  using lock_type = detail::lock<asem::basic_mutex<boost::asem::st, executor_type>>;
-
-  lock_type wlock{write_mtx_, ec};
+  auto wlock = asem::lock(write_mtx_, ec);
   if (ec)
     return;
 
-  lock_type rlock{read_mtx_, ec};
+  auto rlock = asem::lock(read_mtx_, ec);
   if (ec)
     return;
 
@@ -143,13 +140,11 @@ void basic_connection<Stream>::connect(endpoint_type ep, system::error_code & ec
 template<typename Stream>
 void basic_connection<Stream>::close(system::error_code & ec)
 {
-  using lock_type = detail::lock<asem::basic_mutex<boost::asem::st, executor_type>>;
-
-  lock_type wlock{write_mtx_, ec};
+  auto wlock = asem::lock(write_mtx_, ec);
   if (ec)
     return;
 
-  lock_type rlock{read_mtx_, ec};
+  auto rlock = asem::lock(read_mtx_, ec);
   if (ec)
     return;
 
@@ -166,13 +161,13 @@ void basic_connection<Stream>::single_request(
 {
   ongoing_requests_++;
   detail::tracker t{ongoing_requests_};
-  using lock_type = detail::lock<asem::basic_mutex<boost::asem::st, executor_type>>;
+  using lock_type = asem::lock_guard<asem::basic_mutex<boost::asem::st, executor_type>>;
   std::chrono::system_clock::time_point now;
   lock_type lock, alock;
 
   // INIT
   {
-    checked_call(lock = lock_type, write_mtx_);
+    checked_call(lock = asem::lock, write_mtx_);
     goto write_init;
   }
 
@@ -188,7 +183,7 @@ void basic_connection<Stream>::single_request(
 
   state(disconnect)
   {
-    checked_call(alock = lock_type, read_mtx_);
+    checked_call(alock = asem::lock, read_mtx_);
     detail::close_impl(next_layer_, ec);
     ec.clear();
     goto connect ;
@@ -196,8 +191,8 @@ void basic_connection<Stream>::single_request(
 
   state(connect)
   {
-    if (!alock)
-      checked_call(alock = lock_type, read_mtx_);
+    if (read_mtx_.try_lock())
+      alock = lock_type(read_mtx_, std::adopt_lock);
 
     checked_call(detail::connect_impl, next_layer_, endpoint_);
     alock = {};
@@ -215,7 +210,7 @@ void basic_connection<Stream>::single_request(
     if (ec == asio::error::broken_pipe || ec == asio::error::connection_reset)
       goto connect ;
 
-    checked_call(lock = lock_type, read_mtx_);
+    checked_call(lock = asem::lock, read_mtx_);
     goto read_done ;
   }
 
@@ -256,7 +251,7 @@ void basic_connection<Stream>::single_request(
   state(close_after)
   {
     boost::system::error_code ec_;
-    lock_type rlock{write_mtx_, ec_};
+    auto lock = asem::lock(write_mtx_, ec_);
     if (!ec_)
       detail::close_impl(next_layer_, ec_);
     return;
@@ -1321,20 +1316,25 @@ BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                         basic_response<Allocator>))
 basic_connection<Stream>::async_download(urls::pct_string_view path,
                                          basic_request<Allocator> req,
-                                         const filesystem::path & download_path,
+                                         filesystem::path download_path,
                                          CompletionToken && completion_token)
 {
   using allocator_type = asio::associated_allocator_t<std::decay_t<CompletionToken>>;
   return asio::async_compose<CompletionToken,
                              void(system::error_code, basic_response<Allocator>)>(
       async_download_op<Allocator, allocator_type>{asio::get_associated_allocator(completion_token),
-                                   this, path, download_path, std::move(req)},
+                                   this, path, std::move(download_path), std::move(req)},
       completion_token,
       next_layer_
   );
 }
 
+#if !defined(BOOST_REQUESTS_HEADER_ONLY)
 
+extern template auto basic_connection<asio::ip::tcp::socket>::                   download(urls::pct_string_view, basic_request<>, const filesystem::path &, system::error_code &) -> response;
+extern template auto basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::download(urls::pct_string_view, basic_request<>, const filesystem::path &, system::error_code &) -> response;
+
+#endif
 
 
 }

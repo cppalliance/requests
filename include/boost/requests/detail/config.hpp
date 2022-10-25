@@ -54,5 +54,9 @@ namespace filesystem = boost::filesystem ;
 }
 }
 
+#if !defined(BOOST_REQUESTS_DEFAULT_POOL_SIZE)
+#define BOOST_REQUESTS_DEFAULT_POOL_SIZE 12
+#endif
+
 
 #endif // BOOST_REQUESTS_DETAIL_HPP
