@@ -9,6 +9,7 @@
 #include <boost/asio/awaitable.hpp>
 #include <boost/asio/co_spawn.hpp>
 #include <boost/asio/detached.hpp>
+#include <boost/asio/experimental/awaitable_operators.hpp>
 #include <boost/asio/redirect_error.hpp>
 #include <boost/asio/use_awaitable.hpp>
 
@@ -261,7 +262,7 @@ TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, reques
     CHECK(js.at("headers").at("Content-Type") == "application/x-www-form-urlencoded");
     CHECK(js.at("form") == json::value{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}});
   }
-  
+
   SUBCASE("post-json")
   {
     json::value msg {{"test-key", "test-value"}};
@@ -332,34 +333,20 @@ asio::awaitable<void> async_https_request()
   auto ep = *rslvr.resolve(url, requests::detail::has_ssl_v<Conn> ? "https" : "http").begin();
 
   co_await hc.async_connect(ep);
-  SUBCASE("single-request")
-  {
-    beast::http::request<beast::http::empty_body> req{beast::http::verb::get, "/headers", 11};
-    beast::http::response<beast::http::string_body> res;
-
-    co_await hc.async_single_request(req, res);
-
-    auto js = json::parse(res.body());
-
-    CHECK(js.at("headers").at("Host").as_string() == url);
-    CHECK(js.at("headers").at("User-Agent").as_string() == "Requests-" BOOST_BEAST_VERSION_STRING);
-
-  }
-
-  SUBCASE("headers")
+  auto headers = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
     requests::request r{requests::headers({{"Test-Header", "it works"}}), {false}};
     auto hdr = co_await hc.async_request(
-                          beast::http::verb::get, "/headers",
-                          requests::empty{}, r);
+        beast::http::verb::get, "/headers",
+        requests::empty{}, r);
 
     auto hd = hdr.json().at("headers");
 
     CHECK(hd.at("Host")        == json::value(url));
     CHECK(hd.at("Test-Header") == json::value("it works"));
-  }
+  };
 
-  SUBCASE("get")
+  auto get_ = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
     requests::request r{requests::headers({{"Test-Header", "it works"}}), {false}};
     auto hdr = co_await hc.async_get("/get", r);
@@ -368,10 +355,10 @@ asio::awaitable<void> async_https_request()
 
     CHECK(hd.at("Host")        == json::value(url));
     CHECK(hd.at("Test-Header") == json::value("it works"));
-  }
+  };
 
 
-  SUBCASE("get-redirect")
+  auto get_redirect = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
     requests::request r{requests::headers({{"Test-Header", "it works"}}), {false}};
     auto hdr = co_await hc.async_get("/redirect-to?url=%2Fget", r);
@@ -383,9 +370,9 @@ asio::awaitable<void> async_https_request()
 
     CHECK(hd.at("Host")        == json::value(url));
     CHECK(hd.at("Test-Header") == json::value("it works"));
-  }
+  };
 
-  SUBCASE("too-many-redirects")
+  auto too_many_redirects = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
     system::error_code ec;
     requests::request r{{}, {false, requests::private_domain, 5}};
@@ -395,10 +382,10 @@ asio::awaitable<void> async_https_request()
     CHECK(res.history.size() == 4);
     CHECK(beast::http::to_status_class(res.header.result()) == beast::http::status_class::redirection);
     CHECK(ec == requests::error::too_many_redirects);
-  }
+  };
 
 
-  SUBCASE("download")
+  auto download = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
     auto pt = std::filesystem::temp_directory_path();
 
@@ -417,12 +404,12 @@ asio::awaitable<void> async_https_request()
     CHECK(std::filesystem::exists(target));
     std::error_code ec;
     std::filesystem::remove(target, ec);
-  }
+  };
 
 
-  SUBCASE("download-redirect")
+  auto download_redirect = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
-    const auto target = std::filesystem::temp_directory_path() / "requests-test.png";
+    const auto target = std::filesystem::temp_directory_path() / "requests-test-2.png";
     if (std::filesystem::exists(target))
       std::filesystem::remove(target);
 
@@ -440,10 +427,10 @@ asio::awaitable<void> async_https_request()
     CHECK(std::filesystem::exists(target));
     std::error_code ec;
     std::filesystem::remove(target, ec);
-  }
+  };
 
 
-  SUBCASE("download-too-many-redirects")
+  auto download_too_many_redirects = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
     system::error_code ec;
     const auto target = std::filesystem::temp_directory_path() / "requests-test.html";
@@ -459,10 +446,10 @@ asio::awaitable<void> async_https_request()
 
     CHECK(ec == requests::error::too_many_redirects);
     CHECK(!std::filesystem::exists(target));
-  }
+  };
 
 
-  SUBCASE("delete")
+  auto delete_ = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
     requests::request r{{}, {false}};
     json::value v{{"test-key", "test-value"}};
@@ -471,9 +458,9 @@ asio::awaitable<void> async_https_request()
     auto js = hdr.json();
     CHECK(beast::http::to_status_class(hdr.header.result()) == beast::http::status_class::successful);
     CHECK(js.at("headers").at("Content-Type") == "application/json");
-  }
+  };
 
-  SUBCASE("patch-json")
+  auto patch_json = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
     json::value msg {{"test-key", "test-value"}};
     requests::request r{{}, {false}};
@@ -483,23 +470,23 @@ asio::awaitable<void> async_https_request()
     CHECK(hdr.header.result() == beast::http::status::ok);
     CHECK(js.at("headers").at("Content-Type") == "application/json");
     CHECK(js.at("json") == msg);
-  }
+  };
 
-  SUBCASE("patch-form")
+  auto patch_form = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
     requests::request r{{}, {false}};
     requests::form f{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}};
     auto hdr = co_await hc.async_patch("/patch",
-                        f,
-                        r);
+                                       f,
+                                       r);
 
     auto js = hdr.json();
     CHECK(hdr.header.result() == beast::http::status::ok);
     CHECK(js.at("headers").at("Content-Type") == "application/x-www-form-urlencoded");
     CHECK(js.at("form") == json::value{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}});
-  }
+  };
 
-  SUBCASE("put-json")
+  auto put_json = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
     json::value msg {{"test-key", "test-value"}};
     requests::request r{{}, {false}};
@@ -509,22 +496,22 @@ asio::awaitable<void> async_https_request()
     CHECK(hdr.header.result() == beast::http::status::ok);
     CHECK(js.at("headers").at("Content-Type") == "application/json");
     CHECK(js.at("json") == msg);
-  }
+  };
 
-  SUBCASE("put-form")
+  auto put_form = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
     requests::request r{{}, {false}};
     requests::form f{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}};
     auto hdr = co_await hc.async_put("/put",
-                      f, r);
+                                     f, r);
 
     auto js = hdr.json();
     CHECK(hdr.header.result() == beast::http::status::ok);
     CHECK(js.at("headers").at("Content-Type") == "application/x-www-form-urlencoded");
     CHECK(js.at("form") == json::value{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}});
-  }
+  };
 
-  SUBCASE("post-json")
+  auto post_json = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
     json::value msg {{"test-key", "test-value"}};
 
@@ -535,9 +522,9 @@ asio::awaitable<void> async_https_request()
     CHECK(hdr.header.result() == beast::http::status::ok);
     CHECK(js.at("headers").at("Content-Type") == "application/json");
     CHECK(js.at("json") == msg);
-  }
+  };
 
-  SUBCASE("post-form")
+  auto post_form = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
 
     requests::request r{{}, {false}};
@@ -548,7 +535,25 @@ asio::awaitable<void> async_https_request()
     CHECK(hdr.header.result() == beast::http::status::ok);
     CHECK(js.at("headers").at("Content-Type") == "application/x-www-form-urlencoded");
     CHECK(js.at("form") == json::value{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}});
-  }
+  };
+
+  using namespace asio::experimental::awaitable_operators ;
+  co_await (
+      headers(hc, url)
+      && get_(hc, url)
+      && get_redirect(hc, url)
+      && too_many_redirects(hc, url)
+      && download(hc, url)
+      && download_redirect(hc, url)
+      && download_too_many_redirects(hc, url)
+      && delete_(hc, url)
+      && patch_json(hc, url)
+      && patch_form(hc, url)
+      && put_json(hc, url)
+      && put_form(hc, url)
+      && post_json(hc, url)
+      && post_form(hc, url)
+  );
 }
 
 
