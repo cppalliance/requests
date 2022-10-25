@@ -9,6 +9,7 @@
 #define BOOST_REQUESTS_IMPL_CONNECTION_HPP
 
 #include <boost/requests/connection.hpp>
+#include <boost/requests/detail/config.hpp>
 #include <boost/requests/detail/ssl.hpp>
 
 #include <boost/asio/ssl/host_name_verification.hpp>
@@ -161,7 +162,7 @@ void basic_connection<Stream>::single_request(
 {
   ongoing_requests_++;
   detail::tracker t{ongoing_requests_};
-  using lock_type = asem::lock_guard<asem::basic_mutex<boost::asem::st, executor_type>>;
+  using lock_type = asem::lock_guard<detail::basic_mutex<executor_type>>;
   std::chrono::system_clock::time_point now;
   lock_type lock, alock;
 
@@ -280,7 +281,7 @@ struct basic_connection<Stream>::async_connect_op
   basic_connection<Stream> * this_;
   endpoint_type ep;
 
-  using mutex_type = asem::basic_mutex<boost::asem::st, executor_type>;
+  using mutex_type = detail::basic_mutex<executor_type>;
 
   template<typename Self>
   void operator()(Self && self)
@@ -353,7 +354,7 @@ struct basic_connection<Stream>::async_close_op
 {
   basic_connection<Stream> * this_;
   detail::tracker t{this_->ongoing_requests_};
-  using mutex_type = asem::basic_mutex<boost::asem::st, executor_type>;
+  using mutex_type = detail::basic_mutex<executor_type>;
   using lock_type = asem::lock_guard<mutex_type>;
 
   template<typename Self>
@@ -447,7 +448,7 @@ struct basic_connection<Stream>::async_single_request_op : boost::asio::coroutin
   beast::http::request<RequestBody, beast::http::basic_fields<RequestAllocator>> &req;
   beast::http::response<ResponseBody, beast::http::basic_fields<ResponseAllocator>> & res;
   detail::tracker t{++this_->ongoing_requests_};
-  using lock_type = asem::lock_guard<asem::basic_mutex<boost::asem::st, typename Stream::executor_type>>;
+  using lock_type = asem::lock_guard<detail::basic_mutex<typename Stream::executor_type>>;
   std::chrono::system_clock::time_point now;
   lock_type lock, alock;
 

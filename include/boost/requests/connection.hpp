@@ -256,7 +256,7 @@ struct basic_connection
   private:
 
     Stream next_layer_;
-    asem::basic_mutex<boost::asem::st, executor_type>
+    detail::basic_mutex<executor_type>
             read_mtx_{next_layer_.get_executor()},
             write_mtx_{next_layer_.get_executor()};
 

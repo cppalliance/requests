@@ -277,7 +277,7 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
       BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (system::error_code, connection_type *))
     async_get_connection_(CompletionToken && completion_token);
 
-    asem::basic_mutex<asem::st, executor_type> mutex_;
+    detail::basic_mutex<executor_type> mutex_;
     std::string host_;
     std::vector<endpoint_type> endpoints_;
     std::size_t limit_;

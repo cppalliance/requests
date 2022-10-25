@@ -20,7 +20,7 @@ void basic_connection_pool<Stream>::lookup(urls::authority_view sv, system::erro
 {
   constexpr auto protocol = detail::has_ssl_v<Stream> ? "https" : "http";
   const auto service = sv.has_port() ? sv.port() : protocol;
-  using lock_type = asem::lock_guard<asem::basic_mutex<boost::asem::st, executor_type>>;
+  using lock_type = asem::lock_guard<detail::basic_mutex<executor_type>>;
 
   lock_type lock = asem::lock(mutex_, ec);
   if (ec)
@@ -53,7 +53,7 @@ struct basic_connection_pool<Stream>::async_lookup_op : asio::coroutine
   const core::string_view service = sv.has_port() ? sv.port() : protocol;
   std::shared_ptr<resolver_type> resolver;
 
-  using mutex_type = asem::basic_mutex<boost::asem::st, executor_type>;
+  using mutex_type = detail::basic_mutex<executor_type>;
   using lock_type = asem::lock_guard<mutex_type>;
 
   template<typename Self>
@@ -181,7 +181,7 @@ template<typename Stream>
 struct basic_connection_pool<Stream>::async_get_connection_op : asio::coroutine
 {
   basic_connection_pool<Stream> * this_;
-  using lock_type = asem::lock_guard<asem::basic_mutex<asem::st, executor_type>>;
+  using lock_type = asem::lock_guard<detail::basic_mutex<executor_type>>;
   using conn_t = boost::unordered_multimap<endpoint_type, connection_type, detail::endpoint_hash<endpoint_type>>;
   typename conn_t::iterator itr;
 
