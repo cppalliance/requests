@@ -144,7 +144,7 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
     template<typename Exec, typename = std::enable_if_t<detail::has_ssl_v<Stream>, Exec>>
     explicit basic_connection_pool(Exec && exec,
                                    asio::ssl::context & ctx,
-                                   std::size_t limit = 12)
+                                   std::size_t limit = BOOST_REQUESTS_DEFAULT_POOL_SIZE)
         : detail::ssl_base<true>(ctx), mutex_(std::forward<Exec>(exec)), limit_(limit) {}
 
     basic_connection_pool(basic_connection_pool && ) = default;
@@ -286,6 +286,7 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
     std::string host_;
     std::vector<endpoint_type> endpoints_;
     std::size_t limit_;
+    std::size_t connecting_{0u};
 
     boost::unordered_multimap<endpoint_type,
                               std::shared_ptr<connection_type>,

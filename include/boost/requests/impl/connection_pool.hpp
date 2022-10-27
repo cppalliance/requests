@@ -195,12 +195,12 @@ struct basic_connection_pool<Stream>::async_get_connection_op : asio::coroutine
   template<typename Self>
   void operator()(Self && self, system::error_code ec = {}, lock_type lock = {})
   {
-     if (ec)
-      return self.complete(ec, {nullptr});
-
     reenter (this)
     {
       yield asem::async_lock(this_->mutex_, std::move(self));
+      if (ec)
+        return self.complete(ec, {nullptr});
+
       // find an idle connection
       itr = std::find_if(this_->conns_.begin(), this_->conns_.end(),
                          [](const std::pair<const endpoint_type, std::shared_ptr<connection_type>> & conn)
@@ -216,10 +216,7 @@ struct basic_connection_pool<Stream>::async_get_connection_op : asio::coroutine
       if (this_->conns_.size() < this_->limit_) // open another connection then -> we block the entire
       {
         if (this_->endpoints_.empty())
-        {
-          this_->conns_.emplace(ep, nconn);
           return self.complete(asio::error::not_found, nullptr);
-        }
 
         //sort the endpoints by connections that use it
         std::sort(this_->endpoints_.begin(), this_->endpoints_.end(),
@@ -230,8 +227,12 @@ struct basic_connection_pool<Stream>::async_get_connection_op : asio::coroutine
         ep = this_->endpoints_.front();
         nconn = this_->template make_connection_<connection_type>(this_->get_executor());
         nconn->set_host(this_->host_);
-        /// this isn't ideal, since we don't have connect going on in parallel.
+        // this isn't ideal, since we don't have connect going on in parallel.
+
         yield nconn->async_connect(ep, asio::append(std::move(self), std::move(lock))); // don't unlock here.
+        if (ec)
+          return self.complete(ec, {nullptr});
+
         this_->conns_.emplace(ep, nconn);
         lock = {};
         return self.complete(error_code{}, std::move(nconn));
