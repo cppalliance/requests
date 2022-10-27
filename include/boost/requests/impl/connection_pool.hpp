@@ -114,7 +114,7 @@ basic_connection_pool<Stream>::async_lookup(urls::authority_view av,
 }
 
 template<typename Stream>
-auto basic_connection_pool<Stream>::get_connection_(error_code & ec) -> connection_type *
+auto basic_connection_pool<Stream>::get_connection(error_code & ec) -> std::shared_ptr<connection_type>
 {
 
   auto lock = asem::lock(mutex_, ec);
@@ -123,13 +123,13 @@ auto basic_connection_pool<Stream>::get_connection_(error_code & ec) -> connecti
 
   // find an idle connection
   auto itr = std::find_if(conns_.begin(), conns_.end(),
-                          [](const std::pair<const endpoint_type, connection_type> & conn)
+                          [](const std::pair<const endpoint_type, std::shared_ptr<connection_type>> & conn)
                           {
-                            return conn.second.working_requests() == 0u;
+                            return conn.second->working_requests() == 0u;
                           });
 
   if (itr != conns_.end())
-    return &itr->second;
+    return itr->second;
 
   // check if we can make more connections. -> open another connection.
   // the race here is that we might open one too many
@@ -148,25 +148,27 @@ auto basic_connection_pool<Stream>::get_connection_(error_code & ec) -> connecti
                 return conns_.count(a) < conns_.count(b);
               });
     const auto ep = endpoints_.front();
-    connection_type nconn = this->template make_connection_<connection_type>(get_executor());
-    nconn.set_host(host_);
-    nconn.connect(ep, ec);
+    std::shared_ptr<connection_type> nconn = this->template make_connection_<connection_type>(get_executor());
+    nconn->set_host(host_);
+    nconn->connect(ep, ec);
     if (ec)
       return nullptr;
 
     if (ec)
       return nullptr;
 
-    return &conns_.emplace(ep, std::move(nconn))->second;
+    conns_.emplace(ep, nconn);
+    return nconn;
+
   }
 
   // find the one with the lowest usage
   itr = std::min_element(conns_.begin(), conns_.end(),
-                         [](const std::pair<const endpoint_type, connection_type> & lhs,
-                            const std::pair<const endpoint_type, connection_type> & rhs)
+                         [](const std::pair<const endpoint_type, std::shared_ptr<connection_type>> & lhs,
+                            const std::pair<const endpoint_type, std::shared_ptr<connection_type>> & rhs)
                          {
-                           return (lhs.second.working_requests() + (lhs.second.is_open() ? 0 : 1))
-                                < (rhs.second.working_requests() + (rhs.second.is_open() ? 0 : 1));
+                           return (lhs.second->working_requests() + (lhs.second->is_open() ? 0 : 1))
+                                < (rhs.second->working_requests() + (rhs.second->is_open() ? 0 : 1));
                          });
   if (itr == conns_.end())
   {
@@ -174,7 +176,7 @@ auto basic_connection_pool<Stream>::get_connection_(error_code & ec) -> connecti
     return nullptr;
   }
   else
-    return &itr->second;
+    return itr->second;
 }
 
 template<typename Stream>
@@ -182,37 +184,42 @@ struct basic_connection_pool<Stream>::async_get_connection_op : asio::coroutine
 {
   basic_connection_pool<Stream> * this_;
   using lock_type = asem::lock_guard<detail::basic_mutex<executor_type>>;
-  using conn_t = boost::unordered_multimap<endpoint_type, connection_type, detail::endpoint_hash<endpoint_type>>;
+  using conn_t = boost::unordered_multimap<endpoint_type,
+                                           std::shared_ptr<connection_type>,
+                                           detail::endpoint_hash<endpoint_type>>;
   typename conn_t::iterator itr;
 
-  std::shared_ptr<connection_type> nconn;
+  std::shared_ptr<connection_type> nconn = nullptr;
   endpoint_type ep;
 
   template<typename Self>
   void operator()(Self && self, system::error_code ec = {}, lock_type lock = {})
   {
      if (ec)
-      return self.complete(ec, nullptr);
+      return self.complete(ec, {nullptr});
 
     reenter (this)
     {
       yield asem::async_lock(this_->mutex_, std::move(self));
       // find an idle connection
       itr = std::find_if(this_->conns_.begin(), this_->conns_.end(),
-                         [](const std::pair<const endpoint_type, connection_type> & conn)
+                         [](const std::pair<const endpoint_type, std::shared_ptr<connection_type>> & conn)
                          {
-                           return conn.second.working_requests() == 0u;
+                           return conn.second->working_requests() == 0u;
                          });
 
       if (itr != this_->conns_.end())
-        return self.complete(error_code{}, &itr->second);
+        return self.complete(error_code{}, itr->second);
 
       // check if we can make more connections. -> open another connection.
       // the race here is that we might open one too many
       if (this_->conns_.size() < this_->limit_) // open another connection then -> we block the entire
       {
         if (this_->endpoints_.empty())
+        {
+          this_->conns_.emplace(ep, nconn);
           return self.complete(asio::error::not_found, nullptr);
+        }
 
         //sort the endpoints by connections that use it
         std::sort(this_->endpoints_.begin(), this_->endpoints_.end(),
@@ -221,38 +228,38 @@ struct basic_connection_pool<Stream>::async_get_connection_op : asio::coroutine
                     return this_->conns_.count(a) < this_->conns_.count(b);
                   });
         ep = this_->endpoints_.front();
-        nconn = this_->template allocate_connection_<connection_type>(self.get_allocator(), this_->get_executor());
+        nconn = this_->template make_connection_<connection_type>(this_->get_executor());
         nconn->set_host(this_->host_);
-        yield nconn->async_connect(ep, asio::append(std::move(self), std::move(lock)));
-        auto p = &this_->conns_.emplace(ep, std::move(*nconn))->second;
-        nconn = nullptr;
+        /// this isn't ideal, since we don't have connect going on in parallel.
+        yield nconn->async_connect(ep, asio::append(std::move(self), std::move(lock))); // don't unlock here.
+        this_->conns_.emplace(ep, nconn);
         lock = {};
-        return self.complete(error_code{}, p);
+        return self.complete(error_code{}, std::move(nconn));
       }
       // find the one with the lowest usage
       itr = std::min_element(this_->conns_.begin(), this_->conns_.end(),
-                             [](const std::pair<const endpoint_type, connection_type> & lhs,
-                                const std::pair<const endpoint_type, connection_type> & rhs)
+                             [](const std::pair<const endpoint_type, std::shared_ptr<connection_type>> & lhs,
+                                const std::pair<const endpoint_type, std::shared_ptr<connection_type>> & rhs)
                              {
-                               return (lhs.second.working_requests() + (lhs.second.is_open() ? 0 : 1))
-                                    < (rhs.second.working_requests() + (rhs.second.is_open() ? 0 : 1));
+                               return (lhs.second->working_requests() + (lhs.second->is_open() ? 0 : 1))
+                                    < (rhs.second->working_requests() + (rhs.second->is_open() ? 0 : 1));
                              });
       lock = {};
       if (itr == this_->conns_.end())
         return self.complete(asio::error::not_found, nullptr);
       else
-        return self.complete(error_code{}, &itr->second);
+        return self.complete(error_code{}, itr->second);
     }
 
   }
 };
 
 template<typename Stream>
-template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (system::error_code, basic_connection<Stream> *)) CompletionToken>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (system::error_code, basic_connection<Stream> *))
-basic_connection_pool<Stream>::async_get_connection_(CompletionToken && completion_token)
+template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (system::error_code, std::shared_ptr<basic_connection<Stream>>)) CompletionToken>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (system::error_code, std::shared_ptr<basic_connection<Stream>>))
+basic_connection_pool<Stream>::async_get_connection(CompletionToken && completion_token)
 {
-  return asio::async_compose<CompletionToken, void(system::error_code, basic_connection<Stream> *)>(
+  return asio::async_compose<CompletionToken, void(system::error_code, std::shared_ptr<connection_type>)>(
       async_get_connection_op{{}, this},
       completion_token,
       mutex_
@@ -271,16 +278,16 @@ struct basic_connection_pool<Stream>::async_request_op : asio::coroutine
 
 
   template<typename Self>
-  void operator()(Self && self, error_code ec = {}, connection_type * conn = nullptr)
+  void operator()(Self && self, error_code ec = {}, std::shared_ptr<connection_type> conn = nullptr)
   {
 
-    if (ec)
-      return self.complete(ec, basic_response<Allocator>{req.get_allocator()});
     reenter(this)
     {
-      yield this_->async_get_connection_(std::move(self));
+      yield this_->async_get_connection(std::move(self));
       if (!ec && conn == nullptr)
         return self.complete(asio::error::not_found, basic_response<Allocator>{req.get_allocator()});
+      if (ec)
+        return self.complete(ec, basic_response<Allocator>{req.get_allocator()});
       yield conn->async_request(method, path, std::forward<RequestBody>(body), std::move(req), std::move(self));
 
     }
@@ -326,11 +333,11 @@ struct basic_connection_pool<Stream>::async_download_op : asio::coroutine
   basic_request<Allocator> req;
 
   template<typename Self>
-  void operator()(Self && self, error_code ec = {}, connection_type * conn = nullptr)
+  void operator()(Self && self, error_code ec = {}, std::shared_ptr<connection_type> conn = nullptr)
   {
     reenter(this)
     {
-      yield this_->async_get_connection_(std::move(self));
+      yield this_->async_get_connection(std::move(self));
       if (!ec && conn == nullptr)
         ec =  asio::error::not_found;
       if (ec)

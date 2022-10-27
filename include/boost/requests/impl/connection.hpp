@@ -16,6 +16,7 @@
 #include <boost/asio/redirect_error.hpp>
 #include <boost/asio/yield.hpp>
 #include <boost/asem/lock_guard.hpp>
+#include <boost/core/exchange.hpp>
 #include <boost/container/pmr/monotonic_buffer_resource.hpp>
 #include <boost/requests/detail/define.hpp>
 #include <boost/requests/detail/state_machine.hpp>
@@ -55,15 +56,25 @@ namespace detail {
 
 struct tracker
 {
-  std::size_t *cnt = nullptr;
-  tracker(std::size_t &cnt) : cnt(&cnt) {++cnt;}
-  ~tracker() { if (cnt) --(*cnt);}
+  std::atomic<std::size_t> *cnt = nullptr;
+  tracker() = default;
+  tracker(std::atomic<std::size_t> &cnt) : cnt(&cnt) {++cnt;}
+  ~tracker()
+  {
+    if (cnt) --(*cnt);
+  }
 
   tracker(const tracker &) = delete;
-  tracker(tracker && lhs)
+  tracker(tracker && lhs) noexcept : cnt(boost::exchange(lhs.cnt, nullptr))
+  {
+
+  }
+  tracker& operator=(tracker && lhs) noexcept
   {
     std::swap(cnt, lhs.cnt);
+    return *this;
   }
+
 };
 
 namespace {
@@ -243,10 +254,7 @@ void basic_connection<Stream>::single_request(
       goto close_after;
 
     if (!urls::grammar::ci_is_equal(conn_itr->value(), "keep-alive"))
-    {
       ec = asio::error::invalid_argument;
-      return ;
-    }
   }
 
   state(close_after)
@@ -447,7 +455,8 @@ struct basic_connection<Stream>::async_single_request_op : boost::asio::coroutin
   basic_connection<Stream> * this_;
   beast::http::request<RequestBody, beast::http::basic_fields<RequestAllocator>> &req;
   beast::http::response<ResponseBody, beast::http::basic_fields<ResponseAllocator>> & res;
-  detail::tracker t{++this_->ongoing_requests_};
+
+  detail::tracker t{this_->ongoing_requests_};
   using lock_type = asem::lock_guard<detail::basic_mutex<typename Stream::executor_type>>;
   std::chrono::system_clock::time_point now;
   lock_type lock, alock;
@@ -483,10 +492,20 @@ struct basic_connection<Stream>::async_single_request_op : boost::asio::coroutin
   }
 
   template<typename Self>
+  void complete(Self && self, error_code ec, lock_type lock_ = {})
+  {
+    lock_ = {};
+    alock = {};
+    lock = {};
+    t = detail::tracker();
+    self.complete(ec);
+  }
+
+  template<typename Self>
   void operator()(Self && self, system::error_code ec= {}, lock_type lock_ = {})
   {
     if (ec)
-      return self.complete(ec);
+      return complete(std::move(self), ec, std::move(lock_));
 
     reenter(this)
     {
@@ -528,7 +547,6 @@ struct basic_connection<Stream>::async_single_request_op : boost::asio::coroutin
           yield handshake_impl(std::move(self), detail::has_ssl<Stream>{});
         }
         alock = {};
-
         goto do_write ;
       }
 
@@ -555,17 +573,13 @@ struct basic_connection<Stream>::async_single_request_op : boost::asio::coroutin
               std::allocate_shared<beast::http::response_parser<ResponseBody, ResponseAllocator>>(
                   self.get_allocator(), std::move(res.base()));
 
-          yield {
-            auto p = hparser;
-            beast::http::async_read_header(this_->next_layer_, this_->buffer_, *p,
-                                           detail::drop_size())(std::move(self));
-          };
+          yield beast::http::async_read_header(this_->next_layer_, this_->buffer_, *hparser,
+                                               detail::drop_size())(std::move(self));
           res = std::move(hparser->get());
           hparser.reset();
         }
         else
           yield beast::http::async_read(this_->next_layer_, this_->buffer_, res, detail::drop_size())(std::move(self));
-
 
         now = std::chrono::system_clock::now();
         const auto conn_itr = res.find(beast::http::field::connection);
@@ -577,20 +591,20 @@ struct basic_connection<Stream>::async_single_request_op : boost::asio::coroutin
         }
 
         if (conn_itr == res.end())
-          return self.complete(ec);
+          return complete(std::move(self), ec, std::move(lock_));
 
         if (urls::grammar::ci_is_equal(conn_itr->value(), "close"))
           goto close_after;
 
         if (!urls::grammar::ci_is_equal(conn_itr->value(), "keep-alive"))
-        {
-          ec = asio::error::invalid_argument;
-          return self.complete(ec);
-        }
+          return complete(std::move(self), asio::error::invalid_argument, std::move(lock_));
+
+        goto complete ;
       }
 
       state(close_after)
       {
+
         yield asem::async_lock(this_->write_mtx_, std::move(self));
         alock = std::move(lock_);
         if (detail::has_ssl_v<Stream>)
@@ -599,26 +613,27 @@ struct basic_connection<Stream>::async_single_request_op : boost::asio::coroutin
         }
         boost::system::error_code ec_;
         beast::get_lowest_layer(this_->next_layer_).close(ec_);
-        return self.complete(ec);
+        return complete(std::move(self), ec, std::move(lock_));
       }
-
-      const auto kl_itr = res.find(beast::http::field::keep_alive);
-      if (kl_itr == res.end())
-        this_->keep_alive_set_ = keep_alive{}; // set to max
-      else
+      state(complete)
       {
-
-        auto rr = parse_keep_alive_field(kl_itr->value(), now);
-        if (rr.has_error())
-          ec = rr.error();
+        const auto kl_itr = res.find(beast::http::field::keep_alive);
+        if (kl_itr == res.end())
+          this_->keep_alive_set_ = keep_alive{}; // set to max
         else
-          this_->keep_alive_set_ = *rr;
+        {
 
-        if (this_->keep_alive_set_.timeout < now)
-          goto close_after;
+          auto rr = parse_keep_alive_field(kl_itr->value(), now);
+          if (rr.has_error())
+            ec = rr.error();
+          else
+            this_->keep_alive_set_ = *rr;
+
+          if (this_->keep_alive_set_.timeout < now)
+            goto close_after;
+        }
+        return complete(std::move(self), ec, std::move(lock_));
       }
-
-      return self.complete(ec);
     }
   }
 };

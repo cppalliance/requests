@@ -74,7 +74,7 @@ using basic_mutex = asem::basic_mutex<boost::asem::mt, Executor>;
 }
 
 #if !defined(BOOST_REQUESTS_DEFAULT_POOL_SIZE)
-#define BOOST_REQUESTS_DEFAULT_POOL_SIZE 12
+#define BOOST_REQUESTS_DEFAULT_POOL_SIZE 6
 #endif
 
 

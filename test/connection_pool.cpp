@@ -512,6 +512,7 @@ asio::awaitable<void> async_http_pool_request()
       && post_json(hc, url)
       && post_form(hc, url)
   );
+  co_await asio::post(asio::use_awaitable);
 
   CHECK(hc.limit() == hc.active());
 }
@@ -525,6 +526,7 @@ TEST_CASE_TEMPLATE("async-request", Pool, aw_http_connection_pool, aw_https_conn
                  async_http_pool_request<Pool>(),
                  [](std::exception_ptr e)
                  {
+                   printf("Result : %p\n", *reinterpret_cast<void**>(&e));
                    CHECK(e == nullptr);
                  });
 

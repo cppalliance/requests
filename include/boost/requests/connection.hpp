@@ -86,6 +86,20 @@ struct basic_connection
     template<typename ... Args>
     explicit basic_connection(Args && ... args) : next_layer_(std::forward<Args>(args)...) {}
 
+    basic_connection(basic_connection && ) noexcept = default;
+
+    template<typename Other>
+    basic_connection(basic_connection<Other> && lhs)
+          : next_layer_(std::move(lhs.next_layer_))
+          , read_mtx_(std::move(lhs.read_mtx_))
+          , write_mtx_(std::move(lhs.write_mtx_))
+          , host_(std::move(lhs.host_))
+          , buffer_(std::move(lhs.buffer_))
+          , ongoing_requests_(std::move(lhs.ongoing_requests_.load()))
+          , keep_alive_set_(std::move(lhs.keep_alive_set_))
+          , endpoint_(std::move(lhs.endpoint_))
+    {}
+
     void connect(endpoint_type ep)
     {
       boost::system::error_code ec;
@@ -262,7 +276,7 @@ struct basic_connection
 
     std::string host_;
     beast::flat_buffer buffer_;
-    std::size_t ongoing_requests_{0u};
+    std::atomic<std::size_t> ongoing_requests_{0u};
     keep_alive keep_alive_set_;
     endpoint_type endpoint_;
     struct async_close_op;

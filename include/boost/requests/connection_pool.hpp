@@ -52,9 +52,9 @@ protected:
   ssl_base () = default;
 
   template<typename Connection, typename Executor>
-  Connection make_connection_(Executor exec)
+  std::shared_ptr<Connection> make_connection_(Executor exec)
   {
-    return Connection(std::move(exec));
+    return std::make_shared<Connection>(std::move(exec));
   }
 
   template<typename Connection, typename Allocator, typename Executor>
@@ -76,9 +76,9 @@ protected:
   ssl_base(asio::ssl::context & context) : context_(context) {}
 
   template<typename Connection, typename Executor>
-  Connection make_connection_(Executor exec)
+  std::shared_ptr<Connection> make_connection_(Executor exec)
   {
-    return Connection(std::move(exec), context_);
+    return std::make_shared<Connection>(std::move(exec), context_);
   }
 
   template<typename Connection, typename Allocator, typename Executor>
@@ -177,7 +177,6 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
 
     std::size_t limit() const {return limit_;}
     std::size_t active() const {return conns_.size();}
-    constexpr static redirect_mode supported_redirect_mode() {return redirect_mode::endpoint;}
 
 
     template<typename RequestBody, typename Allocator = std::allocator<char>>
@@ -187,7 +186,7 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
                  basic_request<Allocator> req,
                  system::error_code & ec) -> basic_response<Allocator>
     {
-      connection_type * conn = get_connection_(ec);
+      auto conn = get_connection(ec);
       if (!ec && conn == nullptr)
         ec = asio::error::not_found;
       if (ec)
@@ -231,7 +230,7 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
                   const filesystem::path & download_path,
                   system::error_code & ec) -> basic_response<Allocator>
     {
-      connection_type * conn = get_connection_(ec);
+      auto conn = get_connection(ec);
       if (!ec && conn == nullptr)
         ec = asio::error::not_found;
       if (ec)
@@ -269,20 +268,27 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
     using target_view = urls::pct_string_view;
 #include <boost/requests/detail/alias.def>
 
+    std::shared_ptr<connection_type> get_connection(error_code & ec);
+    std::shared_ptr<connection_type> get_connection()
+    {
+      boost::system::error_code ec;
+      auto res = get_connection(ec);
+      if (ec)
+        throw_exception(system::system_error(ec, "get_connection"));
+      return res;
+    }
+
+    template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (system::error_code, std::shared_ptr<connection_type>)) CompletionToken>
+      BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (system::error_code, std::shared_ptr<connection_type>))
+    async_get_connection(CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
   private:
-
-    connection_type * get_connection_(error_code & ec);
-
-    template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (system::error_code, connection_type *)) CompletionToken>
-      BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (system::error_code, connection_type *))
-    async_get_connection_(CompletionToken && completion_token);
-
     detail::basic_mutex<executor_type> mutex_;
     std::string host_;
     std::vector<endpoint_type> endpoints_;
     std::size_t limit_;
 
-    boost::unordered_multimap<endpoint_type, connection_type,
+    boost::unordered_multimap<endpoint_type,
+                              std::shared_ptr<connection_type>,
                               detail::endpoint_hash<endpoint_type>> conns_;
 
     struct async_lookup_op;

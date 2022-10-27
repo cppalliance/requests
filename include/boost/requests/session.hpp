@@ -7,7 +7,7 @@
 #define BOOST_REQUESTS_BASIC_SESSION_HPP
 
 #include <boost/asio/any_io_executor.hpp>
-#include <boost/requests/connection.hpp>
+#include <boost/requests/connection_pool.hpp>
 #include <boost/beast/http/message.hpp>
 
 namespace boost::requests
@@ -29,7 +29,7 @@ struct basic_session
 
     /// Constructor.
     explicit basic_session(const executor_type &ex)
-            : executor_(ex)
+            : mutex_(ex)
     {
     }
 
@@ -39,22 +39,95 @@ struct basic_session
                      typename asio::constraint<
                                    asio::is_convertible<ExecutionContext &, asio::execution_context &>::value
                            >::type = 0)
-            : executor_(context.get_executor())
+            : mutex_(context.get_executor())
     {
     }
 
     /// Get the executor associated with the object.
     executor_type get_executor() BOOST_ASIO_NOEXCEPT
     {
-        return executor_;
+        return mutex_.get_executor();
     }
 
 
+    template<typename RequestBody, typename Allocator = std::allocator<char>>
+    auto request(beast::http::verb method,
+                 urls::pct_string_view path,
+                 RequestBody && body,
+                 basic_request<Allocator> req,
+                 system::error_code & ec) -> basic_response<Allocator>;
+
+    template<typename RequestBody, typename Allocator = std::allocator<char>>
+    auto request(beast::http::verb method,
+                 urls::pct_string_view path,
+                 RequestBody && body,
+                 basic_request<Allocator> req)
+        -> basic_response<Allocator>
+    {
+      boost::system::error_code ec;
+      auto res = request(method, path, std::move(body), std::move(req), ec);
+      if (ec)
+        throw_exception(system::system_error(ec, "request"));
+      return res;
+    }
+
+    template<typename RequestBody,
+              typename Allocator = std::allocator<char>,
+              BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+                                                   basic_response<Allocator>)) CompletionToken
+                  BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
+                                       void (boost::system::error_code,
+                                            basic_response<Allocator>))
+    async_request(beast::http::verb method,
+                  urls::pct_string_view path,
+                  RequestBody && body,
+                  basic_request<Allocator> req,
+                  CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
+
+    template<typename Allocator = std::allocator<char>>
+    auto download(urls::pct_string_view path,
+                  basic_request<Allocator> req,
+                  const filesystem::path & download_path,
+                  system::error_code & ec) -> basic_response<Allocator>;
+
+
+    template<typename Allocator= std::allocator<char> >
+    auto download(urls::pct_string_view path,
+                  basic_request<Allocator> req,
+                  const filesystem::path & download_path) -> basic_response<Allocator>
+    {
+      boost::system::error_code ec;
+      auto res = download(path, std::move(req), download_path, ec);
+      if (ec)
+        throw_exception(system::system_error(ec, "request"));
+      return res;
+    }
+
+    template<typename Allocator = std::allocator<char>,
+              BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+                                                   basic_response<Allocator>)) CompletionToken
+                  BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
+                                       void (boost::system::error_code,
+                                            basic_response<Allocator>))
+    async_download(urls::pct_string_view path,
+                   basic_request<Allocator> req,
+                   filesystem::path download_path,
+                   CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
+
+    using target_view = urls::url_view;
+#include <boost/requests/detail/alias.def>
+
 
   private:
-    executor_type executor_;
-    //boost::unordered_multimap<std::string, basic_http_connection<Executor>> http_connections_;
-    //boost::unordered_multimap<std::string, basic_https_connection<Executor>> https_connections_;
+    asio::ssl::context sslctx_{asio::ssl::context_base::tls_client};
+    detail::basic_mutex<executor_type> mutex_;
+
+    using host_ = std::pair<std::string, unsigned short>;
+
+    boost::unordered_map<host_, basic_http_connection_pool<Executor>> http_pools_;
+    boost::unordered_map<host_, basic_https_connection_pool<Executor>> https_pools_;
 };
 
 typedef basic_session<> session;
