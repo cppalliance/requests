@@ -38,7 +38,6 @@ template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::asyn
 template auto basic_connection<asio::ip::tcp::socket>::                   download(urls::pct_string_view, basic_request<>, const filesystem::path &, system::error_code &) -> response;
 template auto basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::download(urls::pct_string_view, basic_request<>, const filesystem::path &, system::error_code &) -> response;
 
-
 }
 }
 

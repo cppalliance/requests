@@ -61,17 +61,12 @@ TEST_CASE("variadics")
     CHECK(typeid(r4) == typeid(l));
     CHECK(typeid(r5) == typeid(l));
 
-    auto a1 = rqs::detail::tie_args<void(int), exec>();
-    auto a2 = rqs::detail::tie_args<void(int), exec>(42);
-    auto a3 = rqs::detail::tie_args<void(int), exec>(l, 42);
-    auto a4 = rqs::detail::tie_args<void(int), exec>(42, l);
-    auto a5 = rqs::detail::tie_args<void(int), asio::any_io_executor>(42, l);
 
-    CHECK(a1 == std::make_tuple());
-    CHECK(a2 == std::make_tuple(42));
-    CHECK(a3 == std::make_tuple(l, 42));
-    CHECK(a4 == std::make_tuple(42));
-    CHECK(a5 == std::make_tuple(42));
+    CHECK(rqs::detail::tie_args<void(int), exec>() == std::make_tuple());
+    CHECK(rqs::detail::tie_args<void(int), exec>(42) == std::make_tuple(42));
+    CHECK(rqs::detail::tie_args<void(int), exec>(l, 42) == std::make_tuple(l, 42));
+    CHECK(rqs::detail::tie_args<void(int), exec>(42, l) == std::make_tuple(42));
+    CHECK(rqs::detail::tie_args<void(int), asio::any_io_executor>(42, l) == std::make_tuple(42));
 }
 /*
 struct test_op1

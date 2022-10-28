@@ -1121,7 +1121,8 @@ basic_connection<Stream>::async_request(beast::http::verb method,
                                         CompletionToken && completion_token)
 {
   return asio::async_compose<CompletionToken, void(system::error_code, basic_response<Allocator>)>(
-      async_request_op<typename request_body_traits<std::decay_t<RequestBody>>::body_type, Allocator>{this, method, path,
+      async_request_op<typename request_body_traits<std::decay_t<RequestBody>>::body_type, Allocator>{
+                                                  this, method, path,
                                                   std::forward<RequestBody>(body),
                                                   std::move(req)},
       completion_token,
@@ -1302,7 +1303,11 @@ struct basic_connection<Stream>::async_download_op : asio::coroutine
         }
         if (ec)
           goto complete;
-        yield this_->async_single_request(state_->hreq, state_->fres, asio::append(std::move(self), 0));
+        yield this_->async_single_request(state_->hreq, state_->fres, std::move(self));
+        state_->res.header = std::move(state_->fres.base());
+        auto res = std::move(state_->res);
+        state_ = nullptr;
+        return self.complete(ec, std::move(res));
       }
       else complete:
       {
@@ -1312,15 +1317,6 @@ struct basic_connection<Stream>::async_download_op : asio::coroutine
       }
     }
   }
-
-  template<typename Self>
-  void operator()(Self && self,
-                  boost::system::error_code ec, int)
-  {
-    state_->res.header = std::move(state_->fres.base());
-    self.complete(ec, std::move(state_->res));
-  }
-
 };
 
 

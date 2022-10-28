@@ -50,6 +50,7 @@ inline field_entry bearer(core::string_view token)
 
 template<typename Allocator>
 inline auto headers(const Allocator & alloc, std::initializer_list<field_entry> fields)
+  -> beast::http::basic_fields<Allocator>
 {
   beast::http::basic_fields<Allocator> f{alloc};
   for (const auto & init : fields)
@@ -61,7 +62,7 @@ inline auto headers(const Allocator & alloc, std::initializer_list<field_entry> 
   return f;
 }
 
-inline auto headers(std::initializer_list<field_entry> fields)
+inline auto headers(std::initializer_list<field_entry> fields) -> beast::http::fields
 {
   return headers(std::allocator<char>(), std::move(fields));
 }

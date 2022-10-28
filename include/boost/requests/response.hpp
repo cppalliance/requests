@@ -113,7 +113,7 @@ struct basic_response
 
   using string_body_type = typename beast::http::basic_string_body<char, std::char_traits<char>, allocator_type>;
   using history_type = typename beast::http::response<body_type, fields_type>;
-  using vector_alloc = std::scoped_allocator_adaptor<typename std::allocator_traits<Allocator>::template rebind_alloc<history_type>>;
+  using vector_alloc = typename std::allocator_traits<Allocator>::template rebind_alloc<history_type>;
 
   std::vector<history_type, vector_alloc> history{vector_alloc{header.get_allocator()}};
 
