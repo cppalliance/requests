@@ -752,7 +752,7 @@ auto basic_connection<Stream>::request(
       ec.assign(error::too_many_redirects, &sloc);
       break ;
     }
-    res.history.emplace_back(std::move(rres.base()), std::move(rres.body()));
+    res.history.emplace_back(std::move(rres.base()));
 
     hreq.base().target(url->encoded_path());
     if (req.jar)
@@ -872,7 +872,7 @@ auto basic_connection<Stream>::download(
       res.header = std::move(hres.base());
       return res;
     }
-    res.history.emplace_back(std::move(hres.base()), (typename response_type::body_type::value_type){alloc});
+    res.history.emplace_back(std::move(hres.base()));
     hreq.base().target(url->encoded_path());
     if (req.jar)
     {
@@ -906,31 +906,34 @@ auto basic_connection<Stream>::download(
 }
 
 template<typename Stream>
-template<typename RequestBody, typename Allocator, typename CplAlloc>
+template<typename RequestBody, typename Allocator>
 struct basic_connection<Stream>::async_request_op : asio::coroutine
 {
 
   basic_connection<Stream> * this_;
   constexpr static auto is_secure = detail::has_ssl_v<Stream>;
 
+  beast::http::verb method;
+
+  cookie_jar_base * jar = nullptr;
+  struct options opts;
+  core::string_view path;
+  core::string_view default_mime_type;
+
+  system::error_code ec_;
+  using body_type = RequestBody;
+
+  typename body_type::value_type body;
+  basic_request<Allocator> req;
   struct state_t
   {
-    beast::http::verb method;
-
-    cookie_jar_base * jar = nullptr;
-    struct options opts;
     Allocator alloc;
 
-    core::string_view path;
-    core::string_view default_mime_type;
 
     //using body_traits = request_body_traits<std::decay_t<RequestBody>>;
-    using body_type = RequestBody;
     using fields_type = beast::http::basic_fields<Allocator>;
     using response_type = basic_response<Allocator> ;
     response_type res;
-
-    system::error_code ec;
 
     beast::http::request<body_type, fields_type> hreq;
     using res_body = beast::http::basic_dynamic_body<beast::basic_flat_buffer<Allocator>>;
@@ -942,50 +945,53 @@ struct basic_connection<Stream>::async_request_op : asio::coroutine
             urls::pct_string_view path,
             RequestBody_ && body,
             basic_request<Allocator> req)
-        :  method(v), jar(req.jar), opts(req.opts), alloc(req.get_allocator()),  path(path),
-           default_mime_type(request_body_traits<std::decay_t<RequestBody_>>::default_content_type(body)),
+        :  alloc(req.get_allocator()),
            res{req.get_allocator()},
            hreq{v, path, 11,
-               request_body_traits<std::decay_t<RequestBody_>>::make_body(std::forward<RequestBody_>(body), ec),
+               std::forward<RequestBody_>(body),
                std::move(req.fields)}
     {
     }
   };
 
+  std::shared_ptr<state_t> state_;
 
-  using allocator_type = typename std::allocator_traits<CplAlloc>::template rebind_alloc<state_t>;
-  std::unique_ptr<state_t, boost::alloc_deleter<state_t, allocator_type> > state_;
-
-  template<typename ... Args>
-  async_request_op(allocator_type alloc, basic_connection<Stream> * this_, Args && ... args)
-      : this_(this_), state_(boost::allocate_unique<state_t>(alloc, std::forward<Args>(args)...))
+  template<typename RequestBody_>
+  async_request_op(basic_connection<Stream> * this_,
+                   beast::http::verb v,
+                   urls::pct_string_view path,
+                   RequestBody_ && body,
+                   basic_request<Allocator> req)
+      : this_(this_), method(v), jar(req.jar), opts(req.opts), path(path),
+        default_mime_type(request_body_traits<std::decay_t<RequestBody_>>::default_content_type(body)),
+        body(request_body_traits<std::decay_t<RequestBody_>>::make_body(std::forward<RequestBody_>(body), ec_)),
+        req(std::move(req))
   {
   }
 
-  void prepare_initial_head_request()
+  void prepare_initial_head_request(error_code & ec)
   {
-    if (state_->ec)
+    if (ec)
       return ;
-
-    if (!is_secure && state_->opts.enforce_tls)
+    if (!is_secure && opts.enforce_tls)
     {
       static constexpr auto loc((BOOST_CURRENT_LOCATION));
-      state_->ec = system::error_code(error::insecure, &loc);
+      ec = system::error_code(error::insecure, &loc);
       return ;
     }
 
     {
       auto itr = state_->hreq.base().find(http::field::content_type);
-      if (itr == state_->hreq.base().end() && !state_->default_mime_type.empty()) {
-        if (!state_->default_mime_type.empty())
-          state_->hreq.base().set(http::field::content_type, state_->default_mime_type);
+      if (itr == state_->hreq.base().end() && !default_mime_type.empty()) {
+        if (!default_mime_type.empty())
+          state_->hreq.base().set(http::field::content_type, default_mime_type);
       }
     }
-    if (state_->jar)
+    if (jar)
     {
       unsigned char buf[4096];
       boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
-      auto cc = state_->jar->get(this_->host(),  &memres, is_secure, state_->path);
+      auto cc = jar->get(this_->host(),  &memres, is_secure, path);
       if (!cc.empty())
         state_->hreq.base().set(http::field::cookie, cc);
       else
@@ -1005,7 +1011,7 @@ struct basic_connection<Stream>::async_request_op : asio::coroutine
       ec.assign(error::invalid_redirect, &loc);
       return;
     }
-    const auto redirect_mode = (std::min)(supported_redirect_mode(), state_->opts.redirect);
+    const auto redirect_mode = (std::min)(supported_redirect_mode(), opts.redirect);
     const auto url = interpret_location(state_->hreq.target(), loc_itr->value());
     if (url.has_error())
     {
@@ -1022,45 +1028,51 @@ struct basic_connection<Stream>::async_request_op : asio::coroutine
       return;
     }
 
-    if (--state_->opts.max_redirects == 0)
+    if (--opts.max_redirects == 0)
     {
       static constexpr auto sloc((BOOST_CURRENT_LOCATION));
       ec.assign(error::too_many_redirects, &sloc);
       return;
     }
-    if (state_->jar)
+    if (jar)
     {
       unsigned char buf[4096];
       boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
-      auto cc = state_->jar->get(this_->host(), &memres, is_secure, url->encoded_path());
+      auto cc = jar->get(this_->host(), &memres, is_secure, url->encoded_path());
       if (!cc.empty())
         state_->hreq.base().set(http::field::cookie, cc);
       else
         state_->hreq.base().erase(http::field::cookie);
     }
 
-    state_->res.history.emplace_back(std::move(state_->rres.base()), std::move(state_->rres.body()));
+    state_->res.history.emplace_back(std::move(state_->rres.base()));
     state_->hreq.base().target(url->encoded_path());
 
   }
   template<typename Self>
   void operator()(Self && self, system::error_code ec= {})
   {
-    auto rc = state_->rres.base().result();
+    auto rc = state_ ?  state_->rres.base().result() : http::status();
 
     reenter(this)
     {
-      prepare_initial_head_request();
-      if (state_->ec)
+      ec = ec_;
+      if (!ec)
+      {
+        state_ = std::allocate_shared<state_t>(self.get_allocator(),
+                                               method, path, std::move(body), std::move(req));
+        prepare_initial_head_request(ec);
+      }
+      if (ec)
       {
         yield asio::post(std::move(self));
-        return self.complete(state_->ec, std::move(state_->res));
+        return self.complete(ec, std::move(state_->res));
       }
 
       yield this_->async_single_request(state_->hreq, state_->rres, std::move(self));
 
       while (!ec &&
-           (state_->opts.redirect >= redirect_mode::endpoint)
+           (opts.redirect >= redirect_mode::endpoint)
            && ((rc == http::status::moved_permanently)
                || (rc == http::status::found)
                || (rc == http::status::temporary_redirect)
@@ -1082,10 +1094,15 @@ struct basic_connection<Stream>::async_request_op : asio::coroutine
 
 #if !defined(BOOST_REQUESTS_HEADER_ONLY)
 
-extern template struct basic_connection<asio::ip::tcp::socket>::async_request_op<beast::http::empty_body,  std::allocator<char>, std::allocator<void>>;
-extern template struct basic_connection<asio::ip::tcp::socket>::async_request_op<beast::http::string_body, std::allocator<char>, std::allocator<void>>;
-extern template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_request_op<beast::http::empty_body,  std::allocator<char>, std::allocator<void>>;
-extern template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_request_op<beast::http::string_body, std::allocator<char>, std::allocator<void>>;
+extern template struct basic_connection<asio::ip::tcp::socket>::async_request_op<beast::http::empty_body,  std::allocator<char>>;
+extern template struct basic_connection<asio::ip::tcp::socket>::async_request_op<beast::http::string_body, std::allocator<char>>;
+extern template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_request_op<beast::http::empty_body,  std::allocator<char>>;
+extern template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_request_op<beast::http::string_body, std::allocator<char>>;
+
+extern template struct basic_connection<asio::ip::tcp::socket>::async_request_op<beast::http::empty_body,  container::pmr::polymorphic_allocator<char>>;
+extern template struct basic_connection<asio::ip::tcp::socket>::async_request_op<beast::http::string_body, container::pmr::polymorphic_allocator<char>>;
+extern template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_request_op<beast::http::empty_body,  container::pmr::polymorphic_allocator<char>>;
+extern template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_request_op<beast::http::string_body, container::pmr::polymorphic_allocator<char>>;
 
 #endif
 
@@ -1103,11 +1120,8 @@ basic_connection<Stream>::async_request(beast::http::verb method,
                                         basic_request<Allocator> req,
                                         CompletionToken && completion_token)
 {
-  using allocator_type = asio::associated_allocator_t<std::decay_t<CompletionToken>>;
   return asio::async_compose<CompletionToken, void(system::error_code, basic_response<Allocator>)>(
-      async_request_op<typename request_body_traits<std::decay_t<RequestBody>>::body_type,
-                       Allocator, allocator_type>{asio::get_associated_allocator(completion_token),
-                                                  this, method, path,
+      async_request_op<typename request_body_traits<std::decay_t<RequestBody>>::body_type, Allocator>{this, method, path,
                                                   std::forward<RequestBody>(body),
                                                   std::move(req)},
       completion_token,
@@ -1116,7 +1130,7 @@ basic_connection<Stream>::async_request(beast::http::verb method,
 }
 
 template<typename Stream>
-template<typename Allocator, typename CplAlloc>
+template<typename Allocator>
 struct basic_connection<Stream>::async_download_op : asio::coroutine
 {
   using fields_type = beast::http::basic_fields<Allocator>;
@@ -1124,51 +1138,50 @@ struct basic_connection<Stream>::async_download_op : asio::coroutine
 
   basic_connection<Stream>* this_;
   constexpr static auto is_secure = detail::has_ssl_v<Stream>;
+  cookie_jar_base * jar;
+  struct options opts;
+  core::string_view path;
+  core::string_view default_mime_type;
+  filesystem::path download_path;
+
+  basic_request<Allocator> req;
 
   struct state_t
   {
-    cookie_jar_base * jar;
-    struct options opts;
     Allocator alloc;
-
-    core::string_view path;
-    core::string_view default_mime_type;
-
     response_type res{alloc};
-
     beast::http::request<http::empty_body, fields_type> hreq;
     http::response<http::empty_body, fields_type> hres{http::response_header<fields_type>{alloc}};
     http::response<http::file_body, fields_type> fres{http::response_header<fields_type>{alloc}};
 
-    filesystem::path download_path;
 
     state_t(urls::pct_string_view path,
-            const filesystem::path & download_path,
             basic_request<Allocator> req)
-          : jar(req.jar), opts(req.opts), alloc(req.get_allocator()), path(path),
+          :  alloc(req.get_allocator()),
             hreq{http::verb::head, path, 11,
                  http::empty_body::value_type{},
-                 std::move(req.fields)},
-            download_path(download_path)
+                 std::move(req.fields)}
     {
     }
 
   };
 
 
-  using allocator_type = typename std::allocator_traits<CplAlloc>::template rebind_alloc<state_t>;
-  std::unique_ptr<state_t, boost::alloc_deleter<state_t, allocator_type> > state_;
+  std::shared_ptr<state_t> state_;
 
   template<typename ... Args>
-  async_download_op(allocator_type alloc, basic_connection<Stream> * this_, Args && ... args)
-      : this_(this_), state_(boost::allocate_unique<state_t>(alloc, std::forward<Args>(args)...))
+  async_download_op(basic_connection<Stream> * this_, urls::pct_string_view path,
+                    const filesystem::path & download_path,
+                    basic_request<Allocator> req)
+      : this_(this_), jar(req.jar), opts(req.opts), path(path),
+        download_path(download_path)
   {
   }
 
   void prepare_initial_request(system::error_code &ec)
   {
 
-    if (!is_secure && state_->opts.enforce_tls)
+    if (!is_secure && opts.enforce_tls)
     {
       static constexpr auto loc((BOOST_CURRENT_LOCATION));
       ec.assign(error::insecure, &loc);
@@ -1180,7 +1193,7 @@ struct basic_connection<Stream>::async_download_op : asio::coroutine
       auto hitr = state_->hreq.base().find(http::field::accept);
       if (hitr == state_->hreq.base().end())
       {
-        const auto ext = state_->download_path.extension().string();
+        const auto ext = download_path.extension().string();
         const auto &mp = default_mime_type_map();
         auto itr = mp.find(ext);
         if (itr != mp.end())
@@ -1190,10 +1203,10 @@ struct basic_connection<Stream>::async_download_op : asio::coroutine
 
     state_->hreq.prepare_payload();
 
-    if (state_->jar) {
+    if (jar) {
       unsigned char buf[4096];
       boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
-      auto cc = state_->jar->get(this_->host(), &memres, is_secure, state_->path);
+      auto cc = jar->get(this_->host(), &memres, is_secure, path);
       if (!cc.empty())
         state_->hreq.base().set(http::field::cookie, cc);
       else
@@ -1229,22 +1242,21 @@ struct basic_connection<Stream>::async_download_op : asio::coroutine
       return ;
     }
 
-    if (--state_->opts.max_redirects == 0)
+    if (--opts.max_redirects == 0)
     {
       static constexpr auto sloc((BOOST_CURRENT_LOCATION));
       ec.assign(error::too_many_redirects, &sloc);
       state_->res.header = std::move(state_->hres);
       return ;
     }
-    state_->res.history.emplace_back(std::move(state_->hres.base()),
-                                     (typename response_type::body_type::value_type){state_->alloc});
+    state_->res.history.emplace_back(std::move(state_->hres.base()));
 
     state_->hreq.base().target(url->encoded_path());
-    if (state_->jar)
+    if (jar)
     {
       unsigned char buf[4096];
       boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
-      auto cc = state_->jar->get(this_->host(), &memres, is_secure, url->encoded_path());
+      auto cc = jar->get(this_->host(), &memres, is_secure, url->encoded_path());
       if (!cc.empty())
         state_->hreq.base().set(http::field::cookie, cc);
       else
@@ -1255,10 +1267,11 @@ struct basic_connection<Stream>::async_download_op : asio::coroutine
   template<typename Self>
   void operator()(Self && self, boost::system::error_code ec = {})
   {
-    const auto rc = state_->hres.result();
+    const auto rc = state_ ? state_->hres.result() : http::status();
 
     reenter(this)
     {
+      state_ = std::allocate_shared<state_t>(self.get_allocator(), path, std::move(req));
       prepare_initial_request(ec);
       if (ec)
       {
@@ -1270,7 +1283,7 @@ struct basic_connection<Stream>::async_download_op : asio::coroutine
       if (ec)
         return self.complete(ec, std::move(state_->res));
 
-      while ((state_->opts.redirect >= redirect_mode::endpoint) &&
+      while ((opts.redirect >= redirect_mode::endpoint) &&
             ((rc == http::status::moved_permanently) || (rc == http::status::found) ||
             (rc == http::status::temporary_redirect) || (rc == http::status::permanent_redirect)))
       {
@@ -1283,7 +1296,7 @@ struct basic_connection<Stream>::async_download_op : asio::coroutine
       if (!ec)
       {
         {
-          auto str = state_->download_path.string();
+          auto str = download_path.string();
           state_->hreq.method(beast::http::verb::get);
           state_->fres.body().open(str.c_str(), beast::file_mode::write, ec);
         }
@@ -1292,7 +1305,11 @@ struct basic_connection<Stream>::async_download_op : asio::coroutine
         yield this_->async_single_request(state_->hreq, state_->fres, asio::append(std::move(self), 0));
       }
       else complete:
-        return self.complete(ec, std::move(state_->res));
+      {
+        auto res = std::move(state_->res);
+        state_ = {};
+        return self.complete(ec, std::move(res));
+      }
     }
   }
 
@@ -1309,8 +1326,11 @@ struct basic_connection<Stream>::async_download_op : asio::coroutine
 
 #if !defined(BOOST_REQUESTS_HEADER_ONLY)
 
-extern template struct basic_connection<asio::ip::tcp::socket>::async_download_op<std::allocator<char>, std::allocator<void>>;
-extern template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_download_op<std::allocator<char>, std::allocator<void>>;
+extern template struct basic_connection<asio::ip::tcp::socket>::async_download_op<std::allocator<char>>;
+extern template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_download_op<std::allocator<void>>;
+
+extern template struct basic_connection<asio::ip::tcp::socket>::async_download_op<container::pmr::polymorphic_allocator<char>>;
+extern template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_download_op<container::pmr::polymorphic_allocator<void>>;
 
 #endif
 
@@ -1326,11 +1346,9 @@ basic_connection<Stream>::async_download(urls::pct_string_view path,
                                          filesystem::path download_path,
                                          CompletionToken && completion_token)
 {
-  using allocator_type = asio::associated_allocator_t<std::decay_t<CompletionToken>>;
   return asio::async_compose<CompletionToken,
                              void(system::error_code, basic_response<Allocator>)>(
-      async_download_op<Allocator, allocator_type>{asio::get_associated_allocator(completion_token),
-                                   this, path, std::move(download_path), std::move(req)},
+      async_download_op<Allocator>{this, path, std::move(download_path), std::move(req)},
       completion_token,
       next_layer_
   );

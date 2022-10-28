@@ -18,13 +18,22 @@ namespace requests {
 template struct basic_connection<asio::ip::tcp::socket>;
 template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>;
 
-template struct basic_connection<asio::ip::tcp::socket>::                   async_request_op<beast::http::empty_body,  std::allocator<char>, std::allocator<void>>;
-template struct basic_connection<asio::ip::tcp::socket>::                   async_request_op<beast::http::string_body, std::allocator<char>, std::allocator<void>>;
-template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_request_op<beast::http::empty_body,  std::allocator<char>, std::allocator<void>>;
-template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_request_op<beast::http::string_body, std::allocator<char>, std::allocator<void>>;
+template struct basic_connection<asio::ip::tcp::socket>::                   async_request_op<beast::http::empty_body,  std::allocator<char>>;
+template struct basic_connection<asio::ip::tcp::socket>::                   async_request_op<beast::http::string_body, std::allocator<char>>;
+template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_request_op<beast::http::empty_body,  std::allocator<char>>;
+template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_request_op<beast::http::string_body, std::allocator<char>>;
 
-template struct basic_connection<asio::ip::tcp::socket>::                   async_download_op<std::allocator<char>, std::allocator<void>>;
-template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_download_op<std::allocator<char>, std::allocator<void>>;
+template struct basic_connection<asio::ip::tcp::socket>::                   async_request_op<beast::http::empty_body,  container::pmr::polymorphic_allocator<char>>;
+template struct basic_connection<asio::ip::tcp::socket>::                   async_request_op<beast::http::string_body, container::pmr::polymorphic_allocator<char>>;
+template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_request_op<beast::http::empty_body,  container::pmr::polymorphic_allocator<char>>;
+template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_request_op<beast::http::string_body, container::pmr::polymorphic_allocator<char>>;
+
+
+template struct basic_connection<asio::ip::tcp::socket>::                   async_download_op<std::allocator<char>>;
+template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_download_op<std::allocator<char>>;
+
+template struct basic_connection<asio::ip::tcp::socket>::                   async_download_op<container::pmr::polymorphic_allocator<char>>;
+template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_download_op<container::pmr::polymorphic_allocator<char>>;
 
 template auto basic_connection<asio::ip::tcp::socket>::                   download(urls::pct_string_view, basic_request<>, const filesystem::path &, system::error_code &) -> response;
 template auto basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::download(urls::pct_string_view, basic_request<>, const filesystem::path &, system::error_code &) -> response;

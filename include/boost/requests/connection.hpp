@@ -285,10 +285,10 @@ struct basic_connection
     template<typename, typename, typename, typename>
     struct async_single_request_op;
 
-    template<typename RequestBody, typename Allocator, typename CplAlloc>
+    template<typename RequestBody, typename Allocator>
     struct async_request_op;
 
-    template<typename Allocator, typename CplAlloc>
+    template<typename Allocator>
     struct async_download_op;
 };
 
