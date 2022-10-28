@@ -42,8 +42,6 @@ bool should_redirect(redirect_mode mode,
     if (mode == any)
         return true;
 
-
-
     // TODO: handle encoding/decoding
     const auto target_domain = target.encoded_host();
     const auto current_domain = current.encoded_host();
@@ -59,7 +57,7 @@ bool should_redirect(redirect_mode mode,
             auto current_itr = pp.first.base();
             auto target_itr = pp.second.base();
             if (current_itr == current_domain.end())
-                return false;
+                return true;
 
 
             if (current_itr != current_domain.begin() && *std::prev(current_itr) != '.')
@@ -85,10 +83,10 @@ bool should_redirect(redirect_mode mode,
                     return target_domain[target_domain.size() - current_domain.size() - 1u] == '.';
             }
         case domain:
-            return target_domain == current_domain;
+            return target_domain == current_domain || target_domain.empty();
         case endpoint:
         {
-            if (target_domain == current_domain)
+            if (target_domain == current_domain || target_domain.empty())
             {
                 auto target_port = get_port(target);
                 auto current_port = get_port(current);
@@ -99,12 +97,12 @@ bool should_redirect(redirect_mode mode,
     }
 }
 
-bool same_host(const urls::url_view current, const asio::ip::tcp::endpoint ep)
+bool same_endpoint_on_host(const urls::url_view current, const asio::ip::tcp::endpoint ep)
 {
   return get_port(current) == ep.port();
 }
 
-bool same_host(const urls::url_view current,
+bool same_endpoint_on_host(const urls::url_view current,
                const asio::local::stream_protocol::endpoint ep)
 {
   return false; // domain socket can only redirect locally

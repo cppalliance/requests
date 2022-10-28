@@ -44,10 +44,11 @@ BOOST_REQUESTS_DECL bool should_redirect(
 BOOST_REQUESTS_DECL std::uint16_t get_port(urls::url_view domain);
 
 /// Check if the endpoint is the same as the endpoint
-BOOST_REQUESTS_DECL bool same_host(const urls::url_view current, const asio::ip::tcp::endpoint);
+BOOST_REQUESTS_DECL bool same_endpoint_on_host(const urls::url_view current, const asio::ip::tcp::endpoint);
 
 /// Check if the endpoint is the same as the endpoint
-BOOST_REQUESTS_DECL bool same_host(const urls::url_view current, const asio::local::stream_protocol::endpoint);
+BOOST_REQUESTS_DECL bool same_endpoint_on_host(const urls::url_view current, const asio::local::stream_protocol::endpoint);
+
 
 }
 }

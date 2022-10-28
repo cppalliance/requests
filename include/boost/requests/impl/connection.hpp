@@ -11,6 +11,7 @@
 #include <boost/requests/connection.hpp>
 #include <boost/requests/detail/config.hpp>
 #include <boost/requests/detail/ssl.hpp>
+#include <boost/requests/fields/location.hpp>
 
 #include <boost/asio/ssl/host_name_verification.hpp>
 #include <boost/asio/redirect_error.hpp>
@@ -728,19 +729,17 @@ auto basic_connection<Stream>::request(
       ec.assign(error::invalid_redirect, &loc);
       break ;
     }
-    const auto & loc = *loc_itr;
 
-    auto url = urls::parse_relative_ref(loc.value());
-    if (url.has_error())
-      url = urls::parse_uri(loc.value());
-
+    const auto url = interpret_location(hreq.target(), loc_itr->value());
     if (url.has_error())
     {
       ec = url.error();
       break;
     }
     // we don't need to use should_redirect, bc we're on the same host.
-    if (url->has_authority() && !same_host(*url, endpoint()))
+    if (url->has_authority() &&
+        host_ == url->encoded_host() &&
+        !same_endpoint_on_host(*url, endpoint()))
     {
       static constexpr auto sloc((BOOST_CURRENT_LOCATION));
       ec.assign(error::forbidden_redirect, &sloc);
@@ -849,12 +848,7 @@ auto basic_connection<Stream>::download(
       res.header = std::move(hres.base());
       return res;
     }
-    const auto & loc = *loc_itr;
-    auto url = urls::parse_relative_ref(loc.value());
-
-    if (url.has_error())
-      url = urls::parse_uri(loc.value());
-
+    const auto url = interpret_location(hreq.target(), loc_itr->value());
     if (url.has_error())
     {
       ec = url.error();
@@ -862,7 +856,9 @@ auto basic_connection<Stream>::download(
       return res;
     }
     // we don't need to use should_redirect, bc we're on the same host.
-    if (url->has_authority() && !same_host(*url, endpoint()))
+    if (url->has_authority()
+        && host_ == url->encoded_host()
+        && !same_endpoint_on_host(*url, endpoint()))
     {
       static constexpr auto sloc((BOOST_CURRENT_LOCATION));
       ec.assign(error::forbidden_redirect, &sloc);
@@ -1009,20 +1005,17 @@ struct basic_connection<Stream>::async_request_op : asio::coroutine
       ec.assign(error::invalid_redirect, &loc);
       return;
     }
-    const auto & loc = *loc_itr;
-
     const auto redirect_mode = (std::min)(supported_redirect_mode(), state_->opts.redirect);
-    auto url = urls::parse_relative_ref(loc.value());
-    if (url.has_error())
-      url = urls::parse_uri(loc.value());
-
+    const auto url = interpret_location(state_->hreq.target(), loc_itr->value());
     if (url.has_error())
     {
       ec = url.error();
       return;
     }
     // we don't need to use should_redirect, bc we're on the same host.
-    if (url->has_authority() && !same_host(*url, this_->endpoint()))
+    if (url->has_authority()
+        && this_->host_ == url->encoded_host()
+        && !same_endpoint_on_host(*url, this_->endpoint()))
     {
       static constexpr auto sloc((BOOST_CURRENT_LOCATION));
       ec.assign(error::forbidden_redirect, &sloc);
@@ -1185,7 +1178,8 @@ struct basic_connection<Stream>::async_download_op : asio::coroutine
     // set mime-type
     {
       auto hitr = state_->hreq.base().find(http::field::accept);
-      if (hitr == state_->hreq.base().end()) {
+      if (hitr == state_->hreq.base().end())
+      {
         const auto ext = state_->download_path.extension().string();
         const auto &mp = default_mime_type_map();
         auto itr = mp.find(ext);
@@ -1217,12 +1211,7 @@ struct basic_connection<Stream>::async_download_op : asio::coroutine
       state_->res.header = std::move(state_->hres);
       return ;
     }
-    const auto &loc = *loc_itr;
-
-    auto url = urls::parse_relative_ref(loc.value());
-    if (url.has_error())
-      url = urls::parse_uri(loc.value());
-
+    const auto url = interpret_location(state_->hreq.target(), loc_itr->value());
     if (url.has_error())
     {
       ec = url.error();
@@ -1230,7 +1219,9 @@ struct basic_connection<Stream>::async_download_op : asio::coroutine
       return ;
     }
     // we don't need to use should_redirect, bc we're on the same host.
-    if (url->has_authority() && !same_host(*url, this_->endpoint()))
+    if (url->has_authority()
+        && this_->host_ == url->encoded_host()
+        && !same_endpoint_on_host(*url, this_->endpoint()))
     {
       static constexpr auto sloc((BOOST_CURRENT_LOCATION));
       ec.assign(error::forbidden_redirect, &sloc);

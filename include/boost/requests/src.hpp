@@ -17,6 +17,7 @@
 
 #include <boost/requests/fields/impl/keep_alive.ipp>
 #include <boost/requests/fields/impl/link.ipp>
+#include <boost/requests/fields/impl/location.ipp>
 #include <boost/requests/fields/impl/set_cookie.ipp>
 #include <boost/requests/impl/connection.ipp>
 #include <boost/requests/impl/connection_pool.ipp>
@@ -27,6 +28,7 @@
 #include <boost/requests/impl/redirect.ipp>
 #include <boost/requests/impl/request.ipp>
 #include <boost/requests/impl/response.ipp>
+#include <boost/requests/impl/session.ipp>
 #include <boost/requests/rfc/impl/dates.ipp>
 #include <boost/requests/rfc/impl/link.ipp>
 #include <boost/requests/rfc/impl/quoted_string.ipp>

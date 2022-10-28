@@ -16,6 +16,7 @@ TEST_CASE("none")
     using namespace boost::requests;
     using namespace boost::urls;
     CHECK(!should_redirect(none, parse_uri("http://boost.org").value(), parse_uri("http://boost.org/index.html").value()));
+    CHECK(!should_redirect(none, parse_uri("http://boost.org").value(), parse_uri_reference("/take-my-money.com").value()));
 }
 
 
@@ -31,6 +32,7 @@ TEST_CASE("endpoint")
     CHECK(should_redirect(endpoint, parse_uri("http://boost.org").value(), parse_uri("http://boost.org:80").value()));
     CHECK(should_redirect(endpoint, parse_uri("http://boost.org").value(), parse_uri("ws://boost.org:80").value()));
     CHECK(should_redirect(endpoint, parse_uri("http://boost.org").value(), parse_uri("foo://boost.org:80").value()));
+    CHECK(should_redirect(endpoint, parse_uri("http://boost.org").value(), parse_uri_reference("/take-my-money.com").value()));
 }
 
 TEST_CASE("domain")
@@ -47,7 +49,8 @@ TEST_CASE("domain")
     CHECK(should_redirect(domain, parse_uri("http://boost.org").value(), parse_uri("http://boost.org:80").value()));
     CHECK(should_redirect(domain, parse_uri("http://boost.org").value(), parse_uri("ws://boost.org:80").value()));
     CHECK(should_redirect(domain, parse_uri("http://boost.org").value(), parse_uri("foo://boost.org:80").value()));
-}
+    CHECK(should_redirect(domain, parse_uri("http://boost.org").value(), parse_uri_reference("/take-my-money.com").value()));
+    }
 
 TEST_CASE("subdomain")
 {
@@ -64,6 +67,7 @@ TEST_CASE("subdomain")
     CHECK(should_redirect(subdomain, parse_uri("http://boost.org").value(), parse_uri("http://boost.org:80").value()));
     CHECK(should_redirect(subdomain, parse_uri("http://boost.org").value(), parse_uri("ws://boost.org:80").value()));
     CHECK(should_redirect(subdomain, parse_uri("http://boost.org").value(), parse_uri("foo://boost.org:80").value()));
+    CHECK(should_redirect(subdomain, parse_uri("http://boost.org").value(), parse_uri_reference("/take-my-money.com").value()));
 }
 
 TEST_CASE("private_domain")
@@ -86,6 +90,7 @@ TEST_CASE("private_domain")
     CHECK(!should_redirect(private_domain, parse_uri("http://doc.boost.org").value(), parse_uri("http://fakeboost.org").value()));
     CHECK(!should_redirect(private_domain, parse_uri("http://doc.boost.org").value(), parse_uri("http://ost.org").value()));
     CHECK(should_redirect(private_domain, parse_uri("http://api.boost.org").value(), parse_uri("http://pi.boost.org").value()));
+    CHECK(should_redirect(private_domain, parse_uri("http://boost.org").value(), parse_uri_reference("/take-my-money.com").value()));
 }
 
 
@@ -94,6 +99,7 @@ TEST_CASE("any")
     using namespace boost::requests;
     using namespace boost::urls;
     CHECK(should_redirect(any, parse_uri("http://boost.org").value(), parse_uri("https://take-my-money.com").value()));
+    CHECK(should_redirect(any, parse_uri("http://boost.org").value(), parse_uri_reference("/take-my-money.com").value()));
 }
 
 

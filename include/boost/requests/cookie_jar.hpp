@@ -135,6 +135,8 @@ struct basic_cookie_jar final : cookie_jar_base
     boost::unordered_set<cookie_type, cookie_hash, cookie_equal,
                          typename std::allocator_traits<allocator_type>::template rebind_alloc<cookie>> content;
 
+    basic_cookie_jar(allocator_type allocator = {}) : content(std::move(allocator)) {}
+
     bool set(const set_cookie & set,
              core::string_view request_host,
              bool from_non_http_api = false,
@@ -272,6 +274,11 @@ struct basic_cookie_jar final : cookie_jar_base
 };
 
 using cookie_jar = basic_cookie_jar<>;
+
+namespace pmr
+{
+using cookie_jar = basic_cookie_jar<container::pmr::polymorphic_allocator<char>>;
+}
 
 template<typename Alloc, typename Allocator>
 void tag_invoke(

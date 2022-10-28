@@ -77,5 +77,8 @@ using basic_mutex = asem::basic_mutex<boost::asem::mt, Executor>;
 #define BOOST_REQUESTS_DEFAULT_POOL_SIZE 6
 #endif
 
+#if !defined(BOOST_REQUESTS_MAX_URL_LENGTH)
+#define BOOST_REQUESTS_MAX_URL_LENGTH 4096
+#endif
 
 #endif // BOOST_REQUESTS_DETAIL_HPP
