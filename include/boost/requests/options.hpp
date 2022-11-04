@@ -22,6 +22,9 @@ struct options
 
 };
 
+/// The default options used by sessions.
+BOOST_REQUESTS_DECL options& default_options();
+
 }
 }
 #endif //BOOST_REQUESTS_OPTIONS_HPP

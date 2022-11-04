@@ -24,6 +24,7 @@
 #include <boost/requests/impl/cookie_jar.ipp>
 #include <boost/requests/impl/error.ipp>
 #include <boost/requests/impl/mime_types.ipp>
+#include <boost/requests/impl/options.ipp>
 #include <boost/requests/impl/public_suffix.ipp>
 #include <boost/requests/impl/redirect.ipp>
 #include <boost/requests/impl/request.ipp>

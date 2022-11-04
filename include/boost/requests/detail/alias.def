@@ -1,6 +1,6 @@
 template<typename Allocator = std::allocator<char>>
 auto get(target_view target,
-         basic_request<Allocator> req) -> basic_response<Allocator>
+         basic_request<Allocator> req = {}) -> basic_response<Allocator>
 {
   return request(http::verb::get, target, empty{}, std::move(req));
 }
@@ -15,7 +15,7 @@ auto get(target_view target,
 
 template<typename Allocator = std::allocator<char>>
 auto head(target_view target,
-          basic_request<Allocator> req) -> basic_response<Allocator>
+          basic_request<Allocator> req = {}) -> basic_response<Allocator>
 {
   return request(http::verb::head, target, empty{}, std::move(req));
 }
@@ -31,7 +31,7 @@ auto head(target_view target,
 template<typename RequestBody, typename Allocator = std::allocator<char>>
 auto post(target_view target,
           RequestBody && request_body,
-          basic_request<Allocator> req) -> basic_response<Allocator>
+          basic_request<Allocator> req = {}) -> basic_response<Allocator>
 {
   return request(http::verb::post, target, std::forward<RequestBody>(request_body), std::move(req));
 }
@@ -49,7 +49,7 @@ auto post(target_view target,
 template<typename RequestBody, typename Allocator = std::allocator<char>>
 auto put(target_view target,
          RequestBody && request_body,
-         basic_request<Allocator> req) -> basic_response<Allocator>
+         basic_request<Allocator> req = {}) -> basic_response<Allocator>
 {
   return request(http::verb::put, target, std::forward<RequestBody>(request_body), std::move(req));
 }
@@ -67,7 +67,7 @@ auto put(target_view target,
 template<typename RequestBody, typename Allocator = std::allocator<char>>
 auto patch(target_view target,
            RequestBody && request_body,
-           basic_request<Allocator> req) -> basic_response<Allocator>
+           basic_request<Allocator> req = {}) -> basic_response<Allocator>
 {
   return request(http::verb::patch, target, std::forward<RequestBody>(request_body), std::move(req));
 }
@@ -84,7 +84,7 @@ auto patch(target_view target,
 template<typename RequestBody, typename Allocator = std::allocator<char>>
 auto delete_(target_view target,
              RequestBody && request_body,
-             basic_request<Allocator> req) -> basic_response<Allocator>
+             basic_request<Allocator> req = {}) -> basic_response<Allocator>
 {
   return request(http::verb::delete_, target, std::forward<RequestBody>(request_body), std::move(req));
 }
@@ -101,7 +101,7 @@ auto delete_(target_view target,
 
 template<typename RequestBody, typename Allocator = std::allocator<char>>
 auto delete_(target_view target,
-             basic_request<Allocator> req) -> basic_response<Allocator>
+             basic_request<Allocator> req = {}) -> basic_response<Allocator>
 {
   return request(http::verb::delete_, target, empty{}, std::move(req));
 }
@@ -117,7 +117,7 @@ auto delete_(target_view target,
 
 template<typename RequestBody, typename Allocator = std::allocator<char>>
 auto connect(target_view target,
-             basic_request<Allocator> req) -> basic_response<Allocator>
+             basic_request<Allocator> req = {}) -> basic_response<Allocator>
 {
   return request(http::verb::connect, target, empty{}, std::move(req));
 }
@@ -133,7 +133,7 @@ auto connect(target_view target,
 
 template<typename RequestBody, typename Allocator = std::allocator<char>>
 auto options(target_view target,
-             basic_request<Allocator> req) -> basic_response<Allocator>
+             basic_request<Allocator> req = {}) -> basic_response<Allocator>
 {
   return request(http::verb::options, target, empty{}, std::move(req));
 }
@@ -149,7 +149,7 @@ auto options(target_view target,
 
 template<typename RequestBody, typename Allocator = std::allocator<char>>
 auto trace(target_view target,
-           basic_request<Allocator> req) -> basic_response<Allocator>
+           basic_request<Allocator> req = {}) -> basic_response<Allocator>
 {
   return request(http::verb::trace, target, empty{}, std::move(req));
 }
@@ -169,7 +169,7 @@ template<typename Allocator = std::allocator<char>,
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, basic_response<Allocator>))
 async_get(target_view target,
-          basic_request<Allocator> req,
+          basic_request<Allocator> req = {},
           CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
 {
   return async_request(http::verb::get, target, empty{}, std::move(req),
@@ -183,7 +183,7 @@ template<typename Allocator = std::allocator<char>,
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, basic_response<Allocator>))
 async_head(target_view target,
-           basic_request<Allocator> req,
+           basic_request<Allocator> req  = {},
            CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
 {
   return async_request(http::verb::head, target,
@@ -200,7 +200,7 @@ BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, basic_response<Allocator>))
 async_post(target_view target,
            RequestBody && request_body,
-           basic_request<Allocator> req,
+           basic_request<Allocator> req  = {},
            CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
 {
   return async_request(http::verb::post, target,
@@ -217,7 +217,7 @@ BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, basic_response<Allocator>))
 async_put(target_view target,
           RequestBody && request_body,
-          basic_request<Allocator> req,
+          basic_request<Allocator> req  = {},
           CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
 {
   return async_request(http::verb::put, target,
@@ -234,7 +234,7 @@ BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, basic_response<Allocator>))
 async_patch(target_view target,
             RequestBody && request_body,
-            basic_request<Allocator> req,
+            basic_request<Allocator> req  = {},
             CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
 {
   return async_request(http::verb::patch, target,
@@ -251,7 +251,7 @@ BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, basic_response<Allocator>))
 async_delete(target_view target,
              RequestBody && request_body,
-             basic_request<Allocator> req,
+             basic_request<Allocator> req = {},
              CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
 {
   return async_request(http::verb::delete_, target,
@@ -268,7 +268,7 @@ template<typename Allocator = std::allocator<char>,
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, basic_response<Allocator>))
 async_delete(target_view target,
-             basic_request<Allocator> req,
+             basic_request<Allocator> req  = {},
              CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
 {
   return async_request(http::verb::delete_, target,
@@ -284,7 +284,7 @@ template<typename Allocator = std::allocator<char>,
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, basic_response<Allocator>))
 async_connect(target_view target,
-              basic_request<Allocator> req,
+              basic_request<Allocator> req  = {},
               CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
 {
   return async_request(http::verb::connect, target,
@@ -300,7 +300,7 @@ template<typename Allocator = std::allocator<char>,
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, basic_response<Allocator>))
 async_options(target_view target,
-              basic_request<Allocator> req,
+              basic_request<Allocator> req  = {},
               CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
 {
   return async_request(http::verb::options, target,
@@ -316,7 +316,7 @@ template<typename Allocator = std::allocator<char>,
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, basic_response<Allocator>))
 async_trace(target_view target,
-            basic_request<Allocator> req,
+            basic_request<Allocator> req  = {},
             CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
 {
   return async_request(http::verb::trace, target,

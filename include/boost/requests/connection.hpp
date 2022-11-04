@@ -118,7 +118,6 @@ struct basic_connection
     async_connect(endpoint_type ep,
                   CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
 
-
     void close()
     {
       boost::system::error_code ec;

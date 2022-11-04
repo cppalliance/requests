@@ -539,6 +539,25 @@ struct basic_session<Executor>::async_request_op : asio::coroutine
   {
   }
 
+
+  template<typename RequestBody_>
+  async_request_op(basic_session<Executor> * this_,
+                   beast::http::verb v,
+                   core::string_view url,
+                   RequestBody_ && body,
+                   basic_request<Allocator> req)
+      : this_(this_), method(v), opts(this_->options_),
+        default_mime_type(request_body_traits<std::decay_t<RequestBody_>>::default_content_type(body)),
+        body(request_body_traits<std::decay_t<RequestBody_>>::make_body(std::forward<RequestBody_>(body), ec_)),
+        req(std::move(req))
+  {
+    auto u = urls::parse_uri(url);
+    if (u.has_error())
+      ec_ = u.error();
+    else
+      this->url = u.value();
+  }
+
   void prepare_initial_head_request(error_code & ec)
   {
     if (ec)
@@ -711,6 +730,28 @@ basic_session<Executor>::async_request(beast::http::verb method,
 
 
 template<typename Executor>
+template<typename RequestBody, typename Allocator,
+          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+                                               basic_response<Allocator>)) CompletionToken>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
+                                   void (boost::system::error_code,
+                                        basic_response<Allocator>))
+basic_session<Executor>::async_request(beast::http::verb method,
+                                       core::string_view path,
+                                       RequestBody && body,
+                                       basic_request<Allocator> req,
+                                       CompletionToken && completion_token)
+{
+  return asio::async_compose<CompletionToken, void(system::error_code, basic_response<Allocator>)>(
+      async_request_op<typename request_body_traits<std::decay_t<RequestBody>>::body_type, Allocator>{
+            this, method, path, std::forward<RequestBody>(body), std::move(req)},
+      completion_token,
+      mutex_
+  );
+}
+
+
+template<typename Executor>
 template<typename Allocator>
 struct basic_session<Executor>::async_download_op : asio::coroutine
 {
@@ -724,6 +765,7 @@ struct basic_session<Executor>::async_download_op : asio::coroutine
   filesystem::path download_path;
 
   basic_request<Allocator> req;
+  boost::system::error_code ec;
 
   const bool is_secure = (url.scheme_id() == urls::scheme::https)
                       || (url.scheme_id() == urls::scheme::wss);
@@ -760,6 +802,20 @@ struct basic_session<Executor>::async_download_op : asio::coroutine
       : this_(this_), opts(this_->options_), url(url),
         download_path(download_path)
   {
+  }
+
+  template<typename ... Args>
+  async_download_op(basic_session<Executor> * this_,
+                    core::string_view url,
+                    const filesystem::path & download_path,
+                    http::basic_fields<Allocator> req)
+      : this_(this_), opts(this_->options_), download_path(download_path)
+  {
+    auto u = urls::parse_uri_reference(url);
+    if (u.has_error())
+      this->ec = u.error();
+    else
+      this->url = u.value();
   }
 
   void prepare_initial_request(system::error_code &ec)
@@ -862,8 +918,13 @@ struct basic_session<Executor>::async_download_op : asio::coroutine
 
     reenter(this)
     {
-      state_ = std::allocate_shared<state_t>(self.get_allocator(), url.encoded_resource(), std::move(req));
-      prepare_initial_request(ec);
+      if (this->ec)
+        ec = this->ec;
+      else
+      {
+        state_ = std::allocate_shared<state_t>(self.get_allocator(), url.encoded_resource(), std::move(req));
+        prepare_initial_request(ec);
+      }
       if (ec)
       {
         yield asio::post(asio::append(std::move(self), ec));
@@ -930,6 +991,27 @@ BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code,
                                         basic_response<Allocator>))
 basic_session<Executor>::async_download(urls::url_view path,
+                                        basic_request<Allocator> req,
+                                        filesystem::path download_path,
+                                        CompletionToken && completion_token)
+
+{
+  return asio::async_compose<CompletionToken, void(system::error_code, basic_response<Allocator>)>(
+      async_download_op<Allocator>{this, path, download_path, std::move(req)},
+      completion_token,
+      mutex_
+  );
+}
+
+
+template<typename Executor>
+template<typename Allocator,
+          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+                                               basic_response<Allocator>)) CompletionToken>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
+                                   void (boost::system::error_code,
+                                        basic_response<Allocator>))
+basic_session<Executor>::async_download(core::string_view path,
                                         basic_request<Allocator> req,
                                         filesystem::path download_path,
                                         CompletionToken && completion_token)
