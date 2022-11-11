@@ -15,9 +15,6 @@
 namespace boost {
 namespace requests {
 
-template struct basic_cookie_jar<std::allocator<char>>;
-template struct basic_cookie_jar<container::pmr::polymorphic_allocator<char>>;
-
 }
 }
 

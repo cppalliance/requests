@@ -16,9 +16,6 @@
 namespace boost {
 namespace requests {
 
-template struct basic_response<std::allocator<char>>;
-template struct basic_response<container::pmr::polymorphic_allocator<char>>;
-
 }
 }
 

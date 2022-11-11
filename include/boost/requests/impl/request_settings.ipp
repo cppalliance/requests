@@ -11,13 +11,10 @@
 
 #if defined(BOOST_REQUESTS_SOURCE)
 
-#include <boost/requests/request.hpp>
+#include <boost/requests/request_settings.hpp>
 
 namespace boost {
 namespace requests {
-
-template struct basic_request<std::allocator<char>>;
-template struct basic_request<container::pmr::polymorphic_allocator<char>>;
 
 }
 }

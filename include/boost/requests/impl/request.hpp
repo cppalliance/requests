@@ -5,8 +5,8 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#ifndef BOOST_REQUESTS_IMPL_FREE_HPP
-#define BOOST_REQUESTS_IMPL_FREE_HPP
+#ifndef BOOST_REQUESTS_IMPL_REQUEST_HPP
+#define BOOST_REQUESTS_IMPL_REQUEST_HPP
 
 #include <boost/requests/http.hpp>
 #include <boost/requests/service.hpp>
@@ -16,15 +16,14 @@ namespace boost
 {
 namespace requests
 {
-namespace free
-{
+
 
 template<typename RequestBody, typename Allocator>
 auto request(beast::http::verb method,
              urls::url_view path,
              RequestBody && body,
              beast::http::basic_fields<Allocator> req,
-             system::error_code & ec) -> basic_response<Allocator>
+             system::error_code & ec) -> response
 {
   return default_session().request(method, path, std::forward<RequestBody>(body), std::move(req), ec);
 }
@@ -33,7 +32,7 @@ template<typename Allocator>
 auto download(urls::url_view path,
               beast::http::basic_fields<Allocator> req,
               const filesystem::path & download_path,
-              system::error_code & ec) -> basic_response<Allocator>
+              system::error_code & ec) -> response
 {
   return default_session().download(path, std::move(req), download_path, ec);
 }
@@ -65,10 +64,10 @@ struct async_request_op
 template<typename RequestBody,
           typename Allocator,
           BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-                                               basic_response<Allocator>)) CompletionToken>
+                                               response)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code,
-                                        basic_response<Allocator>))
+                                        response))
 async_request(beast::http::verb method,
               urls::url_view path,
               RequestBody && body,
@@ -77,7 +76,7 @@ async_request(beast::http::verb method,
 {
   return asio::async_initiate<CompletionToken,
                               void(boost::system::error_code,
-                                   basic_response<Allocator>)>(
+                                   response)>(
           detail::async_request_op{}, completion_token,
           method, path, std::forward<RequestBody>(body), std::move(req));
 }
@@ -85,10 +84,10 @@ async_request(beast::http::verb method,
 template<typename RequestBody,
           typename Allocator,
           BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-                                               basic_response<Allocator>)) CompletionToken>
+                                               response)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code,
-                                        basic_response<Allocator>))
+                                        response))
 async_request(beast::http::verb method,
               core::string_view path,
               RequestBody && body,
@@ -97,7 +96,7 @@ async_request(beast::http::verb method,
 {
   return asio::async_initiate<CompletionToken,
                               void (boost::system::error_code,
-                                   basic_response<Allocator>)>(
+                                   response)>(
       detail::async_request_op{},
       completion_token, method, path, std::forward<RequestBody>(body), std::move(req));
 }
@@ -124,10 +123,10 @@ struct async_download_op
 
 template<typename Allocator,
           BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-                                               basic_response<Allocator>)) CompletionToken>
+                                               response)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code,
-                                        basic_response<Allocator>))
+                                        response))
 async_download(urls::url_view path,
                beast::http::basic_fields<Allocator> req,
                filesystem::path download_path,
@@ -135,7 +134,7 @@ async_download(urls::url_view path,
 {
   return asio::async_initiate<CompletionToken,
                               void (boost::system::error_code,
-                                   basic_response<Allocator>)>(
+                                   response)>(
       detail::async_download_op{},
       completion_token, path, std::move(req), std::move(download_path));
 }
@@ -143,10 +142,10 @@ async_download(urls::url_view path,
 
 template<typename Allocator,
           BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-                                               basic_response<Allocator>)) CompletionToken>
+                                               response)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code,
-                                        basic_response<Allocator>))
+                                        response))
 async_download(core::string_view path,
                beast::http::basic_fields<Allocator> req,
                filesystem::path download_path,
@@ -154,14 +153,12 @@ async_download(core::string_view path,
 {
   return asio::async_initiate<CompletionToken,
                               void (boost::system::error_code,
-                                   basic_response<Allocator>)>(
+                                   response)>(
       detail::async_download_op{},
       completion_token, path, std::move(req), std::move(download_path));
 }
 
 }
 }
-}
 
-
-#endif // BOOST_REQUESTS_FREE_HPP
+#endif // BOOST_REQUESTS_REQUEST_HPP

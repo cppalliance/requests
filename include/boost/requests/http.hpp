@@ -11,11 +11,18 @@
 #include <boost/beast/http/fields.hpp>
 #include <boost/beast/http/status.hpp>
 #include <boost/beast/http/verb.hpp>
+#include <boost/container/pmr/polymorphic_allocator.hpp>
 
 namespace boost {
 namespace requests {
 
-namespace http = boost::beast::http;
+namespace http {
+
+using boost::beast::http::field;
+using boost::beast::http::status;
+using boost::beast::http::verb;
+using fields = boost::beast::http::basic_fields<boost::container::pmr::polymorphic_allocator<char>>;
+}
 
 }
 }

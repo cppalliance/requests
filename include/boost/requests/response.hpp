@@ -33,10 +33,9 @@ namespace boost
 namespace requests
 {
 
-template<typename Allocator = std::allocator<char>>
-struct basic_response
+struct response
 {
-  using allocator_type = Allocator;
+  using allocator_type = boost::container::pmr::polymorphic_allocator<char>;
   using fields_type = beast::http::basic_fields<allocator_type>;
   using buffer_type = beast::basic_flat_buffer<allocator_type>;
   using body_type = beast::http::basic_dynamic_body<buffer_type>;
@@ -45,15 +44,15 @@ struct basic_response
   // raw body
   buffer_type buffer{header.get_allocator()};
 
-  basic_response(allocator_type alloc) : header(alloc), buffer(alloc) {}
-  basic_response(beast::http::response_header<fields_type> header,
+  response(allocator_type alloc) : header(alloc), buffer(alloc) {}
+  response(beast::http::response_header<fields_type> header,
                  buffer_type buffer) : header(std::move(header)), buffer(std::move(buffer)) {}
 
-  basic_response(const basic_response & ) = default;
-  basic_response(basic_response && ) noexcept = default;
+  response(const response & ) = default;
+  response(response && ) noexcept = default;
 
-  basic_response& operator=(const basic_response & ) = default;
-  basic_response& operator=(basic_response && ) noexcept = default;
+  response& operator=(const response & ) = default;
+  response& operator=(response && ) noexcept = default;
 
   template<typename Char = char,
            typename CharTraits = std::char_traits<char>>
@@ -113,7 +112,7 @@ struct basic_response
 
   using string_body_type = typename beast::http::basic_string_body<char, std::char_traits<char>, allocator_type>;
   using history_type = typename beast::http::response<body_type, fields_type>;
-  using vector_alloc = typename std::allocator_traits<Allocator>::template rebind_alloc<history_type>;
+  using vector_alloc = boost::container::pmr::polymorphic_allocator<history_type>;
 
   std::vector<history_type, vector_alloc> history{vector_alloc{header.get_allocator()}};
 
@@ -177,17 +176,6 @@ struct basic_response
     return res;
   }
 };
-
-using response = basic_response<>;
-
-namespace pmr {
-  using response = basic_response<container::pmr::polymorphic_allocator<char>>;
-}
-
-#if !defined(BOOST_REQUESTS_HEADER_ONLY)
-extern template struct basic_response<std::allocator<char>>;
-extern template struct basic_response<container::pmr::polymorphic_allocator<char>>;
-#endif
 
 }
 }

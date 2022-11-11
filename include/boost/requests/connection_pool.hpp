@@ -183,14 +183,14 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
     auto request(beast::http::verb method,
                  urls::pct_string_view path,
                  RequestBody && body,
-                 basic_request<Allocator> req,
-                 system::error_code & ec) -> basic_response<Allocator>
+                 request_settings req,
+                 system::error_code & ec) -> response
     {
       auto conn = get_connection(ec);
       if (!ec && conn == nullptr)
         ec = asio::error::not_found;
       if (ec)
-        return basic_response<Allocator>{req.get_allocator()};
+        return response{req.get_allocator()};
 
       assert(conn != nullptr);
       return conn->request(method, path, body, std::move(req), ec);
@@ -200,8 +200,8 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
     auto request(beast::http::verb method,
                  urls::pct_string_view path,
                  RequestBody && body,
-                 basic_request<Allocator> req)
-        -> basic_response<Allocator>
+                 request_settings req)
+        -> response
     {
       boost::system::error_code ec;
       auto res = request(method, path, std::move(body), std::move(req), ec);
@@ -213,28 +213,28 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
     template<typename RequestBody,
               typename Allocator = std::allocator<char>,
               BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-                                                   basic_response<Allocator>)) CompletionToken
+                                                   response)) CompletionToken
                   BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                        void (boost::system::error_code,
-                                            basic_response<Allocator>))
+                                            response))
     async_request(beast::http::verb method,
                   urls::pct_string_view path,
                   RequestBody && body,
-                  basic_request<Allocator> req,
+                  request_settings req,
                   CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
 
     template<typename Allocator = std::allocator<char>>
     auto download(urls::pct_string_view path,
-                  basic_request<Allocator> req,
+                  request_settings req,
                   const filesystem::path & download_path,
-                  system::error_code & ec) -> basic_response<Allocator>
+                  system::error_code & ec) -> response
     {
       auto conn = get_connection(ec);
       if (!ec && conn == nullptr)
         ec = asio::error::not_found;
       if (ec)
-        return basic_response<Allocator>{req.get_allocator()};
+        return response{req.get_allocator()};
 
       assert(conn != nullptr);
       return conn->download(path, std::move(req), download_path, ec);
@@ -243,8 +243,8 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
 
     template<typename Allocator= std::allocator<char> >
     auto download(urls::pct_string_view path,
-                  basic_request<Allocator> req,
-                  const filesystem::path & download_path) -> basic_response<Allocator>
+                  request_settings req,
+                  const filesystem::path & download_path) -> response
     {
       boost::system::error_code ec;
       auto res = download(path, std::move(req), download_path, ec);
@@ -255,17 +255,18 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
 
     template<typename Allocator = std::allocator<char>,
               BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-                                                   basic_response<Allocator>)) CompletionToken
+                                                   response)) CompletionToken
                   BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                        void (boost::system::error_code,
-                                             basic_response<Allocator>))
+                                             response))
     async_download(urls::pct_string_view path,
-                   basic_request<Allocator> req,
+                   request_settings req,
                    filesystem::path download_path,
                    CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
 
     using target_view = urls::pct_string_view;
+    using request_type = request_settings;
 #include <boost/requests/detail/alias.def>
 
     std::shared_ptr<connection_type> get_connection(error_code & ec);

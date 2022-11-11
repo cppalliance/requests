@@ -66,25 +66,25 @@ struct basic_session
         return mutex_.get_executor();
     }
 
-          struct options & options()       {return options_;}
-    const struct options & options() const {return options_;}
+          struct request_options & options()       {return options_;}
+    const struct request_options & options() const {return options_;}
 
     template<typename Allocator>
     using basic_request = beast::http::basic_fields<Allocator>;
 
-    template<typename RequestBody, typename Allocator = std::allocator<char>>
+    template<typename RequestBody>
     auto request(beast::http::verb method,
                  urls::url_view path,
                  RequestBody && body,
-                 basic_request<Allocator> req,
-                 system::error_code & ec) -> basic_response<Allocator>;
+                 http::fields req,
+                 system::error_code & ec) -> response;
 
-    template<typename RequestBody, typename Allocator = std::allocator<char>>
+    template<typename RequestBody>
     auto request(beast::http::verb method,
                  urls::url_view path,
                  RequestBody && body,
-                 basic_request<Allocator> req)
-        -> basic_response<Allocator>
+                 http::fields req)
+        -> response
     {
       boost::system::error_code ec;
       auto res = request(method, path, std::move(body), std::move(req), ec);
@@ -93,29 +93,29 @@ struct basic_session
       return res;
     }
 
-    template<typename RequestBody, typename Allocator = std::allocator<char>>
+    template<typename RequestBody>
     auto request(beast::http::verb method,
                  core::string_view path,
                  RequestBody && body,
-                 basic_request<Allocator> req,
-                 system::error_code & ec) -> basic_response<Allocator>
+                 http::fields req,
+                 system::error_code & ec) -> response
     {
       auto url = urls::parse_uri(path);
       if (url.has_error())
       {
         ec = url.error();
-        return basic_response<Allocator>{req.get_allocator()};
+        return response{req.get_allocator()};
       }
       else
         return request(method, url.value(), std::forward<RequestBody>(body), req, ec);
     }
 
-    template<typename RequestBody, typename Allocator = std::allocator<char>>
+    template<typename RequestBody>
     auto request(beast::http::verb method,
                  core::string_view path,
                  RequestBody && body,
-                 basic_request<Allocator> req)
-        -> basic_response<Allocator>
+                 http::fields req)
+        -> response
     {
       boost::system::error_code ec;
       auto res = request(method, path, std::move(body), std::move(req), ec);
@@ -126,43 +126,39 @@ struct basic_session
 
 
     template<typename RequestBody,
-              typename Allocator = std::allocator<char>,
               BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-                                                   basic_response<Allocator>)) CompletionToken
+                                                   response)) CompletionToken
                   BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                        void (boost::system::error_code,
-                                            basic_response<Allocator>))
+                                            response))
     async_request(beast::http::verb method,
                   urls::url_view path,
                   RequestBody && body,
-                  basic_request<Allocator> req,
+                  http::fields req,
                   CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
 
     template<typename RequestBody,
-              typename Allocator = std::allocator<char>,
               BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-                                                   basic_response<Allocator>)) CompletionToken
+                                                   response)) CompletionToken
                   BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                        void (boost::system::error_code,
-                                            basic_response<Allocator>))
+                                            response))
     async_request(beast::http::verb method,
                   core::string_view path,
                   RequestBody && body,
-                  basic_request<Allocator> req,
+                  http::fields req,
                   CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
 
-    template<typename Allocator = std::allocator<char>>
     auto download(urls::url_view path,
-                  basic_request<Allocator> req,
+                  http::fields req,
                   const filesystem::path & download_path,
-                  system::error_code & ec) -> basic_response<Allocator>;
+                  system::error_code & ec) -> response;
 
-    template<typename Allocator= std::allocator<char> >
     auto download(urls::url_view path,
-                  basic_request<Allocator> req,
-                  const filesystem::path & download_path) -> basic_response<Allocator>
+                  http::fields req,
+                  const filesystem::path & download_path) -> response
     {
       boost::system::error_code ec;
       auto res = download(path, std::move(req), download_path, ec);
@@ -171,26 +167,24 @@ struct basic_session
       return res;
     }
 
-    template<typename Allocator = std::allocator<char>>
     auto download(core::string_view path,
-                  basic_request<Allocator> req,
+                  http::fields req,
                   const filesystem::path & download_path,
-                  system::error_code & ec) -> basic_response<Allocator>
+                  system::error_code & ec) -> response
     {
       auto url = urls::parse_uri(path);
       if (url.has_error())
       {
         ec = url.error();
-        return basic_response<Allocator>{req.get_allocator()};
+        return response{req.get_allocator()};
       }
       else
         return download(url.value(), req, download_path, ec);
     }
 
-    template<typename Allocator= std::allocator<char> >
     auto download(core::string_view path,
-                  basic_request<Allocator> req,
-                  const filesystem::path & download_path) -> basic_response<Allocator>
+                  http::fields req,
+                  const filesystem::path & download_path) -> response
     {
       boost::system::error_code ec;
       auto res = download(path, std::move(req), download_path, ec);
@@ -200,30 +194,29 @@ struct basic_session
     }
 
 
-    template<typename Allocator = std::allocator<char>,
-              BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-                                                   basic_response<Allocator>)) CompletionToken
+    template< BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+                                                   response)) CompletionToken
                   BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                        void (boost::system::error_code,
-                                            basic_response<Allocator>))
+                                            response))
     async_download(urls::url_view path,
-                   basic_request<Allocator> req,
+                   http::fields req,
                    filesystem::path download_path,
                    CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
 
-    template<typename Allocator = std::allocator<char>,
-              BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-                                                   basic_response<Allocator>)) CompletionToken
+    template< BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+                                                   response)) CompletionToken
                   BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                        void (boost::system::error_code,
-                                            basic_response<Allocator>))
+                                            response))
     async_download(core::string_view path,
-                   basic_request<Allocator> req,
+                   http::fields req,
                    filesystem::path download_path,
                    CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
 
+    using request_type = http::fields;
 #define target_view urls::url_view
 #include <boost/requests/detail/alias.def>
 #undef target_view
@@ -245,8 +238,7 @@ struct basic_session
       return res;
     }
 
-    template<typename Allocator = std::allocator<char>,
-    BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, pool_ptr)) CompletionToken
+    template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, pool_ptr)) CompletionToken
                   BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, pool_ptr))
     async_get_pool(urls::url_view path,
@@ -261,7 +253,7 @@ struct basic_session
     asio::ssl::context sslctx_{asio::ssl::context_base::tls_client};
     detail::basic_mutex<executor_type> mutex_;
 
-    struct options options_{default_options()};
+    struct request_options options_{default_options()};
 
     using host_ = std::pair<
         std::basic_string<char, std::char_traits<char>, container::pmr::polymorphic_allocator<char>>, unsigned short>;
@@ -271,20 +263,16 @@ struct basic_session
 
     // this isn't great
     boost::container::pmr::synchronized_pool_resource pmr_;
-    pmr::cookie_jar jar_{boost::container::pmr::polymorphic_allocator<char>(&pmr_)};
+    cookie_jar jar_{boost::container::pmr::polymorphic_allocator<char>(&pmr_)};
 
-    template<typename RequestBody, typename Allocator>
+    template<typename RequestBody>
     struct async_request_op;
 
-    template<typename Allocator>
     struct async_download_op;
 
     struct async_get_pool_op;
 
-    template<typename Allocator>
-    auto make_request_(beast::http::basic_fields<Allocator> fields) -> requests::basic_request<Allocator>;
-
-    auto make_request_(beast::http::fields fields) -> requests::request;
+    auto make_request_(http::fields fields) -> requests::request_settings;
 
     template<typename>
     friend struct basic_session;

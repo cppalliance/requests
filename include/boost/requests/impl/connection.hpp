@@ -13,15 +13,15 @@
 #include <boost/requests/detail/ssl.hpp>
 #include <boost/requests/fields/location.hpp>
 
-#include <boost/asio/ssl/host_name_verification.hpp>
-#include <boost/asio/redirect_error.hpp>
-#include <boost/asio/yield.hpp>
 #include <boost/asem/lock_guard.hpp>
-#include <boost/core/exchange.hpp>
+#include <boost/asio/redirect_error.hpp>
+#include <boost/asio/ssl/host_name_verification.hpp>
+#include <boost/asio/yield.hpp>
 #include <boost/container/pmr/monotonic_buffer_resource.hpp>
+#include <boost/core/exchange.hpp>
 #include <boost/requests/detail/define.hpp>
 #include <boost/requests/detail/state_machine.hpp>
-#include <boost/requests/request.hpp>
+#include <boost/requests/request_settings.hpp>
 #include <boost/smart_ptr/allocate_unique.hpp>
 #include <boost/url/grammar/ci_string.hpp>
 
@@ -660,20 +660,19 @@ basic_connection<Stream>::async_single_request(
 
 
 template<typename Stream>
-template<typename RequestBody, typename Allocator>
+template<typename RequestBody>
 auto basic_connection<Stream>::request(
             beast::http::verb method,
             urls::pct_string_view path,
             RequestBody && body,
-            basic_request<Allocator> req,
-            system::error_code & ec) -> basic_response<Allocator>
+            request_settings req,
+            system::error_code & ec) -> response
 {
   using body_traits = request_body_traits<std::decay_t<RequestBody>>;
   using body_type = typename body_traits::body_type;
-  using fields_type = beast::http::basic_fields<Allocator>;
   constexpr auto is_secure = detail::has_ssl_v<Stream>;
   const auto alloc = req.get_allocator();
-  using response_type = basic_response<Allocator> ;
+  using response_type = response ;
   response_type res{alloc};
 
   if (!is_secure && req.opts.enforce_tls)
@@ -697,22 +696,26 @@ auto basic_connection<Stream>::request(
   {
     unsigned char buf[4096];
     boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
-    auto cc = req.jar->get(host(),  &memres, is_secure, path);
+    using allocator_type = boost::container::pmr::polymorphic_allocator<char>;
+    auto cc = req.jar->get<allocator_type>(host(), is_secure, path,  &memres);
     if (!cc.empty())
       req.fields.set(http::field::cookie, cc);
   }
 
-  beast::http::request<body_type, fields_type> hreq{method, path, 11,
+  beast::http::request<body_type, http::fields> hreq{method, path, 11,
                                                     body_traits::make_body(std::forward<RequestBody>(body), ec),
                                                     std::move(req.fields)};
+
+  using flat_buffer = beast::basic_flat_buffer<boost::container::pmr::polymorphic_allocator<char>>;
+
   hreq.prepare_payload();
-  using res_body = beast::http::basic_dynamic_body<beast::basic_flat_buffer<Allocator>>;
-  beast::http::response<res_body, fields_type> rres{http::response_header<fields_type>{alloc},
-                                                    beast::basic_flat_buffer<Allocator>{alloc}};
+  using res_body = beast::http::basic_dynamic_body<flat_buffer>;
+  beast::http::response<res_body, http::fields> rres{beast::http::response_header<http::fields>{alloc},
+                                                     flat_buffer{alloc}};
 
   single_request(hreq, rres, ec);
 
-  using response_type = basic_response<Allocator>;
+  using response_type = response;
 
   auto rc = rres.base().result();
   while (!ec &&
@@ -758,8 +761,9 @@ auto basic_connection<Stream>::request(
     if (req.jar)
     {
       unsigned char buf[4096];
-      boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
-      auto cc = req.jar->get(host(), &memres, is_secure, url->encoded_path());
+      container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
+      container::pmr::polymorphic_allocator<char> alloc2{&memres};
+      auto cc = req.jar->get(host(), is_secure, url->encoded_path(), alloc2);
       if (!cc.empty())
         hreq.base().set(http::field::cookie, cc);
     }
@@ -776,15 +780,13 @@ auto basic_connection<Stream>::request(
 }
 
 template<typename Stream>
-template<typename Allocator>
 auto basic_connection<Stream>::download(
             urls::pct_string_view path,
-            basic_request<Allocator> req,
+            request_settings req,
             const filesystem::path & download_path,
-            system::error_code & ec) -> basic_response<Allocator>
+            system::error_code & ec) -> response
 {
-  using fields_type = beast::http::basic_fields<Allocator>;
-  using response_type = basic_response<Allocator> ;
+  using response_type = response ;
 
   const auto alloc = req.get_allocator();
   constexpr auto is_secure = detail::has_ssl_v<Stream>;
@@ -798,8 +800,9 @@ auto basic_connection<Stream>::download(
     return res;
   }
 
-  http::request<http::empty_body, fields_type> hreq{http::verb::head, path, 11,
-                                                    http::empty_body::value_type{}, std::move(req.fields)};
+  beast::http::request<beast::http::empty_body, http::fields> hreq{beast::http::verb::head, path, 11,
+                                                                  beast::http::empty_body::value_type{},
+                                                                  std::move(req.fields)};
 
   // set mime-type
   {
@@ -813,14 +816,16 @@ auto basic_connection<Stream>::download(
         hreq.base().set(http::field::accept, itr->second);
     }
   }
-  http::response<http::empty_body, fields_type> hres{http::response_header<fields_type>{alloc}};
+  beast::http::response<beast::http::empty_body, http::fields> hres{beast::http::response_header<http::fields>{alloc}};
   hreq.prepare_payload();
 
   if (req.jar)
   {
     unsigned char buf[4096];
     boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
-    auto cc = req.jar->get(host(),  &memres, is_secure, path);
+    container::pmr::polymorphic_allocator<char> alloc2{&memres};
+
+    auto cc = req.jar->get(host(), is_secure, path, alloc2);
     if (!cc.empty())
       hreq.base().set(http::field::cookie, cc);
     else
@@ -828,7 +833,7 @@ auto basic_connection<Stream>::download(
   }
 
   single_request(hreq, hres, ec);
-  using response_type = basic_response<Allocator>;
+  using response_type = response;
 
 
   auto rc = hres.base().result();
@@ -878,7 +883,8 @@ auto basic_connection<Stream>::download(
     {
       unsigned char buf[4096];
       boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
-      auto cc = req.jar->get(host(), &memres, is_secure, url->encoded_path());
+      container::pmr::polymorphic_allocator<char> alloc2{&memres};
+            auto cc = req.jar->get(host(), is_secure, url->encoded_path(), alloc2);
       if (!cc.empty())
         hreq.base().set(http::field::cookie, cc);
       else
@@ -891,7 +897,7 @@ auto basic_connection<Stream>::download(
 
   }
   hreq.method(beast::http::verb::get);
-  http::response<http::file_body, fields_type> fres{http::response_header<fields_type>{alloc}};
+  beast::http::response<beast::http::file_body, http::fields> fres{beast::http::response_header<http::fields>{alloc}};
 
   auto str = download_path.string();
   if (!ec)
@@ -906,7 +912,7 @@ auto basic_connection<Stream>::download(
 }
 
 template<typename Stream>
-template<typename RequestBody, typename Allocator>
+template<typename RequestBody>
 struct basic_connection<Stream>::async_request_op : asio::coroutine
 {
 
@@ -915,8 +921,8 @@ struct basic_connection<Stream>::async_request_op : asio::coroutine
 
   beast::http::verb method;
 
-  cookie_jar_base * jar = nullptr;
-  struct options opts;
+  cookie_jar * jar = nullptr;
+  struct request_options opts;
   core::string_view path;
   core::string_view default_mime_type;
 
@@ -924,27 +930,27 @@ struct basic_connection<Stream>::async_request_op : asio::coroutine
   using body_type = RequestBody;
 
   typename body_type::value_type body;
-  basic_request<Allocator> req;
+  request_settings req;
   struct state_t
   {
-    Allocator alloc;
+    boost::container::pmr::polymorphic_allocator<char> alloc;
 
 
     //using body_traits = request_body_traits<std::decay_t<RequestBody>>;
-    using fields_type = beast::http::basic_fields<Allocator>;
-    using response_type = basic_response<Allocator> ;
+    using response_type = response ;
     response_type res;
 
-    beast::http::request<body_type, fields_type> hreq;
-    using res_body = beast::http::basic_dynamic_body<beast::basic_flat_buffer<Allocator>>;
-    beast::http::response<res_body, fields_type> rres{http::response_header<fields_type>{alloc},
-                                                      beast::basic_flat_buffer<Allocator>{alloc}};
+    beast::http::request<body_type, http::fields> hreq;
+    using flat_buffer = beast::basic_flat_buffer<boost::container::pmr::polymorphic_allocator<char>>;
+    using res_body = beast::http::basic_dynamic_body<flat_buffer>;
+    beast::http::response<res_body, http::fields> rres{beast::http::response_header<http::fields>{alloc},
+                                                       flat_buffer{alloc}};
 
     template<typename RequestBody_>
     state_t(beast::http::verb v,
             urls::pct_string_view path,
             RequestBody_ && body,
-            basic_request<Allocator> req)
+            request_settings req)
         :  alloc(req.get_allocator()),
            res{req.get_allocator()},
            hreq{v, path, 11,
@@ -961,7 +967,7 @@ struct basic_connection<Stream>::async_request_op : asio::coroutine
                    beast::http::verb v,
                    urls::pct_string_view path,
                    RequestBody_ && body,
-                   basic_request<Allocator> req)
+                   request_settings req)
       : this_(this_), method(v), jar(req.jar), opts(req.opts), path(path),
         default_mime_type(request_body_traits<std::decay_t<RequestBody_>>::default_content_type(body)),
         body(request_body_traits<std::decay_t<RequestBody_>>::make_body(std::forward<RequestBody_>(body), ec_)),
@@ -991,7 +997,9 @@ struct basic_connection<Stream>::async_request_op : asio::coroutine
     {
       unsigned char buf[4096];
       boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
-      auto cc = jar->get(this_->host(),  &memres, is_secure, path);
+      container::pmr::polymorphic_allocator<char> alloc2{&memres};
+
+      auto cc = jar->get(this_->host(), is_secure, path, alloc2);
       if (!cc.empty())
         state_->hreq.base().set(http::field::cookie, cc);
       else
@@ -1038,7 +1046,9 @@ struct basic_connection<Stream>::async_request_op : asio::coroutine
     {
       unsigned char buf[4096];
       boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
-      auto cc = jar->get(this_->host(), &memres, is_secure, url->encoded_path());
+      container::pmr::polymorphic_allocator<char> alloc2{&memres};
+
+      auto cc = jar->get(this_->host(), is_secure, url->encoded_path(), alloc2);
       if (!cc.empty())
         state_->hreq.base().set(http::field::cookie, cc);
       else
@@ -1094,34 +1104,28 @@ struct basic_connection<Stream>::async_request_op : asio::coroutine
 
 #if !defined(BOOST_REQUESTS_HEADER_ONLY)
 
-extern template struct basic_connection<asio::ip::tcp::socket>::async_request_op<beast::http::empty_body,  std::allocator<char>>;
-extern template struct basic_connection<asio::ip::tcp::socket>::async_request_op<beast::http::string_body, std::allocator<char>>;
-extern template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_request_op<beast::http::empty_body,  std::allocator<char>>;
-extern template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_request_op<beast::http::string_body, std::allocator<char>>;
-
-extern template struct basic_connection<asio::ip::tcp::socket>::async_request_op<beast::http::empty_body,  container::pmr::polymorphic_allocator<char>>;
-extern template struct basic_connection<asio::ip::tcp::socket>::async_request_op<beast::http::string_body, container::pmr::polymorphic_allocator<char>>;
-extern template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_request_op<beast::http::empty_body,  container::pmr::polymorphic_allocator<char>>;
-extern template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_request_op<beast::http::string_body, container::pmr::polymorphic_allocator<char>>;
+extern template struct basic_connection<asio::ip::tcp::socket>::async_request_op<beast::http::empty_body>;
+extern template struct basic_connection<asio::ip::tcp::socket>::async_request_op<beast::http::string_body>;
+extern template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_request_op<beast::http::empty_body>;
+extern template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_request_op<beast::http::string_body>;
 
 #endif
 
 
 template<typename Stream>
 template<typename RequestBody,
-          typename Allocator,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, basic_response<Allocator>)) CompletionToken>
+          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code,
-                                        basic_response<Allocator>))
+                                        response))
 basic_connection<Stream>::async_request(beast::http::verb method,
                                         urls::pct_string_view path,
                                         RequestBody && body,
-                                        basic_request<Allocator> req,
+                                        request_settings req,
                                         CompletionToken && completion_token)
 {
-  return asio::async_compose<CompletionToken, void(system::error_code, basic_response<Allocator>)>(
-      async_request_op<typename request_body_traits<std::decay_t<RequestBody>>::body_type, Allocator>{
+  return asio::async_compose<CompletionToken, void(system::error_code, response)>(
+      async_request_op<typename request_body_traits<std::decay_t<RequestBody>>::body_type>{
                                                   this, method, path,
                                                   std::forward<RequestBody>(body),
                                                   std::move(req)},
@@ -1131,36 +1135,34 @@ basic_connection<Stream>::async_request(beast::http::verb method,
 }
 
 template<typename Stream>
-template<typename Allocator>
 struct basic_connection<Stream>::async_download_op : asio::coroutine
 {
-  using fields_type = beast::http::basic_fields<Allocator>;
-  using response_type = basic_response<Allocator> ;
+  using response_type = response ;
 
   basic_connection<Stream>* this_;
   constexpr static auto is_secure = detail::has_ssl_v<Stream>;
-  cookie_jar_base * jar;
-  struct options opts;
+  cookie_jar * jar;
+  struct request_options opts;
   core::string_view path;
   core::string_view default_mime_type;
   filesystem::path download_path;
 
-  basic_request<Allocator> req;
+  request_settings req;
 
   struct state_t
   {
-    Allocator alloc;
+    boost::container::pmr::polymorphic_allocator<char> alloc;
     response_type res{alloc};
-    beast::http::request<http::empty_body, fields_type> hreq;
-    http::response<http::empty_body, fields_type> hres{http::response_header<fields_type>{alloc}};
-    http::response<http::file_body, fields_type> fres{http::response_header<fields_type>{alloc}};
+    beast::http::request<beast::http::empty_body, http::fields> hreq;
+    beast::http::response<beast::http::empty_body, http::fields> hres{beast::http::response_header<http::fields>{alloc}};
+    beast::http::response<beast::http::file_body, http::fields>  fres{beast::http::response_header<http::fields>{alloc}};
 
 
     state_t(urls::pct_string_view path,
-            basic_request<Allocator> req)
+            request_settings req)
           :  alloc(req.get_allocator()),
-            hreq{http::verb::head, path, 11,
-                 http::empty_body::value_type{},
+            hreq{beast::http::verb::head, path, 11,
+                 beast::http::empty_body::value_type{},
                  std::move(req.fields)}
     {
     }
@@ -1173,7 +1175,7 @@ struct basic_connection<Stream>::async_download_op : asio::coroutine
   template<typename ... Args>
   async_download_op(basic_connection<Stream> * this_, urls::pct_string_view path,
                     const filesystem::path & download_path,
-                    basic_request<Allocator> req)
+                    request_settings req)
       : this_(this_), jar(req.jar), opts(req.opts), path(path),
         download_path(download_path)
   {
@@ -1204,10 +1206,13 @@ struct basic_connection<Stream>::async_download_op : asio::coroutine
 
     state_->hreq.prepare_payload();
 
-    if (jar) {
+    if (jar)
+     {
       unsigned char buf[4096];
       boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
-      auto cc = jar->get(this_->host(), &memres, is_secure, path);
+      container::pmr::polymorphic_allocator<char> alloc2{&memres};
+
+      auto cc = jar->get(this_->host(), is_secure, path, alloc2);
       if (!cc.empty())
         state_->hreq.base().set(http::field::cookie, cc);
       else
@@ -1257,7 +1262,8 @@ struct basic_connection<Stream>::async_download_op : asio::coroutine
     {
       unsigned char buf[4096];
       boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
-      auto cc = jar->get(this_->host(), &memres, is_secure, url->encoded_path());
+      container::pmr::polymorphic_allocator<char> alloc2{&memres};
+      auto cc = jar->get(this_->host(), is_secure, url->encoded_path(), alloc2);
       if (!cc.empty())
         state_->hreq.base().set(http::field::cookie, cc);
       else
@@ -1319,32 +1325,19 @@ struct basic_connection<Stream>::async_download_op : asio::coroutine
   }
 };
 
-
-#if !defined(BOOST_REQUESTS_HEADER_ONLY)
-
-extern template struct basic_connection<asio::ip::tcp::socket>::async_download_op<std::allocator<char>>;
-extern template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_download_op<std::allocator<void>>;
-
-extern template struct basic_connection<asio::ip::tcp::socket>::async_download_op<container::pmr::polymorphic_allocator<char>>;
-extern template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_download_op<container::pmr::polymorphic_allocator<void>>;
-
-#endif
-
-
 template<typename Stream>
-template<typename Allocator,
-         BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, basic_response<Allocator>)) CompletionToken>
+template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code,
-                                        basic_response<Allocator>))
+                                        response))
 basic_connection<Stream>::async_download(urls::pct_string_view path,
-                                         basic_request<Allocator> req,
+                                         request_settings req,
                                          filesystem::path download_path,
                                          CompletionToken && completion_token)
 {
   return asio::async_compose<CompletionToken,
-                             void(system::error_code, basic_response<Allocator>)>(
-      async_download_op<Allocator>{this, path, std::move(download_path), std::move(req)},
+                             void(system::error_code, response)>(
+      async_download_op{this, path, std::move(download_path), std::move(req)},
       completion_token,
       next_layer_
   );
@@ -1352,8 +1345,8 @@ basic_connection<Stream>::async_download(urls::pct_string_view path,
 
 #if !defined(BOOST_REQUESTS_HEADER_ONLY)
 
-extern template auto basic_connection<asio::ip::tcp::socket>::                   download(urls::pct_string_view, basic_request<>, const filesystem::path &, system::error_code &) -> response;
-extern template auto basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::download(urls::pct_string_view, basic_request<>, const filesystem::path &, system::error_code &) -> response;
+extern template auto basic_connection<asio::ip::tcp::socket>::                   download(urls::pct_string_view, request_settings, const filesystem::path &, system::error_code &) -> response;
+extern template auto basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::download(urls::pct_string_view, request_settings, const filesystem::path &, system::error_code &) -> response;
 
 #endif
 

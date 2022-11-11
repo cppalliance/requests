@@ -17,14 +17,8 @@ namespace boost {
 namespace requests {
 
 template struct basic_session<asio::any_io_executor>;
-template struct basic_session<asio::any_io_executor>::async_request_op<beast::http::empty_body,  std::allocator<char>>;
-template struct basic_session<asio::any_io_executor>::async_request_op<beast::http::string_body, std::allocator<char>>;
-
-template struct basic_session<asio::any_io_executor>::async_request_op<beast::http::empty_body,  container::pmr::polymorphic_allocator<char>>;
-template struct basic_session<asio::any_io_executor>::async_request_op<beast::http::string_body, container::pmr::polymorphic_allocator<char>>;
-
-template struct basic_session<asio::any_io_executor>::async_download_op<std::allocator<char>>;
-template struct basic_session<asio::any_io_executor>::async_download_op<container::pmr::polymorphic_allocator<void>>;
+template struct basic_session<asio::any_io_executor>::async_request_op<beast::http::empty_body>;
+template struct basic_session<asio::any_io_executor>::async_request_op<beast::http::string_body>;
 
 }
 }

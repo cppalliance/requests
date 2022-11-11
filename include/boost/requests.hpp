@@ -14,13 +14,13 @@
 #include <boost/requests/error.hpp>
 #include <boost/requests/facade.hpp>
 #include <boost/requests/form.hpp>
-#include <boost/requests/free.hpp>
 #include <boost/requests/http.hpp>
 #include <boost/requests/mime_types.hpp>
-#include <boost/requests/options.hpp>
 #include <boost/requests/public_suffix.hpp>
 #include <boost/requests/redirect.hpp>
 #include <boost/requests/request.hpp>
+#include <boost/requests/request_options.hpp>
+#include <boost/requests/request_settings.hpp>
 #include <boost/requests/response.hpp>
 #include <boost/requests/service.hpp>
 #include <boost/requests/session.hpp>

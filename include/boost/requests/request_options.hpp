@@ -2,8 +2,8 @@
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-#ifndef BOOST_REQUESTS_OPTIONS_HPP
-#define BOOST_REQUESTS_OPTIONS_HPP
+#ifndef BOOST_REQUESTS_REQUEST_OPTIONS_HPP
+#define BOOST_REQUESTS_REQUEST_OPTIONS_HPP
 
 #include <boost/requests/redirect.hpp>
 
@@ -11,8 +11,7 @@ namespace boost {
 namespace requests {
 
 /// The basic options attached to any request
-struct options
-{
+struct request_options {
   /// Only allow SSL requests
   bool enforce_tls{true};
   /// The allowed redirect mode.
@@ -23,8 +22,8 @@ struct options
 };
 
 /// The default options used by sessions.
-BOOST_REQUESTS_DECL options& default_options();
+BOOST_REQUESTS_DECL request_options & default_options();
 
 }
 }
-#endif //BOOST_REQUESTS_OPTIONS_HPP
+#endif // BOOST_REQUESTS_REQUEST_OPTIONS_HPP

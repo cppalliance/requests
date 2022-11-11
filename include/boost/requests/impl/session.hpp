@@ -17,27 +17,16 @@ namespace requests {
 
 
 template<typename Executor>
-template<typename Allocator>
-auto basic_session<Executor>::make_request_(beast::http::basic_fields<Allocator> fields)
-    -> requests::basic_request<Allocator>
+auto basic_session<Executor>::make_request_(http::fields fields) -> requests::request_settings
 {
-  return requests::basic_request<Allocator>{
-    fields.get_allocator(),
+  return requests::request_settings{
     std::move(fields),
     options_,
     &jar_
   };
 }
 
-template<typename Executor>
-auto basic_session<Executor>::make_request_(beast::http::fields fields) -> requests::request
-{
-  return requests::request{
-      std::move(fields),
-      options_,
-      &jar_
-  };
-}
+
 template<typename Executor>
 auto
 basic_session<Executor>::get_pool(urls::url_view url, error_code & ec) -> pool_ptr
@@ -94,21 +83,21 @@ basic_session<Executor>::get_pool(urls::url_view url, error_code & ec) -> pool_p
 
 
 template<typename Executor>
-template<typename RequestBody, typename Allocator>
+template<typename RequestBody>
 auto basic_session<Executor>::request(
             beast::http::verb method,
             urls::url_view url,
             RequestBody && body,
-            http::basic_fields<Allocator> fields,
-            system::error_code & ec) -> basic_response<Allocator>
+            http::fields fields,
+            system::error_code & ec) -> response
 {
   auto req  = make_request_(std::move(fields));
   // the rest is pretty much the same as in connection on purpose
   using body_traits = request_body_traits<std::decay_t<RequestBody>>;
   using body_type = typename body_traits::body_type;
-  using fields_type = beast::http::basic_fields<Allocator>;
-  using response_type = basic_response<Allocator> ;
-  using res_body = beast::http::basic_dynamic_body<beast::basic_flat_buffer<Allocator>>;
+  using response_type = response ;
+  using flat_buffer = beast::basic_flat_buffer<container::pmr::polymorphic_allocator<char>>;
+  using res_body = beast::http::basic_dynamic_body<flat_buffer>;
 
   const auto single_request =
       [&](auto & req,
@@ -158,20 +147,20 @@ auto basic_session<Executor>::request(
   {
     unsigned char buf[4096];
     boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
-    auto cc = req.jar->get(host,  &memres, is_secure, url.encoded_path());
+    container::pmr::polymorphic_allocator<char> alloc2{&memres};
+    auto cc = req.jar->get(host, is_secure, url.encoded_path(), alloc2);
     if (!cc.empty())
       req.fields.set(http::field::cookie, cc);
   }
 
-  beast::http::request<body_type, fields_type> hreq{method, path, 11,
+  beast::http::request<body_type, http::fields> hreq{method, path, 11,
                                                     body_traits::make_body(std::forward<RequestBody>(body), ec),
                                                     std::move(req.fields)};
   hreq.prepare_payload();
-  beast::http::response<res_body, fields_type> rres{http::response_header<fields_type>{alloc},
-                                                    beast::basic_flat_buffer<Allocator>{alloc}};
+  beast::http::response<res_body, http::fields> rres{beast::http::response_header<http::fields>{alloc}, flat_buffer{alloc}};
 
   single_request(hreq, rres, ec);
-  using response_type = basic_response<Allocator>;
+  using response_type = response;
 
   urls::url url_cache;
   auto rc = rres.base().result();
@@ -226,7 +215,8 @@ auto basic_session<Executor>::request(
     {
       unsigned char buf[4096];
       boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
-      auto cc = req.jar->get(host, &memres, is_secure, url.encoded_path());
+      container::pmr::polymorphic_allocator<char> alloc2{&memres};
+      auto cc = req.jar->get(host, is_secure, url.encoded_path(), alloc2);
       if (!cc.empty())
         hreq.base().set(http::field::cookie, cc);
     }
@@ -243,20 +233,18 @@ auto basic_session<Executor>::request(
 }
 
 template<typename Executor>
-template<typename Allocator>
 auto basic_session<Executor>::download(
     urls::url_view url,
-    http::basic_fields<Allocator> fields,
+    http::fields fields,
     const filesystem::path & download_path,
-    system::error_code & ec) -> basic_response<Allocator>
+    system::error_code & ec) -> response
 {
   auto req  = make_request_(std::move(fields));
 
-  using fields_type = beast::http::basic_fields<Allocator>;
-  using response_type = basic_response<Allocator> ;
+  using response_type = response ;
 
   const auto single_request =
-      [&](beast::http::request<http::empty_body, fields_type> & req,
+      [&](beast::http::request<beast::http::empty_body, http::fields> & req,
           auto & res,
           error_code & ec)
   {
@@ -289,8 +277,8 @@ auto basic_session<Executor>::download(
     return res;
   }
 
-  http::request<http::empty_body, fields_type> hreq{http::verb::head, path, 11,
-                                                    http::empty_body::value_type{}, std::move(req.fields)};
+  beast::http::request<beast::http::empty_body, http::fields> hreq{http::verb::head, path, 11,
+                                                            beast::http::empty_body::value_type{}, std::move(req.fields)};
 
   // set mime-type
   {
@@ -304,14 +292,16 @@ auto basic_session<Executor>::download(
         hreq.base().set(http::field::accept, itr->second);
     }
   }
-  http::response<http::empty_body, fields_type> hres{http::response_header<fields_type>{alloc}};
+  beast::http::response<beast::http::empty_body, http::fields> hres{beast::http::response_header<http::fields>{alloc}};
   hreq.prepare_payload();
 
   if (req.jar)
   {
     unsigned char buf[4096];
     boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
-    auto cc = req.jar->get(host,  &memres, is_secure, path);
+    container::pmr::polymorphic_allocator<char> alloc2{&memres};
+
+    auto cc = req.jar->get(host, is_secure, path, alloc2);
     if (!cc.empty())
       hreq.base().set(http::field::cookie, cc);
     else
@@ -319,7 +309,7 @@ auto basic_session<Executor>::download(
   }
 
   single_request(hreq, hres, ec);
-  using response_type = basic_response<Allocator>;
+  using response_type = response;
 
   urls::url url_cache;
   auto rc = hres.base().result();
@@ -377,7 +367,9 @@ auto basic_session<Executor>::download(
     {
       unsigned char buf[4096];
       boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
-      auto cc = req.jar->get(host, &memres, is_secure, url.encoded_path());
+      container::pmr::polymorphic_allocator<char> alloc2{&memres};
+
+      auto cc = req.jar->get(host, is_secure, url.encoded_path(), alloc2);
       if (!cc.empty())
         hreq.base().set(http::field::cookie, cc);
       else
@@ -390,7 +382,7 @@ auto basic_session<Executor>::download(
 
   }
   hreq.method(beast::http::verb::get);
-  http::response<http::file_body, fields_type> fres{http::response_header<fields_type>{alloc}};
+  beast::http::response<beast::http::file_body, http::fields> fres{beast::http::response_header<http::fields>{alloc}};
 
   auto str = download_path.string();
   if (!ec)
@@ -472,14 +464,14 @@ async_single_request(basic_session<Executor>* this_, Request & req, Response & r
 }
 
 template<typename Executor>
-template<typename RequestBody, typename Allocator>
+template<typename RequestBody>
 struct basic_session<Executor>::async_request_op : asio::coroutine
 {
 
   basic_session<Executor> * this_;
   beast::http::verb method;
 
-  struct options opts;
+  struct request_options opts;
   urls::url_view url;
   core::string_view default_mime_type;
 
@@ -487,7 +479,7 @@ struct basic_session<Executor>::async_request_op : asio::coroutine
   using body_type = RequestBody;
 
   typename body_type::value_type body;
-  http::basic_fields<Allocator> req;
+  http::fields req;
 
   const bool is_secure = (url.scheme_id() == urls::scheme::https)
                       || (url.scheme_id() == urls::scheme::wss);
@@ -495,18 +487,19 @@ struct basic_session<Executor>::async_request_op : asio::coroutine
 
   struct state_t
   {
-    Allocator alloc;
+    using allocator_type = container::pmr::polymorphic_allocator<char>;
+    allocator_type alloc;
 
 
     //using body_traits = request_body_traits<std::decay_t<RequestBody>>;
-    using fields_type = beast::http::basic_fields<Allocator>;
-    using response_type = basic_response<Allocator> ;
+    using response_type = response ;
     response_type res;
 
-    beast::http::request<body_type, fields_type> hreq;
-    using res_body = beast::http::basic_dynamic_body<beast::basic_flat_buffer<Allocator>>;
-    beast::http::response<res_body, fields_type> rres{http::response_header<fields_type>{alloc},
-                                                      beast::basic_flat_buffer<Allocator>{alloc}};
+    beast::http::request<body_type, http::fields> hreq;
+    using flat_buffer = beast::basic_flat_buffer<allocator_type>;
+    using res_body = beast::http::basic_dynamic_body<flat_buffer>;
+    beast::http::response<res_body, http::fields> rres{beast::http::response_header<http::fields>{alloc},
+                                                       flat_buffer{alloc}};
 
     urls::url url_cache;
 
@@ -514,7 +507,7 @@ struct basic_session<Executor>::async_request_op : asio::coroutine
     state_t(beast::http::verb v,
             urls::pct_string_view path,
             RequestBody_ && body,
-            requests::basic_request<Allocator> req)
+            requests::request_settings req)
         :  alloc(req.get_allocator()),
           res{req.get_allocator()},
           hreq{v, path, 11,
@@ -531,7 +524,7 @@ struct basic_session<Executor>::async_request_op : asio::coroutine
                    beast::http::verb v,
                    urls::url_view url,
                    RequestBody_ && body,
-                   basic_request<Allocator> req)
+                   http::fields req)
       : this_(this_), method(v), opts(this_->options_), url(url),
         default_mime_type(request_body_traits<std::decay_t<RequestBody_>>::default_content_type(body)),
         body(request_body_traits<std::decay_t<RequestBody_>>::make_body(std::forward<RequestBody_>(body), ec_)),
@@ -545,7 +538,7 @@ struct basic_session<Executor>::async_request_op : asio::coroutine
                    beast::http::verb v,
                    core::string_view url,
                    RequestBody_ && body,
-                   basic_request<Allocator> req)
+                   http::fields req)
       : this_(this_), method(v), opts(this_->options_),
         default_mime_type(request_body_traits<std::decay_t<RequestBody_>>::default_content_type(body)),
         body(request_body_traits<std::decay_t<RequestBody_>>::make_body(std::forward<RequestBody_>(body), ec_)),
@@ -580,7 +573,8 @@ struct basic_session<Executor>::async_request_op : asio::coroutine
     {
       unsigned char buf[4096];
       boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
-      auto cc = this_->jar_.get(url.encoded_host(),  &memres, is_secure, url.encoded_target());
+      container::pmr::polymorphic_allocator<char> alloc2{&memres};
+      auto cc = this_->jar_.get(url.encoded_host(), is_secure, url.encoded_target(), alloc2);
       if (!cc.empty())
         state_->hreq.base().set(http::field::cookie, cc);
       else
@@ -635,7 +629,9 @@ struct basic_session<Executor>::async_request_op : asio::coroutine
     {
       unsigned char buf[4096];
       boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
-      auto cc = this_->jar_.get(url.encoded_host(), &memres, is_secure, url.encoded_path());
+      container::pmr::polymorphic_allocator<char> alloc2{&memres};
+
+      auto cc = this_->jar_.get(url.encoded_host(), is_secure, url.encoded_path(), alloc2);
       if (!cc.empty())
         state_->hreq.base().set(http::field::cookie, cc);
       else
@@ -699,29 +695,26 @@ struct basic_session<Executor>::async_request_op : asio::coroutine
 
 #if !defined(BOOST_REQUESTS_HEADER_ONLY)
 
-extern template struct basic_session<asio::any_io_executor>::async_request_op<beast::http::empty_body,  std::allocator<char>>;
-extern template struct basic_session<asio::any_io_executor>::async_request_op<beast::http::string_body, std::allocator<char>>;
-
-extern template struct basic_session<asio::any_io_executor>::async_request_op<beast::http::empty_body,  container::pmr::polymorphic_allocator<char>>;
-extern template struct basic_session<asio::any_io_executor>::async_request_op<beast::http::string_body, container::pmr::polymorphic_allocator<char>>;
+extern template struct basic_session<asio::any_io_executor>::async_request_op<beast::http::empty_body >;
+extern template struct basic_session<asio::any_io_executor>::async_request_op<beast::http::string_body>;
 
 #endif
 
 template<typename Executor>
-template<typename RequestBody, typename Allocator,
+template<typename RequestBody,
           BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-                                               basic_response<Allocator>)) CompletionToken>
+                                               response)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code,
-                                        basic_response<Allocator>))
+                                        response))
 basic_session<Executor>::async_request(beast::http::verb method,
                                        urls::url_view path,
                                        RequestBody && body,
-                                       basic_request<Allocator> req,
+                                       http::fields req,
                                        CompletionToken && completion_token)
 {
-  return asio::async_compose<CompletionToken, void(system::error_code, basic_response<Allocator>)>(
-      async_request_op<typename request_body_traits<std::decay_t<RequestBody>>::body_type, Allocator>{
+  return asio::async_compose<CompletionToken, void(system::error_code, response)>(
+      async_request_op<typename request_body_traits<std::decay_t<RequestBody>>::body_type>{
             this, method, path, std::forward<RequestBody>(body), std::move(req)},
       completion_token,
       mutex_
@@ -730,20 +723,20 @@ basic_session<Executor>::async_request(beast::http::verb method,
 
 
 template<typename Executor>
-template<typename RequestBody, typename Allocator,
+template<typename RequestBody,
           BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-                                               basic_response<Allocator>)) CompletionToken>
+                                               response)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code,
-                                        basic_response<Allocator>))
+                                        response))
 basic_session<Executor>::async_request(beast::http::verb method,
                                        core::string_view path,
                                        RequestBody && body,
-                                       basic_request<Allocator> req,
+                                       http::fields req,
                                        CompletionToken && completion_token)
 {
-  return asio::async_compose<CompletionToken, void(system::error_code, basic_response<Allocator>)>(
-      async_request_op<typename request_body_traits<std::decay_t<RequestBody>>::body_type, Allocator>{
+  return asio::async_compose<CompletionToken, void(system::error_code, response)>(
+      async_request_op<typename request_body_traits<std::decay_t<RequestBody>>::body_type>{
             this, method, path, std::forward<RequestBody>(body), std::move(req)},
       completion_token,
       mutex_
@@ -752,19 +745,17 @@ basic_session<Executor>::async_request(beast::http::verb method,
 
 
 template<typename Executor>
-template<typename Allocator>
 struct basic_session<Executor>::async_download_op : asio::coroutine
 {
-  using fields_type = beast::http::basic_fields<Allocator>;
-  using response_type = basic_response<Allocator> ;
+  using response_type = response ;
 
   basic_session<Executor>* this_;
-  struct options opts;
+  struct request_options opts;
   urls::url_view url;
   core::string_view default_mime_type;
   filesystem::path download_path;
 
-  basic_request<Allocator> req;
+  http::fields req;
   boost::system::error_code ec;
 
   const bool is_secure = (url.scheme_id() == urls::scheme::https)
@@ -772,20 +763,22 @@ struct basic_session<Executor>::async_download_op : asio::coroutine
 
   struct state_t
   {
-    Allocator alloc;
+    using allocator_type = container::pmr::polymorphic_allocator<char>;
+
+    allocator_type alloc;
     response_type res{alloc};
-    beast::http::request<http::empty_body, fields_type> hreq;
-    http::response<http::empty_body, fields_type> hres{http::response_header<fields_type>{alloc}};
-    http::response<http::file_body, fields_type> fres{http::response_header<fields_type>{alloc}};
+    beast::http::request<beast::http::empty_body,  http::fields> hreq;
+    beast::http::response<beast::http::empty_body, http::fields> hres{beast::http::response_header<http::fields>{alloc}};
+    beast::http::response<beast::http::file_body,  http::fields> fres{beast::http::response_header<http::fields>{alloc}};
 
     urls::url url_cache;
 
     state_t(urls::pct_string_view path,
-            http::basic_fields<Allocator> fields)
+            beast::http::basic_fields<allocator_type> fields)
         :  alloc(fields.get_allocator()),
-          hreq{http::verb::head, path, 11,
-               http::empty_body::value_type{},
-               std::move(fields)}
+           hreq{http::verb::head, path, 11,
+                beast::http::empty_body::value_type{},
+                std::move(fields)}
     {
     }
 
@@ -798,7 +791,7 @@ struct basic_session<Executor>::async_download_op : asio::coroutine
   async_download_op(basic_session<Executor> * this_,
                     urls::url_view url,
                     const filesystem::path & download_path,
-                    http::basic_fields<Allocator> req)
+                    http::fields req)
       : this_(this_), opts(this_->options_), url(url),
         download_path(download_path)
   {
@@ -808,7 +801,7 @@ struct basic_session<Executor>::async_download_op : asio::coroutine
   async_download_op(basic_session<Executor> * this_,
                     core::string_view url,
                     const filesystem::path & download_path,
-                    http::basic_fields<Allocator> req)
+                    http::fields req)
       : this_(this_), opts(this_->options_), download_path(download_path)
   {
     auto u = urls::parse_uri_reference(url);
@@ -847,7 +840,9 @@ struct basic_session<Executor>::async_download_op : asio::coroutine
     {
       unsigned char buf[4096];
       boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
-      auto cc = this_->jar_.get(url.encoded_path(), &memres, is_secure, url.encoded_target());
+      container::pmr::polymorphic_allocator<char> alloc2{&memres};
+
+      auto cc = this_->jar_.get(url.encoded_path(), is_secure, url.encoded_target(), alloc2);
       if (!cc.empty())
         state_->hreq.base().set(http::field::cookie, cc);
       else
@@ -897,13 +892,14 @@ struct basic_session<Executor>::async_download_op : asio::coroutine
       return ;
     }
     state_->res.history.emplace_back(std::move(state_->hres.base()));
-
     state_->hreq.base().target(url.encoded_path());
 
     {
       unsigned char buf[4096];
       boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
-      auto cc = this_->jar_.get(url.encoded_resource(), &memres, is_secure, url.encoded_path());
+      container::pmr::polymorphic_allocator<char> alloc2{&memres};
+
+      auto cc = this_->jar_.get(url.encoded_resource(), is_secure, url.encoded_path(), alloc2);
       if (!cc.empty())
         state_->hreq.base().set(http::field::cookie, cc);
       else
@@ -975,29 +971,21 @@ struct basic_session<Executor>::async_download_op : asio::coroutine
 
 };
 
-#if !defined(BOOST_REQUESTS_HEADER_ONLY)
-
-extern template struct basic_session<asio::any_io_executor>::async_download_op<std::allocator<char>>;
-extern template struct basic_session<asio::any_io_executor>::async_download_op<container::pmr::polymorphic_allocator<void>>;
-
-#endif
-
 
 template<typename Executor>
-template<typename Allocator,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-                                               basic_response<Allocator>)) CompletionToken>
+template< BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+                                               response)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code,
-                                        basic_response<Allocator>))
+                                        response))
 basic_session<Executor>::async_download(urls::url_view path,
-                                        basic_request<Allocator> req,
+                                        http::fields req,
                                         filesystem::path download_path,
                                         CompletionToken && completion_token)
 
 {
-  return asio::async_compose<CompletionToken, void(system::error_code, basic_response<Allocator>)>(
-      async_download_op<Allocator>{this, path, download_path, std::move(req)},
+  return asio::async_compose<CompletionToken, void(system::error_code, response)>(
+      async_download_op{this, path, download_path, std::move(req)},
       completion_token,
       mutex_
   );
@@ -1005,20 +993,19 @@ basic_session<Executor>::async_download(urls::url_view path,
 
 
 template<typename Executor>
-template<typename Allocator,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-                                               basic_response<Allocator>)) CompletionToken>
+template< BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+                                               response)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code,
-                                        basic_response<Allocator>))
+                                        response))
 basic_session<Executor>::async_download(core::string_view path,
-                                        basic_request<Allocator> req,
+                                        http::fields req,
                                         filesystem::path download_path,
                                         CompletionToken && completion_token)
 
 {
-  return asio::async_compose<CompletionToken, void(system::error_code, basic_response<Allocator>)>(
-      async_download_op<Allocator>{this, path, download_path, std::move(req)},
+  return asio::async_compose<CompletionToken, void(system::error_code, response)>(
+      async_download_op{this, path, download_path, std::move(req)},
       completion_token,
       mutex_
   );
@@ -1111,8 +1098,7 @@ struct basic_session<Executor>::async_get_pool_op : asio::coroutine
 };
 
 template<typename Executor>
-template<typename Allocator,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+template< BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
                                                variant2::variant<std::shared_ptr<basic_http_connection_pool<Executor>>,
                                                                  std::shared_ptr<basic_https_connection_pool<Executor>>>)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, pool_ptr))

@@ -12,8 +12,36 @@
 namespace boost {
 namespace requests {
 
-template<typename Allocator>
-struct basic_cookie ;
+struct cookie
+{
+  using allocator_type = boost::container::pmr::polymorphic_allocator<char>;
+  using string_type = std::basic_string<char, std::char_traits<char>, allocator_type>;
+
+  cookie(allocator_type && alloc) : name(alloc), value(alloc), domain(alloc), path(alloc) {}
+  cookie(cookie &&) noexcept = default;
+
+  cookie(cookie && val, allocator_type && alloc)
+      : name(std::move(val.name), alloc),
+        value(std::move(val.value), alloc),
+        expiry_time(val.expiry_time),
+        domain(std::move(val.domain), alloc),
+        path(std::move(val.path), alloc),
+        creation_time(val.creation_time),
+        last_access_time(val.last_access_time),
+        persistent_flag(val.persistent_flag),
+        host_only_flag(val.host_only_flag),
+        secure_only_flag(val.secure_only_flag),
+        http_only_flag(val.http_only_flag)
+  {}
+
+  string_type name, value;
+  std::chrono::system_clock::time_point expiry_time;
+  string_type domain, path;
+  std::chrono::system_clock::time_point creation_time{std::chrono::system_clock::now()},
+      last_access_time{std::chrono::system_clock::now()};
+  bool persistent_flag, host_only_flag, secure_only_flag, http_only_flag;
+};
+
 
 namespace detail {
 
@@ -49,16 +77,15 @@ inline void append_cookie_pair(
 }
 
 
-template<typename Allocator>
-inline std::size_t cookie_pair_length(const basic_cookie<Allocator> &  p)
+inline std::size_t cookie_pair_length(const cookie &  p)
 {
     return p.name.size() + p.value.size() + 1u;
 }
 
-template<typename Alloc1, typename Alloc2>
+template<typename Alloc1>
 inline void append_cookie_pair(
         std::basic_string<char, std::char_traits<char>, Alloc1> & res,
-        const basic_cookie<Alloc2> & p)
+        const cookie & p)
 {
     res += p.name;
     res += "=";

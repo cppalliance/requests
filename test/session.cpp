@@ -346,7 +346,6 @@ asio::awaitable<void> async_http_pool_request()
       std::filesystem::remove(target);
 
     CHECK(!std::filesystem::exists(target));
-    requests::request  r{};
     auto res = co_await hc.async_download(u("/image"), {}, target.string());
 
     CHECK(std::stoull(res.header.at(beast::http::field::content_length)) > 0u);
@@ -388,7 +387,6 @@ asio::awaitable<void> async_http_pool_request()
     if (std::filesystem::exists(target))
       std::filesystem::remove(target);
 
-    requests::request  r{{}, {false, requests::private_domain, 3}};
     auto res = co_await hc.async_download(u("/redirect/10"), {}, target.string(),
                                           asio::redirect_error(asio::use_awaitable, ec));
     CHECK(res.history.size() == 2);

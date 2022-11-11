@@ -19,6 +19,7 @@ template<typename Stream>
 void basic_connection_pool<Stream>::lookup(urls::authority_view sv, system::error_code & ec)
 {
   constexpr auto protocol = detail::has_ssl_v<Stream> ? "https" : "http";
+
   const auto service = sv.has_port() ? sv.port() : protocol;
   using lock_type = asem::lock_guard<detail::basic_mutex<executor_type>>;
 
@@ -275,7 +276,7 @@ struct basic_connection_pool<Stream>::async_request_op : asio::coroutine
   beast::http::verb method;
   urls::pct_string_view path;
   RequestBody body;
-  basic_request<Allocator> req;
+  request_settings req;
 
 
   template<typename Self>
@@ -286,16 +287,16 @@ struct basic_connection_pool<Stream>::async_request_op : asio::coroutine
     {
       yield this_->async_get_connection(std::move(self));
       if (!ec && conn == nullptr)
-        return self.complete(asio::error::not_found, basic_response<Allocator>{req.get_allocator()});
+        return self.complete(asio::error::not_found, response{req.get_allocator()});
       if (ec)
-        return self.complete(ec, basic_response<Allocator>{req.get_allocator()});
+        return self.complete(ec, response{req.get_allocator()});
       yield conn->async_request(method, path, std::forward<RequestBody>(body), std::move(req), std::move(self));
 
     }
   }
 
   template<typename Self>
-  void operator()(Self && self, error_code ec, basic_response<Allocator> res)
+  void operator()(Self && self, error_code ec, response res)
   {
     self.complete(ec, std::move(res));
   }
@@ -304,17 +305,17 @@ struct basic_connection_pool<Stream>::async_request_op : asio::coroutine
 template<typename Stream>
 template<typename RequestBody, typename Allocator,
          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-                                               basic_response<Allocator>)) CompletionToken>
+                                               response)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code,
-                                         basic_response<Allocator>))
+                                         response))
 basic_connection_pool<Stream>::async_request(beast::http::verb method,
                                              urls::pct_string_view path,
                                              RequestBody && body,
-                                             basic_request<Allocator> req,
+                                             request_settings req,
                                              CompletionToken && completion_token)
 {
-  return asio::async_compose<CompletionToken, void(system::error_code, basic_response<Allocator>)>(
+  return asio::async_compose<CompletionToken, void(system::error_code, response)>(
       async_request_op<RequestBody, Allocator>{{}, this, method, path,
                                                std::forward<RequestBody>(body), std::move(req)},
       completion_token,
@@ -331,7 +332,7 @@ struct basic_connection_pool<Stream>::async_download_op : asio::coroutine
   basic_connection_pool<Stream> *this_;
   urls::pct_string_view path;
   filesystem::path download_path;
-  basic_request<Allocator> req;
+  request_settings req;
 
   template<typename Self>
   void operator()(Self && self, error_code ec = {}, std::shared_ptr<connection_type> conn = nullptr)
@@ -342,14 +343,14 @@ struct basic_connection_pool<Stream>::async_download_op : asio::coroutine
       if (!ec && conn == nullptr)
         ec =  asio::error::not_found;
       if (ec)
-        return self.complete(ec, basic_response<Allocator>{req.get_allocator()});
+        return self.complete(ec, response{req.get_allocator()});
 
       yield conn->async_download(path, std::move(req), std::move(download_path), std::move(self));
     }
   }
 
   template<typename Self>
-  void operator()(Self && self, error_code ec, basic_response<Allocator> res)
+  void operator()(Self && self, error_code ec, response res)
   {
     self.complete(ec, std::move(res));
   }
@@ -359,17 +360,17 @@ struct basic_connection_pool<Stream>::async_download_op : asio::coroutine
 template<typename Stream>
 template<typename Allocator,
          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-                                               basic_response<Allocator>)) CompletionToken>
+                                               response)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code,
-                                         basic_response<Allocator>))
+                                         response))
 basic_connection_pool<Stream>::async_download(urls::pct_string_view path,
-                                              basic_request<Allocator> req,
+                                              request_settings req,
                                               filesystem::path download_path,
                                               CompletionToken && completion_token)
 
 {
-  return asio::async_compose<CompletionToken, void(system::error_code, basic_response<Allocator>)>(
+  return asio::async_compose<CompletionToken, void(system::error_code, response)>(
       async_download_op<Allocator>{{}, this, path, download_path, std::move(req)},
       completion_token,
       mutex_

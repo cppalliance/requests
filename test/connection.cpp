@@ -335,7 +335,7 @@ asio::awaitable<void> async_https_request()
   co_await hc.async_connect(ep);
   auto headers = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
-    requests::basic_request<> r{requests::headers({{"Test-Header", "it works"}}), {false}};
+    requests::request_settings r{requests::headers({{"Test-Header", "it works"}}), {false}};
     auto hdr = co_await hc.async_request(
         beast::http::verb::get, "/headers",
         requests::empty{}, r);
@@ -348,7 +348,7 @@ asio::awaitable<void> async_https_request()
 
   auto get_ = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
-    requests::request r{requests::headers({{"Test-Header", "it works"}}), {false}};
+    requests::request_settings r{requests::headers({{"Test-Header", "it works"}}), {false}};
     auto hdr = co_await hc.async_get("/get", r);
 
     auto hd = hdr.json().at("headers");
@@ -360,7 +360,7 @@ asio::awaitable<void> async_https_request()
 
   auto get_redirect = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
-    requests::request r{requests::headers({{"Test-Header", "it works"}}), {false}};
+    requests::request_settings r{requests::headers({{"Test-Header", "it works"}}), {false}};
     auto hdr = co_await hc.async_get("/redirect-to?url=%2Fget", r);
 
     CHECK(hdr.history.size() == 1u);
@@ -375,7 +375,7 @@ asio::awaitable<void> async_https_request()
   auto too_many_redirects = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
     system::error_code ec;
-    requests::request r{{}, {false, requests::private_domain, 5}};
+    requests::request_settings r{{}, {false, requests::private_domain, 5}};
 
     auto res = co_await hc.async_get("/redirect/10", r,
                                      asio::redirect_error(asio::use_awaitable, ec));
@@ -394,7 +394,7 @@ asio::awaitable<void> async_https_request()
       std::filesystem::remove(target);
 
     CHECK(!std::filesystem::exists(target));
-    requests::request r{{}, {false}};
+    requests::request_settings r{{}, {false}};
     auto res = co_await hc.async_download("/image", r, target.string());
 
     CHECK(std::stoull(res.header.at(beast::http::field::content_length)) > 0u);
@@ -414,7 +414,7 @@ asio::awaitable<void> async_https_request()
       std::filesystem::remove(target);
 
     CHECK(!std::filesystem::exists(target));
-    requests::request r{{}, {false}};
+    requests::request_settings r{{}, {false}};
     auto res = co_await hc.async_download("/redirect-to?url=%2Fimage", r, target.string());
 
     CHECK(res.history.size() == 1u);
@@ -437,7 +437,7 @@ asio::awaitable<void> async_https_request()
     if (std::filesystem::exists(target))
       std::filesystem::remove(target);
 
-    requests::request r{{}, {false, requests::private_domain, 3}};
+    requests::request_settings r{{}, {false, requests::private_domain, 3}};
     auto res = co_await hc.async_download("/redirect/10", r, target.string(),
                                           asio::redirect_error(asio::use_awaitable, ec));
     CHECK(res.history.size() == 2);
@@ -451,7 +451,7 @@ asio::awaitable<void> async_https_request()
 
   auto delete_ = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
-    requests::request r{{}, {false}};
+    requests::request_settings r{{}, {false}};
     json::value v{{"test-key", "test-value"}};
     auto hdr = co_await hc.async_delete("/delete", v, r);
 
@@ -463,7 +463,7 @@ asio::awaitable<void> async_https_request()
   auto patch_json = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
     json::value msg {{"test-key", "test-value"}};
-    requests::request r{{}, {false}};
+    requests::request_settings r{{}, {false}};
     auto hdr = co_await hc.async_patch("/patch", msg, r);
 
     auto js = hdr.json();
@@ -474,7 +474,7 @@ asio::awaitable<void> async_https_request()
 
   auto patch_form = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
-    requests::request r{{}, {false}};
+    requests::request_settings r{{}, {false}};
     requests::form f{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}};
     auto hdr = co_await hc.async_patch("/patch",
                                        f,
@@ -489,7 +489,7 @@ asio::awaitable<void> async_https_request()
   auto put_json = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
     json::value msg {{"test-key", "test-value"}};
-    requests::request r{{}, {false}};
+    requests::request_settings r{{}, {false}};
     auto hdr = co_await hc.async_put("/put", msg, r);
 
     auto js = hdr.json();
@@ -500,7 +500,7 @@ asio::awaitable<void> async_https_request()
 
   auto put_form = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
-    requests::request r{{}, {false}};
+    requests::request_settings r{{}, {false}};
     requests::form f{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}};
     auto hdr = co_await hc.async_put("/put",
                                      f, r);
@@ -515,7 +515,7 @@ asio::awaitable<void> async_https_request()
   {
     json::value msg {{"test-key", "test-value"}};
 
-    requests::request r{{}, {false}};
+    requests::request_settings r{{}, {false}};
     auto hdr = co_await hc.async_post("/post", msg, r);
 
     auto js = hdr.json();
@@ -527,7 +527,7 @@ asio::awaitable<void> async_https_request()
   auto post_form = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
 
-    requests::request r{{}, {false}};
+    requests::request_settings r{{}, {false}};
     requests::form f = {{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}};
     auto hdr = co_await hc.async_post("/post", f, r);
 

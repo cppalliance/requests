@@ -51,43 +51,9 @@ inline bool path_match(core::string_view full, core::string_view pattern)
     return false;
 }
 
-template<typename Allocator = std::allocator<char>>
-struct basic_cookie
-{
-    using allocator_type = Allocator;
-    using string_type = std::basic_string<char, std::char_traits<char>, allocator_type>;
-
-    basic_cookie(allocator_type && alloc) : name(alloc), value(alloc), domain(alloc), path(alloc) {}
-    basic_cookie(basic_cookie &&) noexcept = default;
-
-    basic_cookie(basic_cookie && val, allocator_type && alloc)
-        : name(std::move(val.name), alloc),
-          value(std::move(val.value), alloc),
-          expiry_time(val.expiry_time),
-          domain(std::move(val.domain), alloc),
-          path(std::move(val.path), alloc),
-          creation_time(val.creation_time),
-          last_access_time(val.last_access_time),
-          persistent_flag(val.persistent_flag),
-          host_only_flag(val.host_only_flag),
-          secure_only_flag(val.secure_only_flag),
-          http_only_flag(val.http_only_flag)
-    {}
-
-    string_type name, value;
-    std::chrono::system_clock::time_point expiry_time;
-    string_type domain, path;
-    std::chrono::system_clock::time_point creation_time{std::chrono::system_clock::now()},
-                                        last_access_time{std::chrono::system_clock::now()};
-    bool persistent_flag, host_only_flag, secure_only_flag, http_only_flag;
-};
-
-using cookie = basic_cookie<>;
-
 struct cookie_hash
 {
-    template<typename Allocator>
-    std::size_t operator()(const basic_cookie<Allocator> & lhs) const
+    std::size_t operator()(const cookie & lhs) const
     {
         size_t seed = 0;
         hash_combine(seed, lhs.name);
@@ -99,54 +65,31 @@ struct cookie_hash
 
 struct cookie_equal
 {
-    template<typename Allocator>
-    bool operator()(const basic_cookie<Allocator> & lhs, const basic_cookie<Allocator> & rhs) const
+    bool operator()(const cookie & lhs, const cookie & rhs) const
     {
         return std::tie(lhs.name, lhs.domain, lhs.path)
             == std::tie(rhs.name, rhs.domain, rhs.path);
     }
 };
 
-struct cookie_jar_base
+struct cookie_jar final
 {
-  virtual bool set(const set_cookie & set,
-                   core::string_view request_host,
-                   bool from_non_http_api = false,
-                   urls::pct_string_view request_uri_path = "/",
-                   const public_suffix_list & public_suffixes = default_public_suffix_list()) = 0;
-
-  virtual auto get(core::string_view request_host,
-                   bool is_secure = false,
-                   urls::pct_string_view request_uri_path = "/") const
-      -> std::string  = 0;
-
-  virtual auto get(core::string_view request_host,
-                   boost::container::pmr::polymorphic_allocator<char> alloc,
-                   bool is_secure = false,
-                   urls::pct_string_view request_uri_path = "/") const
-      -> std::basic_string<char, std::char_traits<char>, boost::container::pmr::polymorphic_allocator<char>> = 0;
-};
-
-template<typename Allocator = std::allocator<char>>
-struct basic_cookie_jar final : cookie_jar_base
-{
-    using allocator_type = Allocator;
-    using cookie_type = basic_cookie<allocator_type>;
-    boost::unordered_set<cookie_type, cookie_hash, cookie_equal,
+    using allocator_type = boost::container::pmr::polymorphic_allocator<char>;
+    boost::unordered_set<cookie, cookie_hash, cookie_equal,
                          typename std::allocator_traits<allocator_type>::template rebind_alloc<cookie>> content;
 
-    basic_cookie_jar(allocator_type allocator = {}) : content(std::move(allocator)) {}
+    cookie_jar(allocator_type allocator = {}) : content(std::move(allocator)) {}
 
     bool set(const set_cookie & set,
              core::string_view request_host,
              bool from_non_http_api = false,
              urls::pct_string_view request_uri_path = "/",
-             const public_suffix_list & public_suffixes = default_public_suffix_list()) override
+             const public_suffix_list & public_suffixes = default_public_suffix_list())
     {
         // https://www.rfc-editor.org/rfc/rfc6265#section-5.3
 
         // 2.   Create a new cookie with name cookie-name, value cookie-value.
-        cookie_type sc{content.get_allocator()};
+        cookie sc{content.get_allocator()};
         sc.name = set.name;
         sc.value = set.value;
 
@@ -236,29 +179,13 @@ struct basic_cookie_jar final : cookie_jar_base
         return make_cookie_field(
                 adaptors::filter(
                     content,
-                    [&](const cookie_type & ck)
+                    [&](const cookie & ck)
                     {
                         return (is_secure || !ck.secure_only_flag) &&
                                (ck.expiry_time > nw) &&
                                (ck.host_only_flag ? (request_host == ck.domain) : domain_match(request_host, ck.domain)) &&
                                path_match(request_uri_path, ck.path);
                     }), alloc_type(alloc));
-    }
-
-    auto get(core::string_view request_host,
-             bool is_secure = false,
-             urls::pct_string_view request_uri_path = "/") const -> std::string override
-    {
-      return get<std::allocator<char>>(request_host, is_secure, request_uri_path);
-    }
-
-    auto get(core::string_view request_host,
-             boost::container::pmr::polymorphic_allocator<char> alloc,
-             bool is_secure = false,
-             urls::pct_string_view request_uri_path = "/") const
-        -> std::basic_string<char, std::char_traits<char>, boost::container::pmr::polymorphic_allocator<char>> override
-    {
-      return get(request_host, is_secure, request_uri_path, alloc);
     }
 
     void drop_expired(const std::chrono::system_clock::time_point nw = std::chrono::system_clock::now())
@@ -273,18 +200,12 @@ struct basic_cookie_jar final : cookie_jar_base
     }
 };
 
-using cookie_jar = basic_cookie_jar<>;
 
-namespace pmr
-{
-using cookie_jar = basic_cookie_jar<container::pmr::polymorphic_allocator<char>>;
-}
-
-template<typename Alloc, typename Allocator>
+template<typename Allocator>
 void tag_invoke(
              const struct prepare_tag &,
-             const basic_cookie_jar<Allocator> & jar,
-             beast::http::header<true, Alloc> & fields,
+             const cookie_jar& jar,
+             beast::http::header<true, Allocator> & fields,
              core::string_view request_host,
              bool is_secure,
              system::error_code & )
@@ -294,11 +215,11 @@ void tag_invoke(
 }
 
 
-template<typename Alloc, typename Allocator>
+template<typename Allocator>
 void tag_invoke(
             const struct complete_tag &,
-            basic_cookie_jar<Allocator> & jar,
-            const beast::http::header<false, Alloc> & fields,
+            cookie_jar & jar,
+            const beast::http::header<false, Allocator> & fields,
             core::string_view request_host,
             bool is_secure,
             core::string_view target,
@@ -316,10 +237,6 @@ void tag_invoke(
     jar.set(*sc, request_host, false, target);
 }
 
-#if !defined(BOOST_REQUESTS_HEADER_ONLY)
-extern template struct basic_cookie_jar<std::allocator<char>>;
-extern template struct basic_cookie_jar<container::pmr::polymorphic_allocator<char>>;
-#endif
 
 }
 }
