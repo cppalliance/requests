@@ -94,8 +94,8 @@ TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, reques
   hc.connect(ep);
   SUBCASE("single-request")
   {
-    beast::http::request<beast::http::empty_body> req{beast::http::verb::get, "/headers", 11};
-    beast::http::response<beast::http::string_body> res;
+    requests::http::request<beast::http::empty_body> req{beast::http::verb::get, "/headers", 11};
+    requests::http::response<beast::http::string_body> res;
 
     hc.single_request(req, res);
 

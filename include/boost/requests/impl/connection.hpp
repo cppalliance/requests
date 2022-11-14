@@ -12,6 +12,8 @@
 #include <boost/requests/detail/config.hpp>
 #include <boost/requests/detail/ssl.hpp>
 #include <boost/requests/fields/location.hpp>
+#include <boost/requests/request_settings.hpp>
+#include <boost/requests/keep_alive.hpp>
 
 #include <boost/asem/lock_guard.hpp>
 #include <boost/asio/redirect_error.hpp>
@@ -19,9 +21,7 @@
 #include <boost/asio/yield.hpp>
 #include <boost/container/pmr/monotonic_buffer_resource.hpp>
 #include <boost/core/exchange.hpp>
-#include <boost/requests/detail/define.hpp>
-#include <boost/requests/detail/state_machine.hpp>
-#include <boost/requests/request_settings.hpp>
+#include <boost/optional.hpp>
 #include <boost/smart_ptr/allocate_unique.hpp>
 #include <boost/url/grammar/ci_string.hpp>
 
@@ -165,124 +165,109 @@ void basic_connection<Stream>::close(system::error_code & ec)
 }
 
 template<typename Stream>
-template<typename RequestBody, typename RequestAllocator,
-          typename ResponseBody, typename ResponseAllocator>
+template<typename RequestBody,
+          typename ResponseBody>
 void basic_connection<Stream>::single_request(
-    beast::http::request<RequestBody, beast::http::basic_fields<RequestAllocator>> &req,
-    beast::http::response<ResponseBody, beast::http::basic_fields<ResponseAllocator>> & res,
+    http::request<RequestBody>   &req,
+    http::response<ResponseBody> &res,
     system::error_code & ec)
 {
   ongoing_requests_++;
   detail::tracker t{ongoing_requests_};
   using lock_type = asem::lock_guard<detail::basic_mutex<executor_type>>;
   std::chrono::system_clock::time_point now;
-  lock_type lock, alock;
 
-  // INIT
-  {
-    checked_call(lock = asem::lock, write_mtx_);
-    goto write_init;
-  }
+  write_mtx_.lock(ec);
+  if (ec)
+    return;
 
-  state(write_init)
-  {
-    if (is_open() && keep_alive_set_.timeout < std::chrono::system_clock::now())
-      goto disconnect;
-    else if (!is_open())
-      goto connect;
-    else
-      goto do_write;
-  }
+  lock_type lock{write_mtx_, std::adopt_lock};
+  boost::optional<lock_type> alock;
 
-  state(disconnect)
+
+  // diconnect first
+  if (!is_open() && keep_alive_set_.timeout < std::chrono::system_clock::now())
   {
-    checked_call(alock = asem::lock, read_mtx_);
+    read_mtx_.lock(ec);
+    if (ec)
+      return;
+    alock.emplace(read_mtx_, std::adopt_lock);
+    // if the close goes wrong - so what, unless it's still open
     detail::close_impl(next_layer_, ec);
     ec.clear();
-    goto connect ;
   }
 
-  state(connect)
+  if (!is_open())
   {
-    if (read_mtx_.try_lock())
-      alock = lock_type(read_mtx_, std::adopt_lock);
-
-    checked_call(detail::connect_impl, next_layer_, endpoint_);
-    alock = {};
-
-    goto do_write ;
-  }
-
-  state(do_write)
-  {
-    req.set(beast::http::field::host, host_);
-    req.set(beast::http::field::user_agent, "Requests-" BOOST_BEAST_VERSION_STRING);
-
-    beast::http::write(next_layer_, req, ec);
-
-    if (ec == asio::error::broken_pipe || ec == asio::error::connection_reset)
-      goto connect ;
-
-    checked_call(lock = asem::lock, read_mtx_);
-    goto read_done ;
-  }
-
-  state(read_done)
-  {
-    if (req.base().method() == beast::http::verb::head)
+   retry:
+    if (!alock)
     {
-      beast::http::response_parser<ResponseBody, ResponseAllocator> ps{std::move(res.base())};
-      beast::http::read_header(next_layer_, buffer_, ps, ec);
-      res = std::move(ps.get());
+      read_mtx_.lock(ec);
+      if (ec)
+        return;
+      alock.emplace(read_mtx_, std::adopt_lock);
     }
-    else
-      beast::http::read(next_layer_, buffer_, res, ec);
-
-
-    now = std::chrono::system_clock::now();
-    const auto conn_itr = res.find(beast::http::field::connection);
+    detail::connect_impl(next_layer_, endpoint_, ec);
     if (ec)
-    {
-      keep_alive_set_.timeout = std::chrono::system_clock::time_point::min();
-      keep_alive_set_.max = 0ull;
-      goto close_after;
-    }
-
-    if (conn_itr == res.end())
-      return ;
-
-    if (urls::grammar::ci_is_equal(conn_itr->value(), "close"))
-      goto close_after;
-
-    if (!urls::grammar::ci_is_equal(conn_itr->value(), "keep-alive"))
-      ec = asio::error::invalid_argument;
+      return;
   }
 
-  state(close_after)
+  req.set(beast::http::field::host, host_);
+  req.set(beast::http::field::user_agent, "Requests-" BOOST_BEAST_VERSION_STRING);
+
+
+  beast::http::write(next_layer_, req, ec);
+  if (ec == asio::error::broken_pipe || ec == asio::error::connection_reset)
+    goto retry ;
+  else  if (ec)
+    return ;
+
+  // release after acquire!
+  read_mtx_.lock(ec);
+  lock = {};
+
+  if (ec)
+    return;
+  alock.emplace(read_mtx_, std::adopt_lock);
+
+  // DO the read - the head needs to be handled differently, because it has a content-length but no body.
+  if (req.base().method() == beast::http::verb::head)
+  {
+    http::response_parser<ResponseBody> ps{std::move(res.base())};
+    beast::http::read_header(next_layer_, buffer_, ps, ec);
+
+    res = std::move(ps.get());
+  }
+  else
+    beast::http::read(next_layer_, buffer_, res, ec);
+
+  bool should_close = interpret_keep_alive_response(keep_alive_set_, res, ec);
+  if (should_close)
   {
     boost::system::error_code ec_;
-    auto lock = asem::lock(write_mtx_, ec_);
+    lock = asem::lock(write_mtx_, ec_);
     if (!ec_)
       detail::close_impl(next_layer_, ec_);
     return;
   }
-
-  const auto kl_itr = res.find(beast::http::field::keep_alive);
-  if (kl_itr == res.end())
-    keep_alive_set_ = keep_alive{}; // set to max
-  else
-  {
-
-    auto rr = parse_keep_alive_field(kl_itr->value(), now);
-    if (rr.has_error())
-      ec = rr.error();
-    else
-      keep_alive_set_ = *rr;
-
-    if (keep_alive_set_.timeout < now)
-      goto close_after;
-  }
 }
+
+#if !defined(BOOST_REQUESTS_HEADER_ONLY)
+
+template<typename Stream> void basic_connection<Stream>::single_request(http::request<http::file_body> &req,   http::response<http::string_body> & res, system::error_code & ec) { return single_request<http::file_body,   http::string_body>(req, res, ec);}
+template<typename Stream> void basic_connection<Stream>::single_request(http::request<http::empty_body> &req,  http::response<http::string_body> & res, system::error_code & ec) { return single_request<http::empty_body,  http::string_body>(req, res, ec);}
+template<typename Stream> void basic_connection<Stream>::single_request(http::request<http::string_body> &req, http::response<http::string_body> & res, system::error_code & ec) { return single_request<http::string_body, http::string_body>(req, res, ec);}
+template<typename Stream> void basic_connection<Stream>::single_request(http::request<http::buffer_body> &req, http::response<http::string_body> & res, system::error_code & ec) { return single_request<http::buffer_body, http::string_body>(req, res, ec);}
+template<typename Stream> void basic_connection<Stream>::single_request(http::request<http::file_body> &req,   http::response<http::empty_body> & res,  system::error_code & ec) { return single_request<http::file_body,   http::empty_body>(req, res, ec);}
+template<typename Stream> void basic_connection<Stream>::single_request(http::request<http::empty_body> &req,  http::response<http::empty_body> & res,  system::error_code & ec) { return single_request<http::empty_body,  http::empty_body>(req, res, ec);}
+template<typename Stream> void basic_connection<Stream>::single_request(http::request<http::string_body> &req, http::response<http::empty_body> & res,  system::error_code & ec) { return single_request<http::string_body, http::empty_body>(req, res, ec);}
+template<typename Stream> void basic_connection<Stream>::single_request(http::request<http::buffer_body> &req, http::response<http::empty_body> & res,  system::error_code & ec) { return single_request<http::buffer_body, http::empty_body>(req, res, ec);}
+template<typename Stream> void basic_connection<Stream>::single_request(http::request<http::file_body> &req,   http::response<http::file_body> & res,   system::error_code & ec) { return single_request<http::file_body,   http::file_body>(req, res, ec);}
+template<typename Stream> void basic_connection<Stream>::single_request(http::request<http::empty_body> &req,  http::response<http::file_body> & res,   system::error_code & ec) { return single_request<http::empty_body,  http::file_body>(req, res, ec);}
+template<typename Stream> void basic_connection<Stream>::single_request(http::request<http::string_body> &req, http::response<http::file_body> & res,   system::error_code & ec) { return single_request<http::string_body, http::file_body>(req, res, ec);}
+template<typename Stream> void basic_connection<Stream>::single_request(http::request<http::buffer_body> &req, http::response<http::file_body> & res,   system::error_code & ec) { return single_request<http::buffer_body, http::file_body>(req, res, ec);}
+
+#endif
 
 template<typename Stream>
 struct basic_connection<Stream>::async_connect_op
@@ -453,6 +438,8 @@ template<typename RequestBody, typename RequestAllocator,
          typename ResponseBody, typename ResponseAllocator>
 struct basic_connection<Stream>::async_single_request_op : boost::asio::coroutine
 {
+#define state(Name) if (false) Name:
+
   basic_connection<Stream> * this_;
   beast::http::request<RequestBody, beast::http::basic_fields<RequestAllocator>> &req;
   beast::http::response<ResponseBody, beast::http::basic_fields<ResponseAllocator>> & res;
@@ -637,6 +624,8 @@ struct basic_connection<Stream>::async_single_request_op : boost::asio::coroutin
       }
     }
   }
+
+#undef state
 };
 
 

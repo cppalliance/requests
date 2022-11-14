@@ -121,7 +121,7 @@ struct domain_t
         else
             goto labelN;
 
-        state(labelN)
+        if (false) labelN:
         {
             valid_until = ++it ;
             if (eoi())
@@ -134,7 +134,7 @@ struct domain_t
                 goto subdomain;
         }
 
-        state(labelN_1)
+        if (false) labelN_1:
         {
             it ++;
             if (eoi())
@@ -145,7 +145,7 @@ struct domain_t
                 goto labelN;
         }
 
-        state(subdomain)
+          if (false) subdomain:
         {
             it ++;
             if (eoi())

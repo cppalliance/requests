@@ -5,8 +5,8 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#ifndef BOOST_REQUESTS_KEEP_ALIVE_HPP
-#define BOOST_REQUESTS_KEEP_ALIVE_HPP
+#ifndef BOOST_REQUESTS_FIELDS_KEEP_ALIVE_HPP
+#define BOOST_REQUESTS_FIELDS_KEEP_ALIVE_HPP
 
 #include <boost/core/detail/string_view.hpp>
 #include <boost/requests/detail/config.hpp>
@@ -37,4 +37,4 @@ BOOST_REQUESTS_DECL system::result<keep_alive>  parse_keep_alive_field(
 #endif
 
 
-#endif //BOOST_REQUESTS_KEEP_ALIVE_HPP
+#endif //BOOST_REQUESTS_FIELDS_KEEP_ALIVE_HPP
