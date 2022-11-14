@@ -7,7 +7,6 @@
 
 #include <boost/beast/http/verb.hpp>
 #include <boost/requests/body_traits.hpp>
-#include <boost/requests/detail/variadic.hpp>
 #include <boost/requests/facade.hpp>
 #include <boost/requests/redirect.hpp>
 #include <boost/requests/request_settings.hpp>
