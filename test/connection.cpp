@@ -305,8 +305,8 @@ asio::awaitable<void> async_http_exception()
 
   co_await hc.async_connect(ep);
 
-  beast::http::request<beast::http::empty_body> req{beast::http::verb::get, "/headers", 11};
-  beast::http::response<beast::http::string_body> res;
+  requests::http::request<beast::http::empty_body> req{beast::http::verb::get, "/headers", 11};
+  requests::http::response<beast::http::string_body> res;
 
   co_await hc.async_single_request(req, res);
 

@@ -139,22 +139,6 @@ struct basic_connection
         http::response<ResponseBody> & res,
         system::error_code & ec);
 
-
-#if !defined(BOOST_REQUESTS_HEADER_ONLY)
-    void single_request(http::request<http::file_body> &req,   http::response<http::string_body> & res, system::error_code & ec);
-    void single_request(http::request<http::empty_body> &req,  http::response<http::string_body> & res, system::error_code & ec);
-    void single_request(http::request<http::string_body> &req, http::response<http::string_body> & res, system::error_code & ec);
-    void single_request(http::request<http::buffer_body> &req, http::response<http::string_body> & res, system::error_code & ec);
-    void single_request(http::request<http::file_body> &req,   http::response<http::empty_body> & res, system::error_code & ec);
-    void single_request(http::request<http::empty_body> &req,  http::response<http::empty_body> & res, system::error_code & ec);
-    void single_request(http::request<http::string_body> &req, http::response<http::empty_body> & res, system::error_code & ec);
-    void single_request(http::request<http::buffer_body> &req, http::response<http::empty_body> & res, system::error_code & ec);
-    void single_request(http::request<http::file_body> &req,   http::response<http::file_body> & res, system::error_code & ec);
-    void single_request(http::request<http::empty_body> &req,  http::response<http::file_body> & res, system::error_code & ec);
-    void single_request(http::request<http::string_body> &req, http::response<http::file_body> & res, system::error_code & ec);
-    void single_request(http::request<http::buffer_body> &req, http::response<http::file_body> & res, system::error_code & ec);
-#endif
-
     template<typename RequestBody, typename ResponseBody>
     void single_request(
         http::request<RequestBody> & req,
@@ -166,14 +150,14 @@ struct basic_connection
         urls::detail::throw_system_error(ec);
     }
 
-    template<typename RequestBody, typename RequestAllocator,
-             typename ResponseBody, typename ResponseAllocator,
+    template<typename RequestBody,
+             typename ResponseBody,
              BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code)) CompletionToken
              BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                        void (boost::system::error_code))
-    async_single_request(beast::http::request<RequestBody, beast::http::basic_fields<RequestAllocator>> &req,
-                         beast::http::response<ResponseBody, beast::http::basic_fields<ResponseAllocator>> & res,
+    async_single_request(http::request<RequestBody> &req,
+                         http::response<ResponseBody> & res,
                          CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
 
     bool is_open() const
@@ -291,7 +275,7 @@ struct basic_connection
     struct async_close_op;
     struct async_connect_op;
 
-    template<typename, typename, typename, typename>
+    template<typename, typename>
     struct async_single_request_op;
 
     template<typename RequestBody>
