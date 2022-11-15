@@ -56,29 +56,6 @@ namespace boost {
 namespace requests {
 namespace detail {
 
-struct tracker
-{
-  std::atomic<std::size_t> *cnt = nullptr;
-  tracker() = default;
-  tracker(std::atomic<std::size_t> &cnt) : cnt(&cnt) {++cnt;}
-  ~tracker()
-  {
-    if (cnt) --(*cnt);
-  }
-
-  tracker(const tracker &) = delete;
-  tracker(tracker && lhs) noexcept : cnt(boost::exchange(lhs.cnt, nullptr))
-  {
-
-  }
-  tracker& operator=(tracker && lhs) noexcept
-  {
-    std::swap(cnt, lhs.cnt);
-    return *this;
-  }
-
-};
-
 namespace {
 
 template <typename Stream>
@@ -304,11 +281,80 @@ void basic_connection<Stream>::single_request(
   {
     boost::system::error_code ec_;
     write_mtx_.lock(ec_);
+    if (ec_)
+      return;
     alock.emplace(write_mtx_, std::adopt_lock);
     if (!ec_)
       detail::close_impl(next_layer_, ec_);
     return;
   }
+}
+
+template<typename Stream>
+template<typename RequestBody, typename ResponseBody>
+void basic_connection<Stream>::single_header_request(
+    http::request<RequestBody> &req,
+    http::response_parser<ResponseBody> & res,
+    system::error_code & ec)
+{
+  detail::tracker t{ongoing_requests_};
+  using lock_type = asem::lock_guard<detail::basic_mutex<executor_type>>;
+
+  write_mtx_.lock(ec);
+  if (ec)
+    return;
+
+  lock_type lock{write_mtx_, std::adopt_lock};
+  boost::optional<lock_type> alock;
+
+
+  // disconnect first
+  if (!is_open() && keep_alive_set_.timeout < std::chrono::system_clock::now())
+  {
+    read_mtx_.lock(ec);
+    if (ec)
+      return;
+    alock.emplace(read_mtx_, std::adopt_lock);
+    // if the close goes wrong - so what, unless it's still open
+    detail::close_impl(next_layer_, ec);
+    ec.clear();
+  }
+
+  if (!is_open())
+  {
+  retry:
+    if (!alock)
+    {
+      read_mtx_.lock(ec);
+      if (ec)
+        return;
+      alock.emplace(read_mtx_, std::adopt_lock);
+    }
+    detail::connect_impl(next_layer_, endpoint_, ec);
+    if (ec)
+      return;
+  }
+
+  alock.reset();
+
+  req.set(beast::http::field::host, host_);
+  req.set(beast::http::field::user_agent, "Requests-" BOOST_BEAST_VERSION_STRING);
+
+  beast::http::write(next_layer_, req, ec);
+  if (ec == asio::error::broken_pipe || ec == asio::error::connection_reset)
+    goto retry ;
+  else  if (ec)
+    return ;
+
+  // release after acquire!
+  read_mtx_.lock(ec);
+
+  if (ec)
+    return;
+  lock = {read_mtx_, std::adopt_lock};
+
+  // DO the read - the head needs to be handled differently, because it has a content-length but no body.
+  beast::http::read_header(next_layer_, buffer_, res, ec);
 }
 
 
@@ -468,7 +514,6 @@ struct drop_size_t
     return asio::deferred.values(std::move(ec));
   }
 };
-
 static asio::deferred_function<drop_size_t> drop_size()
 {
   return asio::deferred(drop_size_t{});
@@ -1329,6 +1374,195 @@ extern template auto basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>:
 
 #endif
 
+
+template<typename Stream>
+template<typename RequestBody>
+auto basic_connection<Stream>::ropen(
+    beast::http::verb method,
+    urls::pct_string_view path,
+    RequestBody && body,
+    request_settings req,
+    system::error_code & ec) -> stream
+{
+  using body_traits = request_body_traits<std::decay_t<RequestBody>>;
+  using body_type = typename body_traits::body_type;
+  constexpr auto is_secure = detail::has_ssl_v<Stream>;
+  const auto alloc = req.get_allocator();
+  using response_type = response ;
+  response_type res{alloc};
+
+  stream str{this};
+
+  if (!is_secure && req.opts.enforce_tls)
+  {
+    static constexpr auto loc((BOOST_CURRENT_LOCATION));
+    ec.assign(error::insecure, &loc);
+    return str;
+  }
+
+  {
+    const auto nm = body_traits::default_content_type(body);
+    auto itr = req.fields.find(http::field::content_type);
+    if (itr == req.fields.end() && !nm.empty())
+    {
+      const auto nm = body_traits::default_content_type(body);
+      if (!nm.empty())
+        req.fields.set(http::field::content_type, nm);
+    }
+  }
+
+  if (req.jar)
+  {
+    unsigned char buf[4096];
+    boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
+    using allocator_type = boost::container::pmr::polymorphic_allocator<char>;
+    auto cc = req.jar->get<allocator_type>(host(), is_secure, path,  &memres);
+    if (!cc.empty())
+      req.fields.set(http::field::cookie, cc);
+  }
+
+  beast::http::request<body_type, http::fields> hreq{method, path, 11,
+                                                     body_traits::make_body(std::forward<RequestBody>(body), ec),
+                                                     std::move(req.fields)};
+
+  hreq.set(beast::http::field::host, host_);
+  hreq.set(beast::http::field::user_agent, "Requests-" BOOST_BEAST_VERSION_STRING);
+
+  hreq.prepare_payload();
+
+  using lock_type = asem::lock_guard<detail::basic_mutex<executor_type>>;
+
+  {
+    write_mtx_.lock(ec);
+    if (ec)
+      return str;
+
+    lock_type lock{write_mtx_, std::adopt_lock};
+    boost::optional<lock_type> alock;
+
+    // disconnect first
+    if (!is_open() && keep_alive_set_.timeout < std::chrono::system_clock::now())
+    {
+      read_mtx_.lock(ec);
+      if (ec)
+        return str;
+      alock.emplace(read_mtx_, std::adopt_lock);
+      // if the close goes wrong - so what, unless it's still open
+      detail::close_impl(next_layer_, ec);
+      ec.clear();
+    }
+
+
+    if (!is_open())
+    {
+    retry:
+      if (!alock)
+      {
+        read_mtx_.lock(ec);
+        if (ec)
+          return str;
+        alock.emplace(read_mtx_, std::adopt_lock);
+      }
+      detail::connect_impl(next_layer_, endpoint_, ec);
+      if (ec)
+        return str;
+    }
+
+    alock.reset();
+    beast::http::write(next_layer_, hreq, ec);
+
+    if (ec == asio::error::broken_pipe || ec == asio::error::connection_reset)
+      goto retry ;
+    else  if (ec)
+      return str;
+
+    // release after acquire!
+    read_mtx_.lock(ec);
+
+    if (ec)
+      return str;
+
+    str.lock_ = {read_mtx_, std::adopt_lock};
+    lock = {};
+  }
+
+
+  str.parser_ = std::make_unique<http::response_parser<http::buffer_body>>(http::response_header{http::fields{alloc}});
+  str.parser_->get().body().data = nullptr;
+  str.parser_->get().body().size = 0u;
+  str.parser_->get().body().more = true;
+
+  beast::http::read_header(next_layer_, buffer_, *str.parser_, ec);
+  return str;
+}
+
+template<typename Stream>
+template<typename MutableBuffer>
+std::size_t basic_connection<Stream>::stream::read_some(const MutableBuffer & buffer, system::error_code & ec)
+{
+  if (!parser_ || !parser_->get().body().more)
+  {
+    ec = asio::error::eof;
+    return 0u;
+  }
+
+  auto itr = boost::asio::buffer_sequence_begin(buffer);
+  const auto end = boost::asio::buffer_sequence_end(buffer);
+  if (itr == end)
+    return 0u;
+
+  parser_->get().body().data = itr->data();
+  parser_->get().body().size = itr->size();
+  auto res = beast::http::read_some(connection_->next_layer_, connection_->buffer_, *parser_, ec);
+
+  if (ec == beast::http::error::need_buffer)
+  {
+    parser_->get().body().more = true;
+    ec = {};
+  }
+  else
+    parser_->get().body().more = false;
+
+
+  return res;
+}
+
+
+template<typename Stream>
+void basic_connection<Stream>::stream::dump(system::error_code & ec)
+{
+    if (parser_)
+      return ;
+    char data[4096];
+    while (parser_->get().body().more && !ec)
+    {
+      parser_->get().body().data = data;
+      parser_->get().body().size = sizeof(data);
+      beast::http::read_some(connection_->next_layer_, connection_->buffer_, *parser_, ec);
+    }
+
+    bool should_close = interpret_keep_alive_response(connection_->keep_alive_set_, parser_->get(), ec);
+    if (should_close)
+    {
+      boost::system::error_code ec_;
+      connection_->write_mtx_.lock(ec_);
+      if (ec_)
+        return;
+      using lock_type = asem::lock_guard<detail::basic_mutex<executor_type>>;
+      lock_type lock(connection_->write_mtx_, std::adopt_lock);
+
+      if (!ec_)
+        detail::close_impl(connection_->next_layer_, ec_);
+      return ;
+    }
+}
+
+template<typename Stream>
+basic_connection<Stream>::stream::~stream()
+{
+  if (parser_ && parser_->get().body().more && connection_->is_open())
+    dump();
+}
 
 }
 }

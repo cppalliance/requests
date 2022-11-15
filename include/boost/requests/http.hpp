@@ -34,6 +34,8 @@ using empty_body   = beast::http::empty_body;
 using string_body = beast::http::string_body;
 using buffer_body = beast::http::buffer_body;
 
+using request_header  = beast::http::request_header <fields>;
+using response_header = beast::http::response_header<fields>;
 
 template<typename Body> using request  = beast::http::request <Body, fields>;
 template<typename Body> using response = beast::http::response<Body, fields>;

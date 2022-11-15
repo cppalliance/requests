@@ -32,6 +32,33 @@
 
 namespace boost {
 namespace requests {
+namespace detail {
+
+struct tracker
+{
+  std::atomic<std::size_t> *cnt = nullptr;
+  tracker() = default;
+  tracker(std::atomic<std::size_t> &cnt) : cnt(&cnt) {++cnt;}
+  ~tracker()
+  {
+    if (cnt) --(*cnt);
+  }
+
+  tracker(const tracker &) = delete;
+  tracker(tracker && lhs) noexcept : cnt(boost::exchange(lhs.cnt, nullptr))
+  {
+  }
+
+  tracker& operator=(tracker && lhs) noexcept
+  {
+    std::swap(cnt, lhs.cnt);
+    return *this;
+  }
+
+};
+
+}
+
 
 
 template<typename Stream>
@@ -150,6 +177,23 @@ struct basic_connection
         urls::detail::throw_system_error(ec);
     }
 
+    template<typename RequestBody, typename ResponseBody>
+    void single_header_request(
+        http::request<RequestBody> &req,
+        http::response_parser<ResponseBody> & res,
+        system::error_code & ec);
+
+    template<typename RequestBody, typename ResponseBody>
+    void single_header_request(
+        http::request<RequestBody> & req,
+        http::response_header & res)
+    {
+      boost::system::error_code ec;
+      single_header_request(req, res, ec);
+      if (ec)
+        urls::detail::throw_system_error(ec);
+    }
+
     template<typename RequestBody,
              typename ResponseBody,
              BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code)) CompletionToken
@@ -260,6 +304,41 @@ struct basic_connection
     using request_type = request_settings;
 #include <boost/requests/detail/alias.def>
 
+    struct stream;
+
+    template<typename RequestBody>
+    auto ropen(beast::http::verb method,
+               urls::pct_string_view path,
+               RequestBody && body,
+               request_settings req,
+               system::error_code & ec) -> stream;
+
+    template<typename RequestBody>
+    auto ropen(beast::http::verb method,
+               urls::pct_string_view path,
+               RequestBody && body,
+               request_settings req) -> stream
+    {
+      boost::system::error_code ec;
+      auto res = ropen(method, path, std::move(body), std::move(req), ec);
+      if (ec)
+        throw_exception(system::system_error(ec, "open"));
+      return res;
+    }
+
+    template<typename RequestBody,
+              BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+                                                   response)) CompletionToken
+                  BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
+                                       void (boost::system::error_code,
+                                            response))
+    async_ropen(beast::http::verb method,
+                urls::pct_string_view path,
+                RequestBody && body,
+                request_settings req,
+                CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
+
   private:
 
     Stream next_layer_;
@@ -298,6 +377,92 @@ using https_connection = basic_https_connection<>;
 extern template struct basic_connection<asio::ip::tcp::socket>;
 extern template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>;
 #endif
+
+template<typename Stream>
+struct basic_connection<Stream>::stream
+{
+  /// The type of the next layer.
+  typedef typename std::remove_reference<Stream>::type next_layer_type;
+
+  /// The type of the executor associated with the object.
+  typedef typename next_layer_type::executor_type executor_type;
+
+  /// The type of the executor associated with the object.
+  typedef typename next_layer_type::lowest_layer_type lowest_layer_type;
+
+
+  /// Get the executor
+  executor_type get_executor() noexcept
+  {
+    return connection_->get_executor();
+  }
+
+  /// The protocol-type of the lowest layer.
+  using protocol_type = typename beast::lowest_layer_type<next_layer_type>::protocol_type;
+
+  /// The endpoint of the lowest lowest layer.
+  using endpoint_type = typename protocol_type::endpoint;
+
+  /// Check if the underlying connection is open.
+  bool is_open() const;
+
+  /// Read some data from the request body.
+  template<typename MutableBuffer>
+  std::size_t read_some(const MutableBuffer & buffer)
+  {
+    boost::system::error_code ec;
+    auto res = read_some(buffer, ec);
+    if (ec)
+      throw_exception(system::system_error(ec, "read_some"));
+    return res;
+  }
+
+  /// Read some data from the request body.
+  template<typename MutableBuffer>
+  std::size_t read_some(const MutableBuffer & buffer, system::error_code & ec);
+
+  /// Read some data from the request body.
+  template<
+      typename MutableBufferSequence,
+      typename ReadToken BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, std::size_t))
+  async_read_some(
+      const MutableBufferSequence & buffers,
+      ReadToken && token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
+
+  /// dump the rest of the data.
+  void dump()
+  {
+    boost::system::error_code ec;
+    dump(ec);
+    if (ec)
+      throw_exception(system::system_error(ec, "dump"));
+  }
+  void dump(system::error_code & ec);
+
+
+  stream           (stream &&) = default;
+  stream& operator=(stream &&) = default;
+
+  stream           (const stream &) = delete;
+  stream& operator=(const stream &) = delete;
+  ~stream();
+
+  const http::response_header &headers() const { return parser_->get().base(); }
+  bool done() const {return !parser_->get().body().more;}
+
+ private:
+  stream(basic_connection<Stream> * connection) : connection_(connection) {}
+  basic_connection<Stream> * connection_;
+  std::unique_ptr<http::response_parser<http::buffer_body>> parser_;
+  asem::lock_guard<detail::basic_mutex<executor_type>> lock_;
+  detail::tracker t_{connection_->ongoing_requests_};
+
+  friend
+  struct basic_connection<Stream>;
+};
+
+
 
 }
 }

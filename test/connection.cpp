@@ -118,6 +118,29 @@ TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, reques
     CHECK(hd.at("Test-Header") == json::value("it works"));
   }
 
+  SUBCASE("stream")
+  {
+    auto str = hc.ropen(beast::http::verb::get, "/get", requests::empty{}, {requests::headers({{"Test-Header", "it works"}}), {false}});
+
+    json::stream_parser sp;
+
+    char buf[32];
+
+    system::error_code ec;
+    while (!str.done() && !ec)
+    {
+      auto sz = str.read_some(asio::buffer(buf), ec);
+      CHECK(ec == system::error_code{});
+      sp.write_some(buf, sz, ec);
+      CHECK(ec == system::error_code{});
+    }
+
+    auto hd = sp.release().at("headers");
+
+    CHECK(hd.at("Host")        == json::value(url));
+    CHECK(hd.at("Test-Header") == json::value("it works"));
+  }
+
 
   SUBCASE("get")
   {
@@ -285,10 +308,7 @@ TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, reques
     CHECK(js.at("headers").at("Content-Type") == "application/x-www-form-urlencoded");
     CHECK(js.at("form") == json::value{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}});
   }
-
 }
-
-
 
 asio::awaitable<void> async_http_exception()
 {
