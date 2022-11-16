@@ -525,8 +525,7 @@ template<typename Stream>
 template<typename RequestBody,
          typename ResponseBody>
 struct basic_connection<Stream>::async_single_request_op
-    : boost::asio::coroutine,
-      std::enable_shared_from_this<async_single_request_op<RequestBody, ResponseBody>>
+    : boost::asio::coroutine
 {
   using lock_type = asem::lock_guard<detail::basic_mutex<typename Stream::executor_type>>;
 
@@ -958,8 +957,6 @@ struct basic_connection<Stream>::async_request_op : asio::coroutine
   struct state_t
   {
     boost::container::pmr::polymorphic_allocator<char> alloc;
-
-
     //using body_traits = request_body_traits<std::decay_t<RequestBody>>;
     using response_type = response ;
     response_type res;
@@ -1388,8 +1385,6 @@ auto basic_connection<Stream>::ropen(
   using body_type = typename body_traits::body_type;
   constexpr auto is_secure = detail::has_ssl_v<Stream>;
   const auto alloc = req.get_allocator();
-  using response_type = response ;
-  response_type res{alloc};
 
   stream str{this};
 
@@ -1496,6 +1491,219 @@ auto basic_connection<Stream>::ropen(
   return str;
 }
 
+
+template<typename Stream>
+template<typename RequestBody>
+struct basic_connection<Stream>::async_ropen_op
+    : boost::asio::coroutine
+{
+  using lock_type = asem::lock_guard<detail::basic_mutex<typename Stream::executor_type>>;
+
+  basic_connection<Stream> * this_;
+  stream str{this_};
+
+  using body_type = RequestBody;
+
+  template<typename Self>
+  void complete(Self && self, error_code ec)
+  {
+    alock = {};
+    lock = {};
+    req = nullptr;
+    self.complete(ec, std::move(str));
+  }
+
+  system::error_code ec_;
+
+  beast::http::request<body_type, http::fields> req_init;
+  std::shared_ptr<beast::http::request<body_type, http::fields>> req;
+
+  lock_type lock;
+  boost::optional<lock_type> alock;
+
+
+  template<typename RequestBody_>
+  beast::http::request<body_type, http::fields> prepare_request(
+                       beast::http::verb method,
+                       urls::pct_string_view path,
+                       core::string_view host,
+                       RequestBody_ && body,
+                       request_settings req,
+                       error_code &ec)
+  {
+    constexpr auto is_secure = detail::has_ssl_v<Stream>;
+    using body_traits = request_body_traits<std::decay_t<RequestBody_>>;
+
+    const auto alloc = req.get_allocator();
+
+
+    if (!is_secure && req.opts.enforce_tls)
+    {
+      static constexpr auto loc((BOOST_CURRENT_LOCATION));
+      ec.assign(error::insecure, &loc);
+      return {};
+    }
+
+    {
+      const auto nm = body_traits::default_content_type(body);
+      auto itr = req.fields.find(http::field::content_type);
+      if (itr == req.fields.end() && !nm.empty())
+      {
+        const auto nm = body_traits::default_content_type(body);
+        if (!nm.empty())
+          req.fields.set(http::field::content_type, nm);
+      }
+    }
+
+    if (req.jar)
+    {
+      unsigned char buf[4096];
+      boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
+      using allocator_type = boost::container::pmr::polymorphic_allocator<char>;
+      auto cc = req.jar->get<allocator_type>(host, is_secure, path,  &memres);
+      if (!cc.empty())
+        req.fields.set(http::field::cookie, cc);
+    }
+
+    beast::http::request<body_type, http::fields> hreq(
+                                    method, path, 11,
+                                    body_traits::make_body(std::forward<RequestBody_>(body), ec),
+                                    std::move(req.fields));
+
+    hreq.set(beast::http::field::host, host);
+    hreq.set(beast::http::field::user_agent, "Requests-" BOOST_BEAST_VERSION_STRING);
+
+    hreq.prepare_payload();
+    return hreq;
+  }
+
+  template<typename RequestBody_>
+  async_ropen_op(basic_connection<Stream> * this_,
+                 beast::http::verb method,
+                 urls::pct_string_view path,
+                 RequestBody_ && body,
+                 request_settings req)
+      : this_(this_),
+        req_init(prepare_request(method, path, this_->host(), std::forward<RequestBody_>(body), std::move(req), ec_))
+  {
+  }
+
+  template<typename Self>
+  void operator()(Self && self, system::error_code ec = {}, lock_type lock_ = {})
+  {
+    step(std::forward<Self>(self), ec);
+    if (is_complete())
+      complete(std::move(self), ec);
+  }
+
+  template<typename Self>
+  void operator()(Self && self, system::error_code ec, std::size_t)
+  {
+    step(std::forward<Self>(self), ec);
+    if (is_complete())
+      complete(std::move(self), ec);
+  }
+
+  template<typename Self>
+  void step(Self && self, system::error_code & ec)
+  {
+    reenter(this)
+    {
+      req = std::allocate_shared<beast::http::request<body_type, http::fields>>(self.get_allocator(), std::move(req_init));
+
+      if (ec_)
+      {
+        yield asio::post(this_->get_executor(), std::move(self));
+        ec = ec_;
+        return ;
+      }
+
+      yield this_->write_mtx_.async_lock(std::move(self));
+      if (ec)
+        return;
+
+      lock = {this_->write_mtx_, std::adopt_lock};
+
+      // disconnect first
+      if (!this_->is_open() && this_->keep_alive_set_.timeout < std::chrono::system_clock::now())
+      {
+        yield this_->read_mtx_.async_lock(std::move(self));
+        if (ec)
+          return;
+        alock.emplace(this_->read_mtx_, std::adopt_lock);
+        // if the close goes wrong - so what, unless it's still open
+        detail::close_impl(this_->next_layer_, ec);
+        ec.clear();
+      }
+
+
+      if (!this_->is_open())
+      {
+      retry:
+        if (!alock)
+        {
+          yield this_->read_mtx_.async_lock(std::move(self));
+          if (ec)
+            return;
+          alock.emplace(this_->read_mtx_, std::adopt_lock);
+        }
+        detail::connect_impl(this_->next_layer_, this_->endpoint_, ec);
+        if (ec)
+          return;
+      }
+
+      alock.reset();
+      yield beast::http::async_write(this_->next_layer_, *req, std::move(self));
+
+      if (ec == asio::error::broken_pipe || ec == asio::error::connection_reset)
+        goto retry ;
+      else  if (ec)
+        return;
+
+      // release after acquire!
+      yield this_->read_mtx_.async_lock(std::move(self));
+
+      if (ec)
+        return;
+
+      str.lock_ = {this_->read_mtx_, std::adopt_lock};
+      lock = {};
+
+
+
+      str.parser_ = std::make_unique<http::response_parser<http::buffer_body>>(http::response_header{http::fields{req->get_allocator()}});
+      str.parser_->get().body().data = nullptr;
+      str.parser_->get().body().size = 0u;
+      str.parser_->get().body().more = true;
+
+      yield beast::http::async_read_header(this_->next_layer_, this_->buffer_, *str.parser_, std::move(self));
+      return;
+    }
+  }
+};
+
+template<typename Stream>
+template<typename RequestBody,
+         typename CompletionToken>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code,
+                                                          typename basic_connection<Stream>::stream))
+basic_connection<Stream>::async_ropen(
+      beast::http::verb method,
+      urls::pct_string_view path,
+      RequestBody && body,
+      request_settings req,
+      CompletionToken && token)
+{
+  return asio::async_compose<CompletionToken, void(system::error_code, stream)>(
+      async_ropen_op<typename request_body_traits<std::decay_t<RequestBody>>::body_type>{
+            this, method, path,
+            std::forward<RequestBody>(body),
+            std::move(req)},
+      token,
+      next_layer_
+  );
+}
+
 template<typename Stream>
 template<typename MutableBuffer>
 std::size_t basic_connection<Stream>::stream::read_some(const MutableBuffer & buffer, system::error_code & ec)
@@ -1521,8 +1729,23 @@ std::size_t basic_connection<Stream>::stream::read_some(const MutableBuffer & bu
     ec = {};
   }
   else
+  {
     parser_->get().body().more = false;
+    bool should_close = interpret_keep_alive_response(connection_->keep_alive_set_, parser_->get(), ec);
+    if (should_close)
+    {
+      boost::system::error_code ec_;
+      connection_->write_mtx_.lock(ec_);
+      if (ec_)
+        return res;
+      using lock_type = asem::lock_guard<detail::basic_mutex<executor_type>>;
+      lock_type lock(connection_->write_mtx_, std::adopt_lock);
 
+      if (!ec_)
+        detail::close_impl(connection_->next_layer_, ec_);
+      return res;
+    }
+  }
 
   return res;
 }
@@ -1531,14 +1754,22 @@ std::size_t basic_connection<Stream>::stream::read_some(const MutableBuffer & bu
 template<typename Stream>
 void basic_connection<Stream>::stream::dump(system::error_code & ec)
 {
-    if (parser_)
+    if (!parser_)
       return ;
-    char data[4096];
-    while (parser_->get().body().more && !ec)
+    char data[65535];
+    while (parser_->get().body().more)
     {
       parser_->get().body().data = data;
       parser_->get().body().size = sizeof(data);
       beast::http::read_some(connection_->next_layer_, connection_->buffer_, *parser_, ec);
+
+      if (ec == beast::http::error::need_buffer)
+      {
+        parser_->get().body().more = true;
+        ec = {};
+      }
+      else
+        parser_->get().body().more = false;
     }
 
     bool should_close = interpret_keep_alive_response(connection_->keep_alive_set_, parser_->get(), ec);
@@ -1553,9 +1784,168 @@ void basic_connection<Stream>::stream::dump(system::error_code & ec)
 
       if (!ec_)
         detail::close_impl(connection_->next_layer_, ec_);
-      return ;
     }
 }
+
+
+template<typename Stream>
+template<typename MutableBufferSequence>
+struct basic_connection<Stream>::stream::async_read_some_op : asio::coroutine
+{
+  stream * this_;
+  const MutableBufferSequence & buffer;
+
+  using lock_type = asem::lock_guard<detail::basic_mutex<executor_type>>;
+  lock_type lock;
+  system::error_code ec_;
+
+  template<typename Self>
+  void operator()(Self && self, system::error_code ec = {}, std::size_t res = 0u)
+  {
+    auto itr = boost::asio::buffer_sequence_begin(buffer);
+    const auto end = boost::asio::buffer_sequence_end(buffer);
+
+    reenter(this)
+    {
+      if (!this_->parser_ || !this_->parser_->get().body().more)
+      {
+        yield asio::post(this_->get_executor(), std::move(self));
+        return self.complete(asio::error::eof, 0u);
+      }
+      if (itr == end)
+      {
+        yield asio::post(this_->get_executor(), std::move(self));
+        return self.complete({}, 0u);
+      }
+
+      this_->parser_->get().body().data = itr->data();
+      this_->parser_->get().body().size = itr->size();
+
+      yield beast::http::async_read_some(this_->connection_->next_layer_, this_->connection_->buffer_,
+                                         *this_->parser_, std::move(self));
+
+      if (ec == beast::http::error::need_buffer)
+      {
+        this_->parser_->get().body().more = true;
+        ec = {};
+      }
+      else
+      {
+        this_->parser_->get().body().more = false;
+        if (interpret_keep_alive_response(this_->connection_->keep_alive_set_, this_->parser_->get(), ec))
+        {
+          ec_ = ec ;
+          yield this_->connection_->write_mtx_.async_lock(std::move(self));
+          if (ec)
+            return self.complete(ec_, res);
+          lock = {this_->connection_->write_mtx_, std::adopt_lock};
+
+          if (!ec_)
+          {
+            yield detail::async_close_impl(this_->connection_->next_layer_, std::move(self));
+          }
+
+          lock = {};
+        }
+      }
+      self.complete(ec, res);
+    }
+  }
+
+};
+
+template<typename Stream>
+template<
+    typename MutableBufferSequence,
+    BOOST_ASIO_COMPLETION_TOKEN_FOR(void (system::error_code, std::size_t)) CompletionToken>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (system::error_code, std::size_t))
+basic_connection<Stream>::stream::async_read_some(
+    const MutableBufferSequence & buffers,
+    CompletionToken && token)
+{
+  return asio::async_compose<CompletionToken, void(system::error_code, std::size_t)>(
+      async_read_some_op<MutableBufferSequence>{{}, this, buffers},
+      token,
+      connection_->next_layer_
+  );
+}
+
+
+template<typename Stream>
+struct basic_connection<Stream>::stream::async_dump_op : asio::coroutine
+{
+  stream * this_;
+  using mutex_type = detail::basic_mutex<executor_type>;
+
+  std::shared_ptr<char[65535]> buffer;
+  using lock_type = asem::lock_guard<detail::basic_mutex<executor_type>>;
+  lock_type lock;
+  system::error_code ec_;
+
+  template<typename Self>
+  void operator()(Self && self, system::error_code ec = {}, std::size_t n = 0u)
+  {
+    reenter(this)
+    {
+      if (!this_->parser_)
+      {
+        yield asio::post(this_->connection_->get_executor(), std::move(self));
+        return self.complete(ec);
+      }
+      buffer = std::allocate_shared<char[65535]>(self.get_allocator());
+      while (this_->parser_->get().body().more)
+      {
+        this_->parser_->get().body().data = buffer.get();
+        this_->parser_->get().body().size = 65535;
+
+        yield beast::http::async_read_some(this_->connection_->next_layer_,
+                                           this_->connection_->buffer_,
+                                           *this_->parser_, std::move(self));
+
+        if (ec == beast::http::error::need_buffer)
+        {
+          this_->parser_->get().body().more = true;
+          ec = {};
+        }
+        else
+          this_->parser_->get().body().more = false;
+      }
+
+      if (interpret_keep_alive_response(this_->connection_->keep_alive_set_, this_->parser_->get(), ec))
+      {
+        ec_ = ec ;
+        yield this_->connection_->write_mtx_.async_lock(std::move(self));
+        if (ec)
+          return self.complete(ec_);
+        lock = {this_->connection_->write_mtx_, std::adopt_lock};
+
+        if (!ec_)
+        {
+          yield  detail::async_close_impl(this_->connection_->next_layer_, std::move(self));
+        }
+
+        return self.complete(ec_);
+      }
+
+      return self.complete(ec);
+    }
+
+  }
+};
+
+template<typename Stream>
+
+template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code)) CompletionToken>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code))
+basic_connection<Stream>::stream::async_dump(CompletionToken && token)
+{
+  return asio::async_compose<CompletionToken, void(system::error_code)>(
+      async_dump_op{{}, this},
+      token,
+      connection_->next_layer_
+      );
+}
+
 
 template<typename Stream>
 basic_connection<Stream>::stream::~stream()

@@ -141,6 +141,11 @@ TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, reques
     CHECK(hd.at("Test-Header") == json::value("it works"));
   }
 
+  SUBCASE("stream-dump")
+  {
+    auto str = hc.ropen(beast::http::verb::get, "/get", requests::empty{}, {requests::headers({{"Test-Header", "it works"}}), {false}});
+    str.dump();
+  }
 
   SUBCASE("get")
   {
@@ -370,13 +375,42 @@ asio::awaitable<void> async_https_request()
   {
     requests::request_settings r{requests::headers({{"Test-Header", "it works"}}), {false}};
     auto hdr = co_await hc.async_get("/get", r);
-
     auto hd = hdr.json().at("headers");
 
     CHECK(hd.at("Host")        == json::value(url));
     CHECK(hd.at("Test-Header") == json::value("it works"));
   };
 
+  auto stream = [](Conn  & hc, core::string_view url) -> asio::awaitable<void>
+  {
+    auto str = co_await hc.async_ropen(beast::http::verb::get, "/get", requests::empty{},
+                                       {requests::headers({{"Test-Header", "it works"}}), {false}});
+
+    json::stream_parser sp;
+    char buf[32];
+
+    system::error_code ec;
+    while (!str.done() && !ec)
+    {
+      auto sz = co_await str.async_read_some(asio::buffer(buf));
+      CHECK(ec == system::error_code{});
+      sp.write_some(buf, sz, ec);
+      CHECK(ec == system::error_code{});
+    }
+
+    auto hd = sp.release().at("headers");
+
+    CHECK(hd.at("Host")        == json::value(url));
+    CHECK(hd.at("Test-Header") == json::value("it works"));
+  };
+
+  auto stream_dump = [](Conn  & hc, core::string_view url) -> asio::awaitable<void>
+  {
+    auto str = co_await  hc.async_ropen(beast::http::verb::get, "/get", requests::empty{},
+                                       {requests::headers({{"Test-Header", "it works"}}), {false}});
+    co_await str.async_dump();
+
+  };
 
   auto get_redirect = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
@@ -561,6 +595,8 @@ asio::awaitable<void> async_https_request()
   co_await (
       headers(hc, url)
       && get_(hc, url)
+      && stream(hc, url)
+      && stream_dump(hc, url)
       && get_redirect(hc, url)
       && too_many_redirects(hc, url)
       && download(hc, url)

@@ -327,12 +327,11 @@ struct basic_connection
     }
 
     template<typename RequestBody,
-              BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-                                                   response)) CompletionToken
+             typename CompletionToken
                   BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                        void (boost::system::error_code,
-                                            response))
+                                             typename basic_connection<Stream>::stream))
     async_ropen(beast::http::verb method,
                 urls::pct_string_view path,
                 RequestBody && body,
@@ -360,7 +359,13 @@ struct basic_connection
     template<typename RequestBody>
     struct async_request_op;
 
+    template<typename RequestBody>
+    struct async_response_op;
+
     struct async_download_op;
+
+    template<typename RequestBody>
+    struct async_ropen_op;
 };
 
 template<typename Executor = asio::any_io_executor>
@@ -424,11 +429,12 @@ struct basic_connection<Stream>::stream
   /// Read some data from the request body.
   template<
       typename MutableBufferSequence,
-      typename ReadToken BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
-  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, std::size_t))
+      BOOST_ASIO_COMPLETION_TOKEN_FOR(void (system::error_code, std::size_t)) CompletionToken
+                                           BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (system::error_code, std::size_t))
   async_read_some(
       const MutableBufferSequence & buffers,
-      ReadToken && token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
+      CompletionToken && token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
 
   /// dump the rest of the data.
   void dump()
@@ -440,6 +446,12 @@ struct basic_connection<Stream>::stream
   }
   void dump(system::error_code & ec);
 
+  /// Read some data from the request body.
+  template<
+      BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code))
+          CompletionToken BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code))
+  async_dump(CompletionToken && token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
 
   stream           (stream &&) = default;
   stream& operator=(stream &&) = default;
@@ -460,6 +472,11 @@ struct basic_connection<Stream>::stream
 
   friend
   struct basic_connection<Stream>;
+
+  struct async_dump_op;
+
+  template<typename MutableBufferSequence>
+  struct async_read_some_op;
 };
 
 
