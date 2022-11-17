@@ -377,6 +377,61 @@ basic_connection_pool<Stream>::async_download(urls::pct_string_view path,
   );
 }
 
+
+
+template<typename Stream>
+template<typename RequestBody>
+struct basic_connection_pool<Stream>::async_ropen_op : asio::coroutine
+{
+  basic_connection_pool<Stream> * this_;
+  beast::http::verb method;
+  urls::pct_string_view path;
+  RequestBody && body;
+  request_settings req;
+
+  template<typename Self>
+  void operator()(Self && self, error_code ec = {}, std::shared_ptr<connection_type> conn = nullptr)
+  {
+    reenter(this)
+    {
+      yield this_->async_get_connection(std::move(self));
+      if (!ec && conn == nullptr)
+        ec =  asio::error::not_found;
+      if (ec)
+        return self.complete(ec, typename connection_type::stream{nullptr});
+
+      yield conn->async_ropen(method, path, std::forward<RequestBody>(body), std::move(req), std::move(self));
+    }
+  }
+
+  template<typename Self>
+  void operator()(Self && self, error_code ec, typename connection_type::stream res)
+  {
+    self.complete(ec, std::move(res));
+  }
+};
+
+
+template<typename Stream>
+template<typename RequestBody,
+         typename CompletionToken>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
+                                   void (boost::system::error_code, typename basic_connection<Stream>::stream))
+basic_connection_pool<Stream>::async_ropen(beast::http::verb method,
+                                           urls::pct_string_view path,
+                                           RequestBody && body,
+                                           request_settings req,
+                                           CompletionToken && completion_token)
+{
+  return asio::async_compose<CompletionToken, void(system::error_code, typename basic_connection<Stream>::stream)>(
+      async_ropen_op<RequestBody>{{}, this, method, path, std::forward<RequestBody>(body), std::move(req)},
+      completion_token,
+      mutex_
+  );
+}
+
+
+
 }
 }
 

@@ -1950,7 +1950,7 @@ basic_connection<Stream>::stream::async_dump(CompletionToken && token)
 template<typename Stream>
 basic_connection<Stream>::stream::~stream()
 {
-  if (parser_ && parser_->get().body().more && connection_->is_open())
+  if (parser_ && parser_->get().body().more && connection_ && connection_->is_open())
     dump();
 }
 

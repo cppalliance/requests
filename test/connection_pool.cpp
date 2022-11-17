@@ -108,6 +108,35 @@ TEST_CASE_TEMPLATE("sync-request", Pool,
     CHECK(hd.at("Test-Header") == json::value("it works"));
   }
 
+  SUBCASE("stream")
+  {
+    auto str = hc.ropen(beast::http::verb::get, "/get", requests::empty{}, {requests::headers({{"Test-Header", "it works"}}), {false}});
+
+    json::stream_parser sp;
+
+    char buf[32];
+
+    system::error_code ec;
+    while (!str.done() && !ec)
+    {
+      auto sz = str.read_some(asio::buffer(buf), ec);
+      CHECK(ec == system::error_code{});
+      sp.write_some(buf, sz, ec);
+      CHECK(ec == system::error_code{});
+    }
+
+    auto hd = sp.release().at("headers");
+
+    CHECK(hd.at("Host")        == json::value(url));
+    CHECK(hd.at("Test-Header") == json::value("it works"));
+  }
+
+  SUBCASE("stream-dump")
+  {
+    auto str = hc.ropen(beast::http::verb::get, "/get", requests::empty{}, {requests::headers({{"Test-Header", "it works"}}), {false}});
+    str.dump();
+  }
+
 
   SUBCASE("get")
   {
@@ -316,6 +345,37 @@ asio::awaitable<void> async_http_pool_request()
   };
 
 
+  auto stream = [](Pool  & hc, core::string_view url) -> asio::awaitable<void>
+  {
+    auto str = co_await hc.async_ropen(beast::http::verb::get, "/get", requests::empty{},
+                                       {requests::headers({{"Test-Header", "it works"}}), {false}});
+
+    json::stream_parser sp;
+    char buf[32];
+
+    system::error_code ec;
+    while (!str.done() && !ec)
+    {
+      auto sz = co_await str.async_read_some(asio::buffer(buf));
+      CHECK(ec == system::error_code{});
+      sp.write_some(buf, sz, ec);
+      CHECK(ec == system::error_code{});
+    }
+
+    auto hd = sp.release().at("headers");
+
+    CHECK(hd.at("Host")        == json::value(url));
+    CHECK(hd.at("Test-Header") == json::value("it works"));
+  };
+
+  auto stream_dump = [](Pool  & hc, core::string_view url) -> asio::awaitable<void>
+  {
+    auto str = co_await  hc.async_ropen(beast::http::verb::get, "/get", requests::empty{},
+                                       {requests::headers({{"Test-Header", "it works"}}), {false}});
+    co_await str.async_dump();
+
+  };
+
   auto get_redirect = [](Pool & hc, core::string_view url) -> asio::awaitable<void>
   {
     requests::request_settings r{requests::headers({{"Test-Header", "it works"}}), {false}};
@@ -499,6 +559,8 @@ asio::awaitable<void> async_http_pool_request()
   co_await (
          headers(hc, url)
       && get_(hc, url)
+      && stream(hc, url)
+      && stream_dump(hc, url)
       && get_redirect(hc, url)
       && too_many_redirects(hc, url)
       && download(hc, url)

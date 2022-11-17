@@ -1112,6 +1112,28 @@ basic_session<Executor>::async_get_pool(urls::url_view url,
   );
 }
 
+template<typename Executor>
+template<typename RequestBody>
+auto basic_session<Executor>::ropen(beast::http::verb method,
+           urls::url_view url,
+           RequestBody && body,
+           http::fields req,
+           system::error_code & ec) -> stream
+{
+  auto p = get_pool(url, ec);
+  if (ec)
+    return ;
+  return visit(
+      [&](auto pool) -> stream
+      {
+        assert(pool);
+        auto conn = pool->get_connection(ec);
+        if (ec)
+          return ;
+        return conn->ropen(url.encoded_target(), std::forward<RequestBody>(body), std::move(req), ec);
+      }, p);
+}
+
 
 }
 }
