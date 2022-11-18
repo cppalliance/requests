@@ -184,6 +184,8 @@ template<typename Stream>
 struct basic_connection_pool<Stream>::async_get_connection_op : asio::coroutine
 {
   basic_connection_pool<Stream> * this_;
+  async_get_connection_op(basic_connection_pool<Stream> * this_) : this_(this_) {}
+
   using lock_type = asem::lock_guard<detail::basic_mutex<executor_type>>;
   using conn_t = boost::unordered_multimap<endpoint_type,
                                            std::shared_ptr<connection_type>,
@@ -193,14 +195,17 @@ struct basic_connection_pool<Stream>::async_get_connection_op : asio::coroutine
   std::shared_ptr<connection_type> nconn = nullptr;
   endpoint_type ep;
 
-  template<typename Self>
-  void operator()(Self && self, system::error_code ec = {}, lock_type lock = {})
+  using completion_signature_type = void(system::error_code, std::shared_ptr<connection_type>);
+  using step_signature_type       = void(system::error_code, lock_type);
+
+  auto resume(requests::detail::co_token_t<step_signature_type> self,
+              system::error_code & ec, lock_type lock = {}) -> std::shared_ptr<connection_type>
   {
     reenter (this)
     {
       yield asem::async_lock(this_->mutex_, std::move(self));
       if (ec)
-        return self.complete(ec, {nullptr});
+        return nullptr;
 
       // find an idle connection
       itr = std::find_if(this_->conns_.begin(), this_->conns_.end(),
@@ -210,14 +215,17 @@ struct basic_connection_pool<Stream>::async_get_connection_op : asio::coroutine
                          });
 
       if (itr != this_->conns_.end())
-        return self.complete(error_code{}, itr->second);
+        return itr->second;
 
       // check if we can make more connections. -> open another connection.
       // the race here is that we might open one too many
       if (this_->conns_.size() < this_->limit_) // open another connection then -> we block the entire
       {
         if (this_->endpoints_.empty())
-          return self.complete(asio::error::not_found, nullptr);
+        {
+          ec = asio::error::not_found;
+          return nullptr;
+        }
 
         //sort the endpoints by connections that use it
         std::sort(this_->endpoints_.begin(), this_->endpoints_.end(),
@@ -232,11 +240,10 @@ struct basic_connection_pool<Stream>::async_get_connection_op : asio::coroutine
 
         yield nconn->async_connect(ep, asio::append(std::move(self), std::move(lock))); // don't unlock here.
         if (ec)
-          return self.complete(ec, {nullptr});
+          return nullptr;
 
         this_->conns_.emplace(ep, nconn);
-        lock = {};
-        return self.complete(error_code{}, std::move(nconn));
+        return std::move(nconn);
       }
       // find the one with the lowest usage
       itr = std::min_element(this_->conns_.begin(), this_->conns_.end(),
@@ -248,11 +255,14 @@ struct basic_connection_pool<Stream>::async_get_connection_op : asio::coroutine
                              });
       lock = {};
       if (itr == this_->conns_.end())
-        return self.complete(asio::error::not_found, nullptr);
+      {
+        ec = asio::error::not_found;
+        return nullptr;
+      }
       else
-        return self.complete(error_code{}, itr->second);
+        return itr->second;
     }
-
+    return nullptr;
   }
 };
 
@@ -261,11 +271,11 @@ template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (system::error_code, std::shared_p
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (system::error_code, std::shared_ptr<basic_connection<Stream>>))
 basic_connection_pool<Stream>::async_get_connection(CompletionToken && completion_token)
 {
-  return asio::async_compose<CompletionToken, void(system::error_code, std::shared_ptr<connection_type>)>(
-      async_get_connection_op{{}, this},
-      completion_token,
-      mutex_
-  );
+  // async_get_connection_op
+  return detail::co_run<async_get_connection_op>(
+      std::forward<CompletionToken>(completion_token),
+      this
+      );
 }
 
 template<typename Stream>

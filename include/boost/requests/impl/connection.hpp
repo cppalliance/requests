@@ -9,6 +9,7 @@
 #define BOOST_REQUESTS_IMPL_CONNECTION_HPP
 
 #include <boost/requests/connection.hpp>
+#include <boost/requests/detail/async_coroutine.hpp>
 #include <boost/requests/detail/config.hpp>
 #include <boost/requests/detail/ssl.hpp>
 #include <boost/requests/fields/location.hpp>
@@ -530,14 +531,22 @@ struct basic_connection<Stream>::async_single_request_op
   using lock_type = asem::lock_guard<detail::basic_mutex<typename Stream::executor_type>>;
 
   basic_connection<Stream> * this_;
-  beast::http::request<RequestBody, http::fields> &req;
-  beast::http::response<ResponseBody, http::fields> & res;
+  http::request<RequestBody> &req;
+  http::response<ResponseBody> & res;
   boost::system::error_code ec_;
 
   async_single_request_op(
       basic_connection<Stream> * this_,
-      beast::http::request<RequestBody, http::fields> &req,
-      beast::http::response<ResponseBody, http::fields> & res
+      http::request<RequestBody> &req,
+      http::response<ResponseBody> &res
+      ) : this_(this_), req(req), res(res)
+  {
+  }
+
+  async_single_request_op(
+      basic_connection<Stream> * this_,
+      http::request<RequestBody> &&req,
+      http::response<ResponseBody> &&res
       ) : this_(this_), req(req), res(res)
   {
   }
@@ -547,39 +556,14 @@ struct basic_connection<Stream>::async_single_request_op
   lock_type lock;
   boost::optional<lock_type> alock;
 
-  std::shared_ptr<http::response_parser<ResponseBody>> hparser;
+  boost::optional<http::response_parser<ResponseBody>> hparser;
   asio::coroutine inner_coro;
 
-  template<typename Self>
-  void complete(Self && self, error_code ec)
-  {
-    alock = {};
-    lock = {};
-    t = detail::tracker();
-    hparser.reset();
-    self.complete(ec);
-  }
+  using completion_signature_type = void(system::error_code);
+  using step_signature_type       = void(system::error_code, variant2::variant<std::size_t, lock_type>);
 
-  template<typename Self>
-  void operator()(Self && self,
-                  system::error_code ec = {},
-                  lock_type lock_ = {})
-  {
-    step(std::forward<Self>(self), ec, std::move(lock_));
-    if (is_complete())
-      complete(std::move(self), ec);
-  }
-
-  template<typename Self>
-  void operator()(Self && self, system::error_code ec, std::size_t)
-  {
-    step(std::forward<Self>(self), ec);
-    if (is_complete())
-      complete(std::move(self), ec);
-  }
-
-  template<typename Self>
-  void step(Self && self, system::error_code & ec, lock_type lock_ = {})
+  void resume(requests::detail::co_token_t<step_signature_type> self,
+              system::error_code & ec, variant2::variant<std::size_t, lock_type> res_ = std::size_t{})
   {
     reenter(this)
     {
@@ -587,7 +571,7 @@ struct basic_connection<Stream>::async_single_request_op
       if (ec)
         return;
 
-      lock = std::move(lock_);
+      lock = std::move(variant2::get<1>(res_));
 
       // disconnect first
       if (!this_->is_open() && this_->keep_alive_set_.timeout < std::chrono::system_clock::now())
@@ -595,7 +579,7 @@ struct basic_connection<Stream>::async_single_request_op
         yield asem::async_lock(this_->read_mtx_, std::move(self));
         if (ec)
           return;
-        alock.emplace(std::move(lock_));
+        alock.emplace(std::move(variant2::get<1>(res_)));
         // if the close goes wrong - so what, unless it's still open
         yield detail::async_close_impl(this_->next_layer_, std::move(self));
         ec.clear();
@@ -608,7 +592,7 @@ struct basic_connection<Stream>::async_single_request_op
         {
           yield asem::async_lock(this_->write_mtx_, std::move(self));
           if (ec)
-            alock.emplace(std::move(lock_));
+            alock.emplace(std::move(variant2::get<1>(res_)));
         }
 
         inner_coro = {};
@@ -631,11 +615,11 @@ struct basic_connection<Stream>::async_single_request_op
       yield asem::async_lock(this_->read_mtx_, std::move(self));
       if (ec)
         return ;
-      lock = std::move(lock_);
+      lock = std::move(variant2::get<1>(res_));
 
       if (req.base().method() == beast::http::verb::head)
       {
-        hparser = std::allocate_shared<http::response_parser<ResponseBody>>(self.get_allocator(), std::move(res.base()));
+        hparser.emplace(std::move(res.base()));
         yield
         {
           auto & hp = *hparser;
@@ -654,7 +638,7 @@ struct basic_connection<Stream>::async_single_request_op
       if (interpret_keep_alive_response(this_->keep_alive_set_, res, ec))
       {
         yield asem::async_lock(this_->write_mtx_, std::move(self));
-        alock.emplace(std::move(lock_));
+        alock.emplace(std::move(variant2::get<1>(res_)));
         if (!ec)
         {
           yield detail::async_close_impl(this_->next_layer_, std::move(self));
@@ -676,9 +660,8 @@ basic_connection<Stream>::async_single_request(
                      http::response<ResponseBody> & res,
                      CompletionToken && completion_token)
 {
-  return asio::async_compose<CompletionToken, void(system::error_code)>(
-      async_single_request_op<RequestBody, ResponseBody>(this, req, res),
-      completion_token);
+  return detail::co_run<async_single_request_op<RequestBody, ResponseBody>>(
+      std::forward<CompletionToken>(completion_token), this, req, res);
 }
 
 
@@ -951,37 +934,17 @@ struct basic_connection<Stream>::async_request_op : asio::coroutine
 
   system::error_code ec_;
   using body_type = RequestBody;
+  using response_type = response ;
+  using flat_buffer = beast::basic_flat_buffer<boost::container::pmr::polymorphic_allocator<char>>;
+  using res_body = beast::http::basic_dynamic_body<flat_buffer>;
 
-  typename body_type::value_type body;
   request_settings req;
-  struct state_t
-  {
-    boost::container::pmr::polymorphic_allocator<char> alloc;
-    //using body_traits = request_body_traits<std::decay_t<RequestBody>>;
-    using response_type = response ;
-    response_type res;
 
-    beast::http::request<body_type, http::fields> hreq;
-    using flat_buffer = beast::basic_flat_buffer<boost::container::pmr::polymorphic_allocator<char>>;
-    using res_body = beast::http::basic_dynamic_body<flat_buffer>;
-    beast::http::response<res_body, http::fields> rres{beast::http::response_header<http::fields>{alloc},
-                                                       flat_buffer{alloc}};
+  response_type res;
 
-    template<typename RequestBody_>
-    state_t(beast::http::verb v,
-            urls::pct_string_view path,
-            RequestBody_ && body,
-            request_settings req)
-        :  alloc(req.get_allocator()),
-           res{req.get_allocator()},
-           hreq{v, path, 11,
-               std::forward<RequestBody_>(body),
-               std::move(req.fields)}
-    {
-    }
-  };
-
-  std::shared_ptr<state_t> state_;
+  beast::http::request<body_type, http::fields> hreq;
+  beast::http::response<res_body, http::fields> rres{beast::http::response_header<http::fields>{req.get_allocator()},
+                                                     flat_buffer{req.get_allocator()}};
 
   template<typename RequestBody_>
   async_request_op(basic_connection<Stream> * this_,
@@ -991,8 +954,11 @@ struct basic_connection<Stream>::async_request_op : asio::coroutine
                    request_settings req)
       : this_(this_), method(v), jar(req.jar), opts(req.opts), path(path),
         default_mime_type(request_body_traits<std::decay_t<RequestBody_>>::default_content_type(body)),
-        body(request_body_traits<std::decay_t<RequestBody_>>::make_body(std::forward<RequestBody_>(body), ec_)),
-        req(std::move(req))
+        req(std::move(req)),
+        res{this->req.get_allocator()},
+        hreq{v, path, 11,
+             request_body_traits<std::decay_t<RequestBody_>>::make_body(std::forward<RequestBody_>(body), ec_),
+             std::move(this->req.fields)}
   {
   }
 
@@ -1008,10 +974,10 @@ struct basic_connection<Stream>::async_request_op : asio::coroutine
     }
 
     {
-      auto itr = state_->hreq.base().find(http::field::content_type);
-      if (itr == state_->hreq.base().end() && !default_mime_type.empty()) {
+      auto itr = hreq.base().find(http::field::content_type);
+      if (itr == hreq.base().end() && !default_mime_type.empty()) {
         if (!default_mime_type.empty())
-          state_->hreq.base().set(http::field::content_type, default_mime_type);
+          hreq.base().set(http::field::content_type, default_mime_type);
       }
     }
     if (jar)
@@ -1022,26 +988,26 @@ struct basic_connection<Stream>::async_request_op : asio::coroutine
 
       auto cc = jar->get(this_->host(), is_secure, path, alloc2);
       if (!cc.empty())
-        state_->hreq.base().set(http::field::cookie, cc);
+        hreq.base().set(http::field::cookie, cc);
       else
-        state_->hreq.base().erase(http::field::cookie);
+        hreq.base().erase(http::field::cookie);
     }
-    state_->hreq.prepare_payload();
+    hreq.prepare_payload();
   }
 
 
   void handle_redirect(system::error_code & ec)
   {
-    auto loc_itr = state_->rres.base().find(http::field::location);
+    auto loc_itr = rres.base().find(http::field::location);
 
-    if (loc_itr == state_->rres.base().end())
+    if (loc_itr == rres.base().end())
     {
       static constexpr auto loc((BOOST_CURRENT_LOCATION));
       ec.assign(error::invalid_redirect, &loc);
       return;
     }
     const auto redirect_mode = (std::min)(supported_redirect_mode(), opts.redirect);
-    const auto url = interpret_location(state_->hreq.target(), loc_itr->value());
+    const auto url = interpret_location(hreq.target(), loc_itr->value());
     if (url.has_error())
     {
       ec = url.error();
@@ -1071,36 +1037,40 @@ struct basic_connection<Stream>::async_request_op : asio::coroutine
 
       auto cc = jar->get(this_->host(), is_secure, url->encoded_path(), alloc2);
       if (!cc.empty())
-        state_->hreq.base().set(http::field::cookie, cc);
+        hreq.base().set(http::field::cookie, cc);
       else
-        state_->hreq.base().erase(http::field::cookie);
+        hreq.base().erase(http::field::cookie);
     }
 
-    state_->res.history.emplace_back(std::move(state_->rres.base()));
-    state_->hreq.base().target(url->encoded_path());
+    res.history.emplace_back(std::move(rres.base()));
+    hreq.base().target(url->encoded_path());
 
   }
-  template<typename Self>
-  void operator()(Self && self, system::error_code ec= {})
+
+  using completion_signature_type = void(system::error_code, response);
+  using step_signature_type       = void(system::error_code);
+
+  auto resume(requests::detail::co_token_t<step_signature_type> self,
+              system::error_code & ec) -> response_type &
   {
-    auto rc = state_ ?  state_->rres.base().result() : http::status();
+    auto rc = rres.base().result();
 
     reenter(this)
     {
       ec = ec_;
       if (!ec)
       {
-        state_ = std::allocate_shared<state_t>(self.get_allocator(),
-                                               method, path, std::move(body), std::move(req));
         prepare_initial_head_request(ec);
       }
       if (ec)
       {
+        ec_ = ec;
         yield asio::post(std::move(self));
-        return self.complete(ec, std::move(state_->res));
+        ec = ec_;
+        break;
       }
 
-      yield this_->async_single_request(state_->hreq, state_->rres, std::move(self));
+      yield this_->async_single_request(hreq, rres, std::move(self));
 
       while (!ec &&
            (opts.redirect >= redirect_mode::endpoint)
@@ -1112,14 +1082,14 @@ struct basic_connection<Stream>::async_request_op : asio::coroutine
         handle_redirect(ec);
         if (ec)
           goto complete;
-        yield this_->async_single_request(state_->hreq, state_->rres, std::move(self));
+        yield this_->async_single_request(hreq, rres, std::move(self));
       }
 
-      state_->res.buffer = std::move(state_->rres.body());
+      res.buffer = std::move(rres.body());
     complete:
-      state_->res.header = std::move(state_->rres.base());
-      self.complete(ec, std::move(state_->res));
+      res.header = std::move(rres.base());
     }
+    return res;
   }
 };
 
@@ -1145,13 +1115,12 @@ basic_connection<Stream>::async_request(beast::http::verb method,
                                         request_settings req,
                                         CompletionToken && completion_token)
 {
-  return asio::async_compose<CompletionToken, void(system::error_code, response)>(
-      async_request_op<typename request_body_traits<std::decay_t<RequestBody>>::body_type>{
-                                                  this, method, path,
-                                                  std::forward<RequestBody>(body),
-                                                  std::move(req)},
-      completion_token,
-      next_layer_
+  using op_t = async_request_op<typename request_body_traits<std::decay_t<RequestBody>>::body_type>;
+  return detail::co_run<op_t>(
+      std::forward<CompletionToken>(completion_token),
+      this, method, path,
+      std::forward<RequestBody>(body),
+      std::move(req)
   );
 }
 
@@ -1169,36 +1138,20 @@ struct basic_connection<Stream>::async_download_op : asio::coroutine
   filesystem::path download_path;
 
   request_settings req;
+  response_type res{req.get_allocator()};
+  beast::http::request<beast::http::empty_body, http::fields> hreq;
+  beast::http::response<beast::http::empty_body, http::fields> hres{beast::http::response_header<http::fields>{req.get_allocator()}};
+  beast::http::response<beast::http::file_body, http::fields>  fres{beast::http::response_header<http::fields>{req.get_allocator()}};
 
-  struct state_t
-  {
-    boost::container::pmr::polymorphic_allocator<char> alloc;
-    response_type res{alloc};
-    beast::http::request<beast::http::empty_body, http::fields> hreq;
-    beast::http::response<beast::http::empty_body, http::fields> hres{beast::http::response_header<http::fields>{alloc}};
-    beast::http::response<beast::http::file_body, http::fields>  fres{beast::http::response_header<http::fields>{alloc}};
-
-
-    state_t(urls::pct_string_view path,
-            request_settings req)
-          :  alloc(req.get_allocator()),
-            hreq{beast::http::verb::head, path, 11,
-                 beast::http::empty_body::value_type{},
-                 std::move(req.fields)}
-    {
-    }
-
-  };
-
-
-  std::shared_ptr<state_t> state_;
-
-  template<typename ... Args>
   async_download_op(basic_connection<Stream> * this_, urls::pct_string_view path,
                     const filesystem::path & download_path,
                     request_settings req)
       : this_(this_), jar(req.jar), opts(req.opts), path(path),
-        download_path(download_path)
+        download_path(download_path),
+        hreq{beast::http::verb::head, path, 11,
+             beast::http::empty_body::value_type{},
+             std::move(this->req.fields)}
+
   {
   }
 
@@ -1214,18 +1167,18 @@ struct basic_connection<Stream>::async_download_op : asio::coroutine
 
     // set mime-type
     {
-      auto hitr = state_->hreq.base().find(http::field::accept);
-      if (hitr == state_->hreq.base().end())
+      auto hitr = hreq.base().find(http::field::accept);
+      if (hitr == hreq.base().end())
       {
         const auto ext = download_path.extension().string();
         const auto &mp = default_mime_type_map();
         auto itr = mp.find(ext);
         if (itr != mp.end())
-          state_->hreq.base().set(http::field::accept, itr->second);
+          hreq.base().set(http::field::accept, itr->second);
       }
     }
 
-    state_->hreq.prepare_payload();
+    hreq.prepare_payload();
 
     if (jar)
      {
@@ -1235,27 +1188,27 @@ struct basic_connection<Stream>::async_download_op : asio::coroutine
 
       auto cc = jar->get(this_->host(), is_secure, path, alloc2);
       if (!cc.empty())
-        state_->hreq.base().set(http::field::cookie, cc);
+        hreq.base().set(http::field::cookie, cc);
       else
-        state_->hreq.base().erase(http::field::cookie);
+        hreq.base().erase(http::field::cookie);
     }
   }
 
   void handle_redirect(system::error_code & ec)
   {
-    auto loc_itr = state_->hres.base().find(http::field::location);
-    if (loc_itr == state_->hres.base().end())
+    auto loc_itr = hres.base().find(http::field::location);
+    if (loc_itr == hres.base().end())
     {
       static constexpr auto loc((BOOST_CURRENT_LOCATION));
       ec.assign(error::invalid_redirect, &loc);
-      state_->res.header = std::move(state_->hres);
+      res.header = std::move(hres);
       return ;
     }
-    const auto url = interpret_location(state_->hreq.target(), loc_itr->value());
+    const auto url = interpret_location(hreq.target(), loc_itr->value());
     if (url.has_error())
     {
       ec = url.error();
-      state_->res.header = std::move(state_->hres);
+      res.header = std::move(hres);
       return ;
     }
     // we don't need to use should_redirect, bc we're on the same host.
@@ -1265,7 +1218,7 @@ struct basic_connection<Stream>::async_download_op : asio::coroutine
     {
       static constexpr auto sloc((BOOST_CURRENT_LOCATION));
       ec.assign(error::forbidden_redirect, &sloc);
-      state_->res.header = std::move(state_->hres);
+      res.header = std::move(hres);
       return ;
     }
 
@@ -1273,12 +1226,12 @@ struct basic_connection<Stream>::async_download_op : asio::coroutine
     {
       static constexpr auto sloc((BOOST_CURRENT_LOCATION));
       ec.assign(error::too_many_redirects, &sloc);
-      state_->res.header = std::move(state_->hres);
+      res.header = std::move(hres);
       return ;
     }
-    state_->res.history.emplace_back(std::move(state_->hres.base()));
+    res.history.emplace_back(std::move(hres.base()));
 
-    state_->hreq.base().target(url->encoded_path());
+    hreq.base().target(url->encoded_path());
     if (jar)
     {
       unsigned char buf[4096];
@@ -1286,30 +1239,31 @@ struct basic_connection<Stream>::async_download_op : asio::coroutine
       container::pmr::polymorphic_allocator<char> alloc2{&memres};
       auto cc = jar->get(this_->host(), is_secure, url->encoded_path(), alloc2);
       if (!cc.empty())
-        state_->hreq.base().set(http::field::cookie, cc);
+        hreq.base().set(http::field::cookie, cc);
       else
-        state_->hreq.base().erase(http::field::cookie);
+        hreq.base().erase(http::field::cookie);
     }
   }
 
-  template<typename Self>
-  void operator()(Self && self, boost::system::error_code ec = {})
+  using completion_signature_type = void(system::error_code, response);
+  using step_signature_type       = void(system::error_code);
+
+  auto resume(requests::detail::co_token_t<step_signature_type> self,
+              boost::system::error_code & ec) -> response_type &
   {
-    const auto rc = state_ ? state_->hres.result() : http::status();
+    const auto rc = hres.result();
 
     reenter(this)
     {
-      state_ = std::allocate_shared<state_t>(self.get_allocator(), path, std::move(req));
       prepare_initial_request(ec);
       if (ec)
       {
         yield asio::post(asio::append(std::move(self), ec));
-        return self.complete(ec, std::move(state_->res));
+        return res;
       }
-      yield this_->async_single_request(state_->hreq, state_->hres, std::move(self));
-
+      yield this_->async_single_request(hreq, hres, std::move(self));
       if (ec)
-        return self.complete(ec, std::move(state_->res));
+        return res;
 
       while ((opts.redirect >= redirect_mode::endpoint) &&
             ((rc == http::status::moved_permanently) || (rc == http::status::found) ||
@@ -1317,32 +1271,23 @@ struct basic_connection<Stream>::async_download_op : asio::coroutine
       {
         handle_redirect(ec);
         if (ec)
-          goto complete;
-        yield this_->async_single_request(state_->hreq, state_->hres, std::move(self));
+          break;
+        yield this_->async_single_request(hreq, hres, std::move(self));
       }
 
       if (!ec)
       {
-        {
-          auto str = download_path.string();
-          state_->hreq.method(beast::http::verb::get);
-          state_->fres.body().open(str.c_str(), beast::file_mode::write, ec);
-        }
-        if (ec)
-          goto complete;
-        yield this_->async_single_request(state_->hreq, state_->fres, std::move(self));
-        state_->res.header = std::move(state_->fres.base());
-        auto res = std::move(state_->res);
-        state_ = nullptr;
-        return self.complete(ec, std::move(res));
+        auto str = download_path.string();
+        hreq.method(beast::http::verb::get);
+        fres.body().open(str.c_str(), beast::file_mode::write, ec);
       }
-      else complete:
+      if (!ec)
       {
-        auto res = std::move(state_->res);
-        state_ = {};
-        return self.complete(ec, std::move(res));
+        yield this_->async_single_request(hreq, fres, std::move(self));
+        res.header = std::move(fres.base());
       }
     }
+    return res;
   }
 };
 
@@ -1356,12 +1301,8 @@ basic_connection<Stream>::async_download(urls::pct_string_view path,
                                          filesystem::path download_path,
                                          CompletionToken && completion_token)
 {
-  return asio::async_compose<CompletionToken,
-                             void(system::error_code, response)>(
-      async_download_op{this, path, std::move(download_path), std::move(req)},
-      completion_token,
-      next_layer_
-  );
+  return detail::co_run<async_download_op>(
+      std::forward<CompletionToken>(completion_token), this, path, std::move(download_path), std::move(req));
 }
 
 #if !defined(BOOST_REQUESTS_HEADER_ONLY)
@@ -1504,22 +1445,13 @@ struct basic_connection<Stream>::async_ropen_op
 
   using body_type = RequestBody;
 
-  template<typename Self>
-  void complete(Self && self, error_code ec)
-  {
-    alock = {};
-    lock = {};
-    req = nullptr;
-    self.complete(ec, std::move(str));
-  }
-
   system::error_code ec_;
 
-  beast::http::request<body_type, http::fields> req_init;
-  std::shared_ptr<beast::http::request<body_type, http::fields>> req;
+  beast::http::request<body_type, http::fields> req;
 
   lock_type lock;
   boost::optional<lock_type> alock;
+  asio::coroutine inner_coro;
 
 
   template<typename RequestBody_>
@@ -1565,10 +1497,9 @@ struct basic_connection<Stream>::async_ropen_op
         req.fields.set(http::field::cookie, cc);
     }
 
-    beast::http::request<body_type, http::fields> hreq(
-                                    method, path, 11,
-                                    body_traits::make_body(std::forward<RequestBody_>(body), ec),
-                                    std::move(req.fields));
+    http::request<body_type> hreq(method, path, 11,
+                                  body_traits::make_body(std::forward<RequestBody_>(body), ec),
+                                  std::move(req.fields));
 
     hreq.set(beast::http::field::host, host);
     hreq.set(beast::http::field::user_agent, "Requests-" BOOST_BEAST_VERSION_STRING);
@@ -1584,43 +1515,28 @@ struct basic_connection<Stream>::async_ropen_op
                  RequestBody_ && body,
                  request_settings req)
       : this_(this_),
-        req_init(prepare_request(method, path, this_->host(), std::forward<RequestBody_>(body), std::move(req), ec_))
+        req(prepare_request(method, path, this_->host(), std::forward<RequestBody_>(body), std::move(req), ec_))
   {
   }
 
-  template<typename Self>
-  void operator()(Self && self, system::error_code ec = {}, lock_type lock_ = {})
-  {
-    step(std::forward<Self>(self), ec);
-    if (is_complete())
-      complete(std::move(self), ec);
-  }
+  using completion_signature_type = void(system::error_code, stream);
+  using step_signature_type       = void(system::error_code, std::size_t);
 
-  template<typename Self>
-  void operator()(Self && self, system::error_code ec, std::size_t)
-  {
-    step(std::forward<Self>(self), ec);
-    if (is_complete())
-      complete(std::move(self), ec);
-  }
-
-  template<typename Self>
-  void step(Self && self, system::error_code & ec)
+  auto resume(requests::detail::co_token_t<step_signature_type> self, system::error_code & ec,
+              std::size_t res_ = 0u) -> stream
   {
     reenter(this)
     {
-      req = std::allocate_shared<beast::http::request<body_type, http::fields>>(self.get_allocator(), std::move(req_init));
-
       if (ec_)
       {
         yield asio::post(this_->get_executor(), std::move(self));
         ec = ec_;
-        return ;
+        return stream{this_};
       }
 
       yield this_->write_mtx_.async_lock(std::move(self));
       if (ec)
-        return;
+        return stream{this_};
 
       lock = {this_->write_mtx_, std::adopt_lock};
 
@@ -1629,7 +1545,7 @@ struct basic_connection<Stream>::async_ropen_op
       {
         yield this_->read_mtx_.async_lock(std::move(self));
         if (ec)
-          return;
+          return stream{this_};
         alock.emplace(this_->read_mtx_, std::adopt_lock);
         // if the close goes wrong - so what, unless it's still open
         detail::close_impl(this_->next_layer_, ec);
@@ -1644,41 +1560,43 @@ struct basic_connection<Stream>::async_ropen_op
         {
           yield this_->read_mtx_.async_lock(std::move(self));
           if (ec)
-            return;
+            return stream{this_};
           alock.emplace(this_->read_mtx_, std::adopt_lock);
         }
-        detail::connect_impl(this_->next_layer_, this_->endpoint_, ec);
+        inner_coro = {};
+        while (!inner_coro.is_complete())
+          yield detail::async_connect_impl(&inner_coro, this_->next_layer_, this_->endpoint_, std::move(self));
         if (ec)
-          return;
+          return stream{this_};
       }
 
       alock.reset();
-      yield beast::http::async_write(this_->next_layer_, *req, std::move(self));
+      yield beast::http::async_write(this_->next_layer_, req, std::move(self));
 
       if (ec == asio::error::broken_pipe || ec == asio::error::connection_reset)
         goto retry ;
-      else  if (ec)
-        return;
+      else if (ec)
+        return stream{this_};
 
       // release after acquire!
       yield this_->read_mtx_.async_lock(std::move(self));
 
       if (ec)
-        return;
+        return stream{this_};
 
       str.lock_ = {this_->read_mtx_, std::adopt_lock};
       lock = {};
 
-
-
-      str.parser_ = std::make_unique<http::response_parser<http::buffer_body>>(http::response_header{http::fields{req->get_allocator()}});
+      str.parser_ = std::make_unique<http::response_parser<http::buffer_body>>(http::response_header{http::fields{req.get_allocator()}});
       str.parser_->get().body().data = nullptr;
       str.parser_->get().body().size = 0u;
       str.parser_->get().body().more = true;
 
       yield beast::http::async_read_header(this_->next_layer_, this_->buffer_, *str.parser_, std::move(self));
-      return;
+      return std::move(str);
     }
+    return stream{this_};
+
   }
 };
 
@@ -1692,16 +1610,14 @@ basic_connection<Stream>::async_ropen(
       urls::pct_string_view path,
       RequestBody && body,
       request_settings req,
-      CompletionToken && token)
+      CompletionToken && completion_token)
 {
-  return asio::async_compose<CompletionToken, void(system::error_code, stream)>(
-      async_ropen_op<typename request_body_traits<std::decay_t<RequestBody>>::body_type>{
-            this, method, path,
-            std::forward<RequestBody>(body),
-            std::move(req)},
-      token,
-      next_layer_
-  );
+  using rp = async_ropen_op<typename request_body_traits<std::decay_t<RequestBody>>::body_type>;
+  return detail::co_run<rp>(
+      std::forward<CompletionToken>(completion_token),
+      this, method, path,
+      std::forward<RequestBody>(body),
+      std::move(req));
 }
 
 template<typename Stream>
@@ -1789,37 +1705,53 @@ void basic_connection<Stream>::stream::dump(system::error_code & ec)
 
 
 template<typename Stream>
-template<typename MutableBufferSequence>
 struct basic_connection<Stream>::stream::async_read_some_op : asio::coroutine
 {
   stream * this_;
-  const MutableBufferSequence & buffer;
+  asio::mutable_buffer buffer;
+
+  template<typename MutableBufferSequence>
+  async_read_some_op(stream * this_, const MutableBufferSequence & buffer) : this_(this_)
+  {
+    auto itr = boost::asio::buffer_sequence_begin(buffer);
+    const auto end = boost::asio::buffer_sequence_end(buffer);
+
+    while (itr != end)
+    {
+      if (itr->size() != 0u)
+      {
+        this->buffer = *itr;
+        break;
+      }
+    }
+  }
 
   using lock_type = asem::lock_guard<detail::basic_mutex<executor_type>>;
   lock_type lock;
   system::error_code ec_;
 
-  template<typename Self>
-  void operator()(Self && self, system::error_code ec = {}, std::size_t res = 0u)
+
+  using completion_signature_type = void(system::error_code, std::size_t);
+  using step_signature_type       = void(system::error_code, std::size_t);
+
+  std::size_t resume(requests::detail::co_token_t<step_signature_type> self,
+                     system::error_code & ec, std::size_t res = 0u)
   {
-    auto itr = boost::asio::buffer_sequence_begin(buffer);
-    const auto end = boost::asio::buffer_sequence_end(buffer);
 
     reenter(this)
     {
       if (!this_->parser_ || !this_->parser_->get().body().more)
       {
         yield asio::post(this_->get_executor(), std::move(self));
-        return self.complete(asio::error::eof, 0u);
-      }
-      if (itr == end)
-      {
-        yield asio::post(this_->get_executor(), std::move(self));
-        return self.complete({}, 0u);
+        ec = asio::error::eof;
+        return 0u;
       }
 
-      this_->parser_->get().body().data = itr->data();
-      this_->parser_->get().body().size = itr->size();
+      if (buffer.size() == 0u)
+        return 0u;
+
+      this_->parser_->get().body().data = buffer.data();
+      this_->parser_->get().body().size = buffer.size();
 
       yield beast::http::async_read_some(this_->connection_->next_layer_, this_->connection_->buffer_,
                                          *this_->parser_, std::move(self));
@@ -1837,7 +1769,10 @@ struct basic_connection<Stream>::stream::async_read_some_op : asio::coroutine
           ec_ = ec ;
           yield this_->connection_->write_mtx_.async_lock(std::move(self));
           if (ec)
-            return self.complete(ec_, res);
+          {
+            ec = ec_;
+            return 0u;
+          }
           lock = {this_->connection_->write_mtx_, std::adopt_lock};
 
           if (!ec_)
@@ -1848,8 +1783,9 @@ struct basic_connection<Stream>::stream::async_read_some_op : asio::coroutine
           lock = {};
         }
       }
-      self.complete(ec, res);
+      return res;
     }
+    return 0u;
   }
 
 };
@@ -1863,11 +1799,7 @@ basic_connection<Stream>::stream::async_read_some(
     const MutableBufferSequence & buffers,
     CompletionToken && token)
 {
-  return asio::async_compose<CompletionToken, void(system::error_code, std::size_t)>(
-      async_read_some_op<MutableBufferSequence>{{}, this, buffers},
-      token,
-      connection_->next_layer_
-  );
+  return detail::co_run<async_read_some_op>(std::forward<CompletionToken>(token), this, buffers);
 }
 
 
@@ -1882,15 +1814,20 @@ struct basic_connection<Stream>::stream::async_dump_op : asio::coroutine
   lock_type lock;
   system::error_code ec_;
 
-  template<typename Self>
-  void operator()(Self && self, system::error_code ec = {}, std::size_t n = 0u)
+  async_dump_op(stream * this_) : this_(this_) {}
+
+  using completion_signature_type = void(system::error_code);
+  using step_signature_type       = void(system::error_code, std::size_t);
+
+  void resume(requests::detail::co_token_t<step_signature_type> self,
+              system::error_code ec = {}, std::size_t n = 0u)
   {
     reenter(this)
     {
       if (!this_->parser_)
       {
-        yield asio::post(this_->connection_->get_executor(), std::move(self));
-        return self.complete(ec);
+        yield asio::post(this_->connection_->get_executor(), asio::append(std::move(self), asio::error::service_not_found));
+        return ;
       }
       buffer = std::allocate_shared<char[65535]>(self.get_allocator());
       while (this_->parser_->get().body().more)
@@ -1916,18 +1853,18 @@ struct basic_connection<Stream>::stream::async_dump_op : asio::coroutine
         ec_ = ec ;
         yield this_->connection_->write_mtx_.async_lock(std::move(self));
         if (ec)
-          return self.complete(ec_);
+        {
+          ec_ = ec;
+          return ;
+        }
         lock = {this_->connection_->write_mtx_, std::adopt_lock};
 
         if (!ec_)
         {
           yield  detail::async_close_impl(this_->connection_->next_layer_, std::move(self));
         }
-
-        return self.complete(ec_);
+        ec = ec_;
       }
-
-      return self.complete(ec);
     }
 
   }
@@ -1939,11 +1876,7 @@ template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code)) Compl
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code))
 basic_connection<Stream>::stream::async_dump(CompletionToken && token)
 {
-  return asio::async_compose<CompletionToken, void(system::error_code)>(
-      async_dump_op{{}, this},
-      token,
-      connection_->next_layer_
-      );
+  return detail::co_run<async_dump_op>(std::forward<CompletionToken>(token), this);
 }
 
 

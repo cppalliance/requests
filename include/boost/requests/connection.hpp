@@ -464,9 +464,10 @@ struct basic_connection<Stream>::stream
   ~stream();
 
   const http::response_header &headers() const { return parser_->get().base(); }
-  bool done() const {return !parser_->get().body().more;}
+  bool done() const {return !parser_ || !parser_->get().body().more;}
   explicit stream(std::nullptr_t ) : connection_(nullptr) {}
  private:
+
   stream(basic_connection<Stream> * connection) : connection_(connection) {}
   basic_connection<Stream> * connection_;
   std::unique_ptr<http::response_parser<http::buffer_body>> parser_;
@@ -477,8 +478,6 @@ struct basic_connection<Stream>::stream
   struct basic_connection<Stream>;
 
   struct async_dump_op;
-
-  template<typename MutableBufferSequence>
   struct async_read_some_op;
 };
 

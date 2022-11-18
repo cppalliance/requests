@@ -478,46 +478,19 @@ struct basic_session<Executor>::async_request_op : asio::coroutine
   system::error_code ec_;
   using body_type = RequestBody;
 
-  typename body_type::value_type body;
-  http::fields req;
-
   const bool is_secure = (url.scheme_id() == urls::scheme::https)
                       || (url.scheme_id() == urls::scheme::wss);
 
-
-  struct state_t
-  {
-    using allocator_type = container::pmr::polymorphic_allocator<char>;
-    allocator_type alloc;
+  using response_type = response ;
+  response_type res;
 
 
-    //using body_traits = request_body_traits<std::decay_t<RequestBody>>;
-    using response_type = response ;
-    response_type res;
-
-    beast::http::request<body_type, http::fields> hreq;
-    using flat_buffer = beast::basic_flat_buffer<allocator_type>;
-    using res_body = beast::http::basic_dynamic_body<flat_buffer>;
-    beast::http::response<res_body, http::fields> rres{beast::http::response_header<http::fields>{alloc},
-                                                       flat_buffer{alloc}};
-
-    urls::url url_cache;
-
-    template<typename RequestBody_>
-    state_t(beast::http::verb v,
-            urls::pct_string_view path,
-            RequestBody_ && body,
-            requests::request_settings req)
-        :  alloc(req.get_allocator()),
-          res{req.get_allocator()},
-          hreq{v, path, 11,
-               std::forward<RequestBody_>(body),
-               std::move(req.fields)}
-    {
-    }
-  };
-
-  std::shared_ptr<state_t> state_;
+  http::request<body_type> hreq;
+  using flat_buffer = beast::basic_flat_buffer<container::pmr::polymorphic_allocator<char>>;
+  using res_body = beast::http::basic_dynamic_body<flat_buffer>;
+  http::response<res_body> rres{beast::http::response_header<http::fields>{hreq.get_allocator()},
+                                flat_buffer{hreq.get_allocator()}};
+  urls::url url_cache;
 
   template<typename RequestBody_>
   async_request_op(basic_session<Executor> * this_,
@@ -527,8 +500,11 @@ struct basic_session<Executor>::async_request_op : asio::coroutine
                    http::fields req)
       : this_(this_), method(v), opts(this_->options_), url(url),
         default_mime_type(request_body_traits<std::decay_t<RequestBody_>>::default_content_type(body)),
-        body(request_body_traits<std::decay_t<RequestBody_>>::make_body(std::forward<RequestBody_>(body), ec_)),
-        req(std::move(req))
+        res{req.get_allocator()},
+        hreq{v, url.encoded_resource(), 11,
+             request_body_traits<std::decay_t<RequestBody_>>::make_body(std::forward<RequestBody_>(body), ec_),
+             this_->make_request_(std::move(req)).fields}
+
   {
   }
 
@@ -541,14 +517,16 @@ struct basic_session<Executor>::async_request_op : asio::coroutine
                    http::fields req)
       : this_(this_), method(v), opts(this_->options_),
         default_mime_type(request_body_traits<std::decay_t<RequestBody_>>::default_content_type(body)),
-        body(request_body_traits<std::decay_t<RequestBody_>>::make_body(std::forward<RequestBody_>(body), ec_)),
-        req(std::move(req))
+        hreq{v, "", 11,
+             request_body_traits<std::decay_t<RequestBody_>>::make_body(std::forward<RequestBody_>(body), ec_),
+             this_->make_request_(std::move(req))}
   {
     auto u = urls::parse_uri(url);
     if (u.has_error())
       ec_ = u.error();
     else
       this->url = u.value();
+    hreq.target(this->url.encoded_resource());
   }
 
   void prepare_initial_head_request(error_code & ec)
@@ -563,10 +541,10 @@ struct basic_session<Executor>::async_request_op : asio::coroutine
     }
 
     {
-      auto itr = state_->hreq.base().find(http::field::content_type);
-      if (itr == state_->hreq.base().end() && !default_mime_type.empty()) {
+      auto itr = hreq.base().find(http::field::content_type);
+      if (itr == hreq.base().end() && !default_mime_type.empty()) {
         if (!default_mime_type.empty())
-          state_->hreq.base().set(http::field::content_type, default_mime_type);
+          hreq.base().set(http::field::content_type, default_mime_type);
       }
     }
 
@@ -576,25 +554,25 @@ struct basic_session<Executor>::async_request_op : asio::coroutine
       container::pmr::polymorphic_allocator<char> alloc2{&memres};
       auto cc = this_->jar_.get(url.encoded_host(), is_secure, url.encoded_target(), alloc2);
       if (!cc.empty())
-        state_->hreq.base().set(http::field::cookie, cc);
+        hreq.base().set(http::field::cookie, cc);
       else
-        state_->hreq.base().erase(http::field::cookie);
+        hreq.base().erase(http::field::cookie);
     }
-    state_->hreq.prepare_payload();
+    hreq.prepare_payload();
   }
 
 
   void handle_redirect(system::error_code & ec)
   {
-    auto loc_itr = state_->rres.base().find(http::field::location);
+    auto loc_itr = rres.base().find(http::field::location);
 
-    if (loc_itr == state_->rres.base().end())
+    if (loc_itr == rres.base().end())
     {
       static constexpr auto loc((BOOST_CURRENT_LOCATION));
       ec.assign(error::invalid_redirect, &loc);
       return;
     }
-    const auto nurl = interpret_location(state_->hreq.target(), loc_itr->value());
+    const auto nurl = interpret_location(hreq.target(), loc_itr->value());
     if (nurl.has_error())
     {
       ec = nurl.error();
@@ -612,10 +590,10 @@ struct basic_session<Executor>::async_request_op : asio::coroutine
       url = *nurl;
     else
     {
-      state_->url_cache = url;
-      state_->url_cache.set_encoded_path(nurl->encoded_path());
-      state_->url_cache.set_encoded_query(nurl->encoded_query());
-      url = state_->url_cache;
+      url_cache = url;
+      url_cache.set_encoded_path(nurl->encoded_path());
+      url_cache.set_encoded_query(nurl->encoded_query());
+      url = url_cache;
     }
 
 
@@ -633,13 +611,13 @@ struct basic_session<Executor>::async_request_op : asio::coroutine
 
       auto cc = this_->jar_.get(url.encoded_host(), is_secure, url.encoded_path(), alloc2);
       if (!cc.empty())
-        state_->hreq.base().set(http::field::cookie, cc);
+        hreq.base().set(http::field::cookie, cc);
       else
-        state_->hreq.base().erase(http::field::cookie);
+        hreq.base().erase(http::field::cookie);
     }
 
-    state_->res.history.emplace_back(std::move(state_->rres.base()));
-    state_->hreq.base().target(url.encoded_path());
+    res.history.emplace_back(std::move(rres.base()));
+    hreq.base().target(url.encoded_path());
   }
 
 
@@ -647,27 +625,25 @@ struct basic_session<Executor>::async_request_op : asio::coroutine
       std::shared_ptr<typename basic_http_connection_pool<Executor>::connection_type>,
       std::shared_ptr<typename basic_https_connection_pool<Executor>::connection_type>>;
 
-  template<typename Self>
-  void operator()(Self && self, system::error_code ec= {})
+  using completion_signature_type = void(system::error_code, response);
+  using step_signature_type       = void(system::error_code);
+
+  auto resume(requests::detail::co_token_t<step_signature_type> self,
+              system::error_code & ec) -> response &
   {
-    auto rc = state_ ?  state_->rres.base().result() : http::status();
+    auto rc = rres.base().result();
 
     reenter(this)
     {
-      ec = ec_;
-      if (!ec)
-      {
-        state_ = std::allocate_shared<state_t>(self.get_allocator(),
-                                               method, url.encoded_resource(), std::move(body),
-                                               this_->make_request_(std::move(req)));
-        prepare_initial_head_request(ec);
-      }
-      if (ec)
+      if (!ec_)
+        prepare_initial_head_request(ec_);
+      if (ec_)
       {
         yield asio::post(std::move(self));
+        ec = ec_;
         goto complete ;
       }
-      yield detail::async_single_request(this_, state_->hreq, state_->rres, url, std::move(self));
+      yield detail::async_single_request(this_, hreq, rres, url, std::move(self));
       while (!ec &&
              (opts.redirect >= redirect_mode::endpoint)
              && ((rc == http::status::moved_permanently)
@@ -679,16 +655,14 @@ struct basic_session<Executor>::async_request_op : asio::coroutine
         if (ec)
           goto complete;
 
-        yield detail::async_single_request(this_, state_->hreq, state_->rres, url, std::move(self));
+        yield detail::async_single_request(this_, hreq, rres, url, std::move(self));
       }
 
-      state_->res.buffer = std::move(state_->rres.body());
+      res.buffer = std::move(rres.body());
     complete:
-      state_->res.header = std::move(state_->rres.base());
-      auto res = std::move(state_->res);
-      state_ = nullptr;
-      self.complete(ec, std::move(res));
+      res.header = std::move(rres.base());
     }
+    return res;
   }
 };
 
@@ -713,12 +687,10 @@ basic_session<Executor>::async_request(beast::http::verb method,
                                        http::fields req,
                                        CompletionToken && completion_token)
 {
-  return asio::async_compose<CompletionToken, void(system::error_code, response)>(
-      async_request_op<typename request_body_traits<std::decay_t<RequestBody>>::body_type>{
-            this, method, path, std::forward<RequestBody>(body), std::move(req)},
-      completion_token,
-      mutex_
-  );
+  using op_t = async_request_op<typename request_body_traits<std::decay_t<RequestBody>>::body_type>;
+  return detail::co_run<op_t>(
+      std::forward<CompletionToken>(completion_token),
+      this, method, path, std::forward<RequestBody>(body), std::move(req));
 }
 
 
@@ -735,12 +707,10 @@ basic_session<Executor>::async_request(beast::http::verb method,
                                        http::fields req,
                                        CompletionToken && completion_token)
 {
-  return asio::async_compose<CompletionToken, void(system::error_code, response)>(
-      async_request_op<typename request_body_traits<std::decay_t<RequestBody>>::body_type>{
-            this, method, path, std::forward<RequestBody>(body), std::move(req)},
-      completion_token,
-      mutex_
-  );
+  using op_t = async_request_op<typename request_body_traits<std::decay_t<RequestBody>>::body_type>;
+  return detail::co_run<op_t>(
+      std::forward<CompletionToken>(completion_token),
+      this, method, path, std::forward<RequestBody>(body), std::move(req));
 }
 
 

@@ -12,6 +12,7 @@
 #include "doctest.h"
 #include <boost/core/detail/string_view.hpp>
 #include <boost/requests/fields/set_cookie.hpp>
+#include <boost/asio/multiple_exceptions.hpp>
 #include <boost/system/result.hpp>
 #include <boost/json.hpp>
 
@@ -111,8 +112,14 @@ struct StringMaker<std::exception_ptr>
   static String convert(std::exception_ptr e)
   {
     if (e)
-        try {
+        try
+        {
           std::rethrow_exception(e);
+        }
+        catch(boost::asio::multiple_exceptions & me)
+        {
+           return convert(me.first_exception());
+
         }
         catch(std::exception & ex)
         {
