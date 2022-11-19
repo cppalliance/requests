@@ -267,7 +267,6 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
 
     using target_view = urls::pct_string_view;
     using request_type = request_settings;
-#include <boost/requests/detail/alias.def>
 
     std::shared_ptr<connection_type> get_connection(error_code & ec);
     std::shared_ptr<connection_type> get_connection()

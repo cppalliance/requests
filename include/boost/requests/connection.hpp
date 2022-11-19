@@ -302,7 +302,6 @@ struct basic_connection
 
     using target_view = urls::pct_string_view;
     using request_type = request_settings;
-#include <boost/requests/detail/alias.def>
 
     struct stream;
 

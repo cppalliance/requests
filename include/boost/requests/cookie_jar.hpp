@@ -190,7 +190,7 @@ struct cookie_jar final
 
     void drop_expired(const std::chrono::system_clock::time_point nw = std::chrono::system_clock::now())
     {
-        for (auto itr = content.begin(); itr != content.end(); itr ++)
+        for (auto itr = content.begin(); itr != content.end();)
         {
             if (itr->expiry_time < nw)
                 itr = content.erase(itr);

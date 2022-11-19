@@ -5,6 +5,7 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
+#include <boost/requests/method.hpp>
 #include <boost/requests/service.hpp>
 #include <boost/url/parse.hpp>
 #include <boost/asio/thread_pool.hpp>
@@ -25,7 +26,7 @@ TEST_CASE("session")
 
   asio::any_io_executor exec{ctx.get_executor()};
 
-  requests::default_session(exec).get("https://httpbin.org", {});
+  get(requests::default_session(exec), "https://httpbin.org", {});
   requests::default_session(tp.get_executor());
   requests::default_session(ctx.get_executor() );
 }

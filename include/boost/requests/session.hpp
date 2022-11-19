@@ -217,13 +217,7 @@ struct basic_session
                    CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
 
     using request_type = http::fields;
-#define target_view urls::url_view
-#include <boost/requests/detail/alias.def>
-#undef target_view
-#define target_view core::string_view
-#include <boost/requests/detail/alias.def>
-#undef target_view
-
+    using target_view =  core::string_view;
 
     // possibly make it a distinct return type.
     using pool_ptr = variant2::variant<std::shared_ptr<basic_http_connection_pool<Executor>>,
@@ -502,8 +496,6 @@ private:
 
   friend struct basic_session<Executor>;
 };
-
-
 
 typedef basic_session<> session;
 

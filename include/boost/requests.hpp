@@ -24,5 +24,6 @@
 #include <boost/requests/response.hpp>
 #include <boost/requests/service.hpp>
 #include <boost/requests/session.hpp>
+#include <boost/requests/method.hpp>
 
 #endif //BOOST_REQUESTS_HPP

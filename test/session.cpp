@@ -3,6 +3,7 @@
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
+#include <boost/requests/method.hpp>
 #include <boost/requests/session.hpp>
 #include <boost/requests/form.hpp>
 #include <boost/json.hpp>
@@ -109,7 +110,7 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
 
   SUBCASE("get")
   {
-    auto hdr = hc.get(u("/get"), requests::headers({{"Test-Header", "it works"}}));
+    auto hdr = get(hc, u("/get"), requests::headers({{"Test-Header", "it works"}}));
 
     auto hd = hdr.json().at("headers");
 
@@ -119,7 +120,7 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
 
   SUBCASE("get-redirect")
   {
-    auto hdr = hc.get(u("/redirect-to?url=%2Fget"), requests::headers({{"Test-Header", "it works"}}));
+    auto hdr = get(hc, u("/redirect-to?url=%2Fget"), requests::headers({{"Test-Header", "it works"}}));
 
     CHECK(hdr.history.size() == 1u);
     CHECK(hdr.history.at(0u).at(beast::http::field::location) == "/get");
@@ -133,7 +134,7 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
   SUBCASE("too-many-redirects")
   {
     system::error_code ec;
-    auto res = hc.get(u("/redirect/10"), {}, ec);
+    auto res = get(hc, u("/redirect/10"), {}, ec);
     CHECK(res.history.size() == 4);
     CHECK(beast::http::to_status_class(res.header.result()) == beast::http::status_class::redirection);
     CHECK(ec == requests::error::too_many_redirects);
@@ -199,7 +200,7 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
 
   SUBCASE("delete")
   {
-    auto hdr = hc.delete_(u("/delete"), json::value{{"test-key", "test-value"}}, {});
+    auto hdr = delete_(hc, u("/delete"), json::value{{"test-key", "test-value"}}, {});
 
     auto js = hdr.json();
     CHECK(beast::http::to_status_class(hdr.header.result()) == beast::http::status_class::successful);
@@ -209,7 +210,7 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
   SUBCASE("patch-json")
   {
     json::value msg {{"test-key", "test-value"}};
-    auto hdr = hc.patch(u("/patch"), msg, {});
+    auto hdr = patch(hc, u("/patch"), msg, {});
 
     auto js = hdr.json();
     CHECK(hdr.header.result() == beast::http::status::ok);
@@ -219,7 +220,7 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
 
   SUBCASE("patch-form")
   {
-    auto hdr = hc.patch(u("/patch"),
+    auto hdr = patch(hc, u("/patch"),
                         requests::form{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}},
                         {});
 
@@ -232,7 +233,7 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
   SUBCASE("put-json")
   {
     json::value msg {{"test-key", "test-value"}};
-    auto hdr = hc.put(u("/put"), msg, {});
+    auto hdr = put(hc, u("/put"), msg, {});
 
     auto js = hdr.json();
     CHECK(hdr.header.result() == beast::http::status::ok);
@@ -242,7 +243,7 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
 
   SUBCASE("put-form")
   {
-    auto hdr = hc.put(u("/put"),
+    auto hdr = put(hc, u("/put"),
                       requests::form{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}},
                       {});
 
@@ -255,7 +256,7 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
   SUBCASE("post-json")
   {
     json::value msg {{"test-key", "test-value"}};
-    auto hdr = hc.post(u("/post"), msg, {});
+    auto hdr = post(hc, u("/post"), msg, {});
 
     auto js = hdr.json();
     CHECK(hdr.header.result() == beast::http::status::ok);
@@ -265,7 +266,7 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
 
   SUBCASE("post-form")
   {
-    auto hdr = hc.post(u("/post"),
+    auto hdr = post(hc, u("/post"),
                        requests::form{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}},
                        {});
 
@@ -302,7 +303,7 @@ asio::awaitable<void> async_http_pool_request()
   auto get_ = [](requests::basic_session<exec_t> & hc, core::string_view url) -> asio::awaitable<void>
   {
     auto h = requests::headers({{"Test-Header", "it works"}});
-    auto hdr = co_await hc.async_get(u("/get"), h);
+    auto hdr = co_await async_get(hc, u("/get"), h);
 
     auto hd = hdr.json().at("headers");
 
@@ -314,7 +315,7 @@ asio::awaitable<void> async_http_pool_request()
   auto get_redirect = [](requests::basic_session<exec_t> & hc, core::string_view url) -> asio::awaitable<void>
   {
     auto h = requests::headers({{"Test-Header", "it works"}});
-    auto hdr = co_await hc.async_get(u("/redirect-to?url=%2Fget"), h);
+    auto hdr = co_await async_get(hc, u("/redirect-to?url=%2Fget"), h);
 
     CHECK(hdr.history.size() == 1u);
     CHECK(hdr.history.at(0u).at(beast::http::field::location) == "/get");
@@ -329,7 +330,7 @@ asio::awaitable<void> async_http_pool_request()
   {
     system::error_code ec;
 
-    auto res = co_await hc.async_get(u("/redirect/10"), {},
+    auto res = co_await async_get(hc, u("/redirect/10"), {},
                                      asio::redirect_error(asio::use_awaitable, ec));
     CHECK(res.history.size() == 2);
     CHECK(beast::http::to_status_class(res.header.result()) == beast::http::status_class::redirection);
@@ -401,7 +402,7 @@ asio::awaitable<void> async_http_pool_request()
   auto delete_ = [](requests::basic_session<exec_t> & hc, core::string_view url) -> asio::awaitable<void>
   {
     json::value v{{"test-key", "test-value"}};
-    auto hdr = co_await hc.async_delete(u("/delete"), v, {});
+    auto hdr = co_await async_delete(hc, u("/delete"), v, {});
 
     auto js = hdr.json();
     CHECK(beast::http::to_status_class(hdr.header.result()) == beast::http::status_class::successful);
@@ -411,7 +412,7 @@ asio::awaitable<void> async_http_pool_request()
   auto patch_json = [](requests::basic_session<exec_t> & hc, core::string_view url) -> asio::awaitable<void>
   {
     json::value msg {{"test-key", "test-value"}};
-    auto hdr = co_await hc.async_patch(u("/patch"), msg, {});
+    auto hdr = co_await async_patch(hc, u("/patch"), msg, {});
 
     auto js = hdr.json();
     CHECK(hdr.header.result() == beast::http::status::ok);
@@ -422,7 +423,7 @@ asio::awaitable<void> async_http_pool_request()
   auto patch_form = [](requests::basic_session<exec_t> & hc, core::string_view url) -> asio::awaitable<void>
   {
     requests::form f{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}};
-    auto hdr = co_await hc.async_patch(u("/patch"), f, {});
+    auto hdr = co_await async_patch(hc, u("/patch"), f, {});
 
     auto js = hdr.json();
     CHECK(hdr.header.result() == beast::http::status::ok);
@@ -433,7 +434,7 @@ asio::awaitable<void> async_http_pool_request()
   auto put_json = [](requests::basic_session<exec_t> & hc, core::string_view url) -> asio::awaitable<void>
   {
     json::value msg {{"test-key", "test-value"}};
-    auto hdr = co_await hc.async_put(u("/put"), msg, {});
+    auto hdr = co_await async_put(hc, u("/put"), msg, {});
 
     auto js = hdr.json();
     CHECK(hdr.header.result() == beast::http::status::ok);
@@ -444,7 +445,7 @@ asio::awaitable<void> async_http_pool_request()
   auto put_form = [](requests::basic_session<exec_t> & hc, core::string_view url) -> asio::awaitable<void>
   {
     requests::form f{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}};
-    auto hdr = co_await hc.async_put(u("/put"), f, {});
+    auto hdr = co_await async_put(hc, u("/put"), f, {});
 
     auto js = hdr.json();
     CHECK(hdr.header.result() == beast::http::status::ok);
@@ -456,7 +457,7 @@ asio::awaitable<void> async_http_pool_request()
   {
     json::value msg {{"test-key", "test-value"}};
 
-    auto hdr = co_await hc.async_post(u("/post"), msg, {});
+    auto hdr = co_await async_post(hc, u("/post"), msg, {});
 
     auto js = hdr.json();
     CHECK(hdr.header.result() == beast::http::status::ok);
@@ -467,7 +468,7 @@ asio::awaitable<void> async_http_pool_request()
   auto post_form = [](requests::basic_session<exec_t> & hc, core::string_view url) -> asio::awaitable<void>
   {
     requests::form f = {{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}};
-    auto hdr = co_await hc.async_post(u("/post"), f, {});
+    auto hdr = co_await async_post(hc, u("/post"), f, {});
 
     auto js = hdr.json();
     CHECK(hdr.header.result() == beast::http::status::ok);
