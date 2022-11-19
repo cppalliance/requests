@@ -380,7 +380,7 @@ asio::awaitable<void> async_http_pool_request()
 
     auto res = co_await requests::async_download(u("/redirect/10"), {}, target.string(),
                                           asio::redirect_error(asio::use_awaitable, ec));
-    CHECK(res.history.size() == 2);
+    CHECK(res.history.size() == 4);
 
     CHECK(beast::http::to_status_class(res.header.result()) == beast::http::status_class::redirection);
 
