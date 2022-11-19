@@ -17,18 +17,18 @@ namespace boost
 namespace requests
 {
 
-template<typename RequestBody, typename Allocator = std::allocator<char>>
+template<typename RequestBody>
 auto request(beast::http::verb method,
              urls::url_view path,
              RequestBody && body,
-             beast::http::basic_fields<Allocator> req,
+             http::fields req,
              system::error_code & ec) -> response;
 
-template<typename RequestBody, typename Allocator = std::allocator<char>>
+template<typename RequestBody>
 auto request(beast::http::verb method,
              urls::url_view path,
              RequestBody && body,
-             beast::http::basic_fields<Allocator> req)
+             http::fields req)
     -> response
 {
   boost::system::error_code ec;
@@ -38,11 +38,11 @@ auto request(beast::http::verb method,
   return res;
 }
 
-template<typename RequestBody, typename Allocator = std::allocator<char>>
+template<typename RequestBody>
 auto request(beast::http::verb method,
              core::string_view path,
              RequestBody && body,
-             beast::http::basic_fields<Allocator> req,
+             http::fields req,
              system::error_code & ec) -> response
 {
   auto url = urls::parse_uri(path);
@@ -55,11 +55,11 @@ auto request(beast::http::verb method,
     return request(method, url.value(), std::forward<RequestBody>(body), req, ec);
 }
 
-template<typename RequestBody, typename Allocator = std::allocator<char>>
+template<typename RequestBody>
 auto request(beast::http::verb method,
              core::string_view path,
              RequestBody && body,
-             beast::http::basic_fields<Allocator> req)
+             http::fields req)
     -> response
 {
   boost::system::error_code ec;
@@ -71,7 +71,6 @@ auto request(beast::http::verb method,
 
 
 template<typename RequestBody,
-          typename Allocator = std::allocator<char>,
           BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
                                                response)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
@@ -80,11 +79,10 @@ BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
 async_request(beast::http::verb method,
               urls::url_view path,
               RequestBody && body,
-              beast::http::basic_fields<Allocator> req,
+              http::fields req,
               CompletionToken && completion_token);
 
 template<typename RequestBody,
-          typename Allocator = std::allocator<char>,
           BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
                                                response)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
@@ -93,19 +91,17 @@ BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
 async_request(beast::http::verb method,
               core::string_view path,
               RequestBody && body,
-              beast::http::basic_fields<Allocator> req,
+              http::fields req,
               CompletionToken && completion_token);
 
-template<typename Allocator = std::allocator<char>>
-auto download(urls::url_view path,
-              beast::http::basic_fields<Allocator> req,
-              const filesystem::path & download_path,
-              system::error_code & ec) -> response;
+inline auto download(urls::url_view path,
+                     http::fields req,
+                     const filesystem::path & download_path,
+                     system::error_code & ec) -> response;
 
-template<typename Allocator= std::allocator<char> >
-auto download(urls::url_view path,
-              beast::http::basic_fields<Allocator> req,
-              const filesystem::path & download_path) -> response
+inline auto download(urls::url_view path,
+                     http::fields req,
+                     const filesystem::path & download_path) -> response
 {
   boost::system::error_code ec;
   auto res = download(path, std::move(req), download_path, ec);
@@ -114,9 +110,8 @@ auto download(urls::url_view path,
   return res;
 }
 
-template<typename Allocator = std::allocator<char>>
-auto download(core::string_view path,
-              beast::http::basic_fields<Allocator> req,
+inline auto download(core::string_view path,
+              http::fields req,
               const filesystem::path & download_path,
               system::error_code & ec) -> response
 {
@@ -130,9 +125,8 @@ auto download(core::string_view path,
     return download(url.value(), req, download_path, ec);
 }
 
-template<typename Allocator= std::allocator<char> >
-auto download(core::string_view path,
-              beast::http::basic_fields<Allocator> req,
+inline auto download(core::string_view path,
+              http::fields req,
               const filesystem::path & download_path) -> response
 {
   boost::system::error_code ec;
@@ -142,45 +136,25 @@ auto download(core::string_view path,
   return res;
 }
 
-
-
-template<typename Allocator = std::allocator<char>,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
                                                response)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code,
                                         response))
 async_download(urls::url_view path,
-               beast::http::basic_fields<Allocator> req,
+               http::fields req,
                filesystem::path download_path,
                CompletionToken && completion_token);
 
-template<typename Allocator = std::allocator<char>,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
                                                response)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code,
                                         response))
 async_download(core::string_view path,
-               beast::http::basic_fields<Allocator> req,
+               http::fields req,
                filesystem::path download_path,
                CompletionToken && completion_token);
-
-#define request_type http::fields
-#define basic_request beast::http::basic_fields
-#define executor_type boost::asio::system_executor
-#define target_view urls::url_view
-#include <boost/requests/detail/alias.def>
-#undef target_view
-
-
-#define target_view core::string_view
-#include <boost/requests/detail/alias.def>
-#undef target_view
-
-#undef executor_type
-#undef basic_request
-#undef request_type
 
 }
 }

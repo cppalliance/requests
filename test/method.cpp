@@ -11,6 +11,7 @@
 #include <boost/json.hpp>
 #include <boost/requests/form.hpp>
 #include <boost/requests/request.hpp>
+#include <boost/requests/method.hpp>
 
 #include "doctest.h"
 #include "string_maker.hpp"
@@ -119,7 +120,7 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
   SUBCASE("too-many-redirects")
   {
     system::error_code ec;
-    requests::default_options().max_redirects = 3;
+    requests::default_session().options().max_redirects = 3;
     auto res = requests::get(u("/redirect/10"), {}, ec);
     CHECK(res.history.size() == 2);
     CHECK(beast::http::to_status_class(res.header.result()) == beast::http::status_class::redirection);
@@ -380,7 +381,7 @@ asio::awaitable<void> async_http_pool_request()
 
     auto res = co_await requests::async_download(u("/redirect/10"), {}, target.string(),
                                           asio::redirect_error(asio::use_awaitable, ec));
-    CHECK(res.history.size() == 4);
+    CHECK(res.history.size() == 2);
 
     CHECK(beast::http::to_status_class(res.header.result()) == beast::http::status_class::redirection);
 
