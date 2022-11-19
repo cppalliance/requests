@@ -462,9 +462,11 @@ struct basic_connection<Stream>::stream
   stream& operator=(const stream &) = delete;
   ~stream();
 
-  const http::response_header &headers() const { return parser_->get().base(); }
+  const http::response_header &headers() const & { return parser_->get().base(); }
   bool done() const {return !parser_ || !parser_->get().body().more;}
   explicit stream(std::nullptr_t ) : connection_(nullptr) {}
+  http::response_header &&headers() && { return std::move(parser_->get().base()); }
+
  private:
 
   stream(basic_connection<Stream> * connection) : connection_(connection) {}
