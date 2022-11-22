@@ -167,16 +167,16 @@ struct response
     }
   }
 
-  system::error_code status_as_error(boost::source_location loc = BOOST_CURRENT_LOCATION)
+  system::error_code status_as_error()
   {
     system::error_code res;
-    res.assign(header.result_int(), http_status_category(), &loc);
+    res.assign(header.result_int(), http_status_category());
     return res;
   }
 
-  void throw_status_if_error(boost::source_location loc = BOOST_CURRENT_LOCATION)
+  void throw_status_if_error()
   {
-    auto ec = status_as_error(loc);
+    auto ec = status_as_error();
     if (ec)
       boost::throw_exception(system::system_error(ec));
   }
@@ -687,12 +687,14 @@ async_get(Connection & conn,
     using completion_signature_type = void(system::error_code, Value);
     using step_signature_type       = void(system::error_code, variant2::variant<typename Connection::stream, Value>);
 
+    Connection & conn;
     typename Connection::target_view target;
     typename Connection::request_type req;
     json::storage_ptr ptr{req.get_allocator().resource()};
 
-    impl(typename Connection::target_view target,
-         typename Connection::request_type req) : target(target), req(std::move(req)) {}
+    impl(Connection & conn,
+         typename Connection::target_view target,
+         typename Connection::request_type req) : conn(conn), target(target), req(std::move(req)) {}
     Value resume(requests::detail::co_token_t<step_signature_type> self,
                  system::error_code & ec,
                  variant2::variant<typename Connection::stream, Value> s)
@@ -707,7 +709,7 @@ async_get(Connection & conn,
     }
   };
   return requests::detail::co_run<impl>(std::forward<CompletionToken>(completion_token),
-                                        target, std::move(req));
+                                        conn, target, std::move(req));
 }
 
 template<typename Value = value,
@@ -727,15 +729,17 @@ async_post(Connection & conn,
     using completion_signature_type = void(system::error_code, Value);
     using step_signature_type       = void(system::error_code, variant2::variant<typename Connection::stream, Value>);
 
+    Connection & conn;
     typename Connection::target_view target;
     RequestBody && request_body;
     typename Connection::request_type req;
     json::storage_ptr ptr{req.get_allocator().resource()};
 
-    impl(typename Connection::target_view target,
+    impl(Connection & conn,
+         typename Connection::target_view target,
          RequestBody && request_body,
          typename Connection::request_type req)
-        : target(target), request_body(std::forward<RequestBody>(request_body)), req(std::move(req)) {}
+        : conn(conn), target(target), request_body(std::forward<RequestBody>(request_body)), req(std::move(req)) {}
     Value resume(requests::detail::co_token_t<step_signature_type> self,
                  system::error_code & ec,
                  variant2::variant<typename Connection::stream, Value> s)
@@ -752,7 +756,7 @@ async_post(Connection & conn,
     }
   };
   return requests::detail::co_run<impl>(std::forward<CompletionToken>(completion_token),
-                                        target, std::forward<RequestBody>(request_body), std::move(req));
+                                        conn, target, std::forward<RequestBody>(request_body), std::move(req));
 }
 
 
@@ -773,15 +777,17 @@ async_patch(Connection & conn,
     using completion_signature_type = void(system::error_code, Value);
     using step_signature_type       = void(system::error_code, variant2::variant<typename Connection::stream, Value>);
 
+    Connection & conn;
     typename Connection::target_view target;
     RequestBody && request_body;
     typename Connection::request_type req;
     json::storage_ptr ptr{req.get_allocator().resource()};
 
-    impl(typename Connection::target_view target,
+    impl(Connection & conn,
+         typename Connection::target_view target,
          RequestBody && request_body,
          typename Connection::request_type req)
-        : target(target), request_body(std::forward<RequestBody>(request_body)), req(std::move(req)) {}
+        : conn(conn), target(target), request_body(std::forward<RequestBody>(request_body)), req(std::move(req)) {}
     Value resume(requests::detail::co_token_t<step_signature_type> self,
                  system::error_code & ec,
                  variant2::variant<typename Connection::stream, Value> s)
@@ -798,7 +804,7 @@ async_patch(Connection & conn,
     }
   };
   return requests::detail::co_run<impl>(std::forward<CompletionToken>(completion_token),
-                                        target, std::forward<RequestBody>(request_body), std::move(req));
+                                        conn, target, std::forward<RequestBody>(request_body), std::move(req));
 }
 
 template<typename Value = value,
@@ -808,25 +814,27 @@ template<typename Value = value,
               BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(typename Connection::executor_type)>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, Value))
 async_put(Connection & conn,
-            typename Connection::target_view target,
-            RequestBody && request_body,
-            typename Connection::request_type req = {},
-            CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
+          typename Connection::target_view target,
+          RequestBody && request_body,
+          typename Connection::request_type req = {},
+          CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
 {
   struct impl : asio::coroutine
   {
     using completion_signature_type = void(system::error_code, optional<Value>);
     using step_signature_type       = void(system::error_code, variant2::variant<typename Connection::stream, optional<Value>>);
 
+    Connection & conn;
     typename Connection::target_view target;
     RequestBody && request_body;
     typename Connection::request_type req;
     json::storage_ptr ptr{req.get_allocator().resource()};
 
-    impl(typename Connection::target_view target,
+    impl(Connection & conn,
+         typename Connection::target_view target,
          RequestBody && request_body,
          typename Connection::request_type req)
-        : target(target), request_body(std::forward<RequestBody>(request_body)), req(std::move(req)) {}
+        : conn(conn), target(target), request_body(std::forward<RequestBody>(request_body)), req(std::move(req)) {}
     optional<Value> resume(requests::detail::co_token_t<step_signature_type> self,
                  system::error_code & ec,
                  variant2::variant<typename Connection::stream, optional<Value>> s)
@@ -843,7 +851,7 @@ async_put(Connection & conn,
     }
   };
   return requests::detail::co_run<impl>(std::forward<CompletionToken>(completion_token),
-                                        target, std::forward<RequestBody>(request_body), std::move(req));
+                                        conn, target, std::forward<RequestBody>(request_body), std::move(req));
 }
 
 
@@ -864,15 +872,17 @@ async_delete(Connection & conn,
     using completion_signature_type = void(system::error_code, optional<Value>);
     using step_signature_type       = void(system::error_code, variant2::variant<typename Connection::stream, optional<Value>>);
 
+    Connection & conn;
     typename Connection::target_view target;
     RequestBody && request_body;
     typename Connection::request_type req;
     json::storage_ptr ptr{req.get_allocator().resource()};
 
-    impl(typename Connection::target_view target,
+    impl(Connection & conn,
+         typename Connection::target_view target,
          RequestBody && request_body,
          typename Connection::request_type req)
-        : target(target), request_body(std::forward<RequestBody>(request_body)), req(std::move(req)) {}
+        : conn(conn),  target(target), request_body(std::forward<RequestBody>(request_body)), req(std::move(req)) {}
     optional<Value> resume(requests::detail::co_token_t<step_signature_type> self,
                  system::error_code & ec,
                  variant2::variant<typename Connection::stream, optional<Value>> s)
@@ -889,7 +899,7 @@ async_delete(Connection & conn,
     }
   };
   return requests::detail::co_run<impl>(std::forward<CompletionToken>(completion_token),
-                                        target, std::forward<RequestBody>(request_body), std::move(req));
+                                        conn, target, std::forward<RequestBody>(request_body), std::move(req));
 }
 
 
@@ -909,13 +919,15 @@ async_delete(Connection & conn,
     using completion_signature_type = void(system::error_code, optional<Value>);
     using step_signature_type       = void(system::error_code, variant2::variant<typename Connection::stream, optional<Value>>);
 
+    Connection & conn;
     typename Connection::target_view target;
     typename Connection::request_type req;
     json::storage_ptr ptr{req.get_allocator().resource()};
 
-    impl(typename Connection::target_view target,
+    impl(Connection & conn,
+         typename Connection::target_view target,
          typename Connection::request_type req)
-        : target(target), req(std::move(req)) {}
+        : conn(conn), target(target), req(std::move(req)) {}
     optional<Value> resume(requests::detail::co_token_t<step_signature_type> self,
                            system::error_code & ec,
                            variant2::variant<typename Connection::stream, optional<Value>> s)
@@ -930,7 +942,7 @@ async_delete(Connection & conn,
     }
   };
   return requests::detail::co_run<impl>(std::forward<CompletionToken>(completion_token),
-                                        target, std::move(req));
+                                        conn, target, std::move(req));
 }
 
 
@@ -949,12 +961,14 @@ async_options(Connection & conn,
     using completion_signature_type = void(system::error_code, Value);
     using step_signature_type       = void(system::error_code, variant2::variant<typename Connection::stream, Value>);
 
+    Connection & conn;
     typename Connection::target_view target;
     typename Connection::request_type req;
     json::storage_ptr ptr{req.get_allocator().resource()};
 
-    impl(typename Connection::target_view target,
-         typename Connection::request_type req) : target(target), req(std::move(req)) {}
+    impl(Connection & conn,
+         typename Connection::target_view target,
+         typename Connection::request_type req) : conn(conn), target(target), req(std::move(req)) {}
     Value resume(requests::detail::co_token_t<step_signature_type> self,
                  system::error_code & ec,
                  variant2::variant<typename Connection::stream, Value> s)
@@ -969,7 +983,7 @@ async_options(Connection & conn,
     }
   };
   return requests::detail::co_run<impl>(std::forward<CompletionToken>(completion_token),
-                                        target, std::move(req));
+                                        conn, target, std::move(req));
 }
 
 }

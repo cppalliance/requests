@@ -42,6 +42,9 @@ struct response
   // raw body
   buffer_type buffer{header.get_allocator()};
 
+  int          result_code() const {return header.result_int(); }
+  http::status result()      const {return header.result(); }
+
   response(allocator_type alloc) : header(alloc), buffer(alloc) {}
   response(beast::http::response_header<fields_type> header,
                  buffer_type buffer) : header(std::move(header)), buffer(std::move(buffer)) {}

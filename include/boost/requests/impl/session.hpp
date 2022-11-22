@@ -478,8 +478,8 @@ struct basic_session<Executor>::async_request_op : asio::coroutine
   system::error_code ec_;
   using body_type = RequestBody;
 
-  const bool is_secure = (url.scheme_id() == urls::scheme::https)
-                      || (url.scheme_id() == urls::scheme::wss);
+  bool is_secure = (url.scheme_id() == urls::scheme::https)
+                || (url.scheme_id() == urls::scheme::wss);
 
   using response_type = response ;
   response_type res;
@@ -503,7 +503,7 @@ struct basic_session<Executor>::async_request_op : asio::coroutine
         res{req.get_allocator()},
         hreq{v, url.encoded_resource(), 11,
              request_body_traits<std::decay_t<RequestBody_>>::make_body(std::forward<RequestBody_>(body), ec_),
-             this_->make_request_(std::move(req)).fields}
+             std::move(req)}
 
   {
   }
@@ -517,16 +517,22 @@ struct basic_session<Executor>::async_request_op : asio::coroutine
                    http::fields req)
       : this_(this_), method(v), opts(this_->options_),
         default_mime_type(request_body_traits<std::decay_t<RequestBody_>>::default_content_type(body)),
+        res{req.get_allocator()},
         hreq{v, "", 11,
              request_body_traits<std::decay_t<RequestBody_>>::make_body(std::forward<RequestBody_>(body), ec_),
-             this_->make_request_(std::move(req))}
+             std::move(req)}
   {
     auto u = urls::parse_uri(url);
     if (u.has_error())
       ec_ = u.error();
     else
+    {
       this->url = u.value();
+      is_secure = (this->url.scheme_id() == urls::scheme::https)
+               || (this->url.scheme_id() == urls::scheme::wss);
+    }
     hreq.target(this->url.encoded_resource());
+
   }
 
   void prepare_initial_head_request(error_code & ec)
@@ -1092,14 +1098,14 @@ auto basic_session<Executor>::ropen(beast::http::verb method,
 {
   auto p = get_pool(url, ec);
   if (ec)
-    return ;
+    return stream{nullptr};
   return visit(
       [&](auto pool) -> stream
       {
         assert(pool);
         auto conn = pool->get_connection(ec);
         if (ec)
-          return ;
+          return stream{nullptr};
         return conn->ropen(url.encoded_target(), std::forward<RequestBody>(body), std::move(req), ec);
       }, p);
 }

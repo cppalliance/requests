@@ -9,6 +9,7 @@
 
 #include <boost/system/error_code.hpp>
 #include <boost/requests/http.hpp>
+#include <boost/requests/request.hpp>
 #include <boost/requests/response.hpp>
 
 namespace boost
@@ -734,54 +735,6 @@ async_trace(basic_session<Executor> & conn, urls::url_view target,
 
 // -------------------------------------- default session stuff --------------------------------------
 
-template<typename RequestBody>
-auto request(beast::http::verb method,
-                    core::string_view path,
-                    RequestBody && body,
-                    http::fields req,
-                    system::error_code & ec) -> response;
-
-template<typename RequestBody>
-auto request(beast::http::verb method,
-                    core::string_view path,
-                    RequestBody && body,
-                    http::fields req) -> response;
-
-template<typename RequestBody>
-auto request(beast::http::verb method,
-             urls::url_view path,
-             RequestBody && body,
-             http::fields req,
-             system::error_code & ec) -> response;
-
-template<typename RequestBody>
-auto request(beast::http::verb method,
-             urls::url_view path,
-             RequestBody && body,
-             http::fields req) -> response;
-
-template<typename RequestBody,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response)) CompletionToken>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                   void (boost::system::error_code, response))
-async_request(beast::http::verb method,
-              urls::url_view path,
-              RequestBody && body,
-              http::fields req,
-              CompletionToken && completion_token);
-
-template<typename RequestBody,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response)) CompletionToken>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                   void (boost::system::error_code, response))
-async_request(beast::http::verb method,
-              core::string_view path,
-              RequestBody && body,
-              http::fields req,
-              CompletionToken && completion_token);
-
-
-
 inline auto get(core::string_view target, http::fields req = {}) -> response
 {
   return request(http::verb::get, target, empty{}, std::move(req));
@@ -883,14 +836,12 @@ auto delete_(core::string_view target,
 }
 
 
-template<typename RequestBody>
 auto delete_(core::string_view target,
              http::fields req = {}) -> response
 {
   return request(http::verb::delete_, target, empty{}, std::move(req));
 }
 
-template<typename RequestBody>
 auto delete_(core::string_view target,
              http::fields req,
              system::error_code & ec) -> response
@@ -899,14 +850,12 @@ auto delete_(core::string_view target,
 }
 
 
-template<typename RequestBody>
 auto connect(core::string_view target,
              http::fields req = {}) -> response
 {
   return request(http::verb::connect, target, empty{}, std::move(req));
 }
 
-template<typename RequestBody>
 auto connect(core::string_view target,
              http::fields req,
              system::error_code & ec) -> response
@@ -915,14 +864,12 @@ auto connect(core::string_view target,
 }
 
 
-template<typename RequestBody>
 auto options(core::string_view target,
              http::fields req = {}) -> response
 {
   return request(http::verb::options, target, empty{}, std::move(req));
 }
 
-template<typename RequestBody>
 auto options(core::string_view target,
              http::fields req,
              system::error_code & ec) -> response
@@ -931,14 +878,12 @@ auto options(core::string_view target,
 }
 
 
-template<typename RequestBody>
 auto trace(core::string_view target,
            http::fields req = {}) -> response
 {
   return request(http::verb::trace, target, empty{}, std::move(req));
 }
 
-template<typename RequestBody>
 auto trace(core::string_view target,
            http::fields req,
            system::error_code & ec) -> response
@@ -1024,8 +969,7 @@ async_delete(core::string_view target,
 }
 
 
-template<typename RequestBody,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response)) CompletionToken>
+template< BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, response))
 async_delete(core::string_view target,
@@ -1321,8 +1265,7 @@ async_delete(urls::url_view target,
 }
 
 
-template<typename RequestBody,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response)) CompletionToken>
+template< BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, response))
 async_delete(urls::url_view target,

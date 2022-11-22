@@ -25,24 +25,29 @@ struct session_service : asio::detail::execution_context_service_base<session_se
       : asio::detail::execution_context_service_base<session_service>(ctx)
   {
   }
+
+  ~session_service()
+  {
+  }
+
   void shutdown() override
   {
-    if (session)
-      session->shutdown();
+    if (session_)
+      session_->shutdown();
   }
 
   void destroy()
   {
-    session = boost::none;
+    session_ = boost::none;
   }
 
-  boost::optional<session> session{asio::system_executor()};
+  boost::optional<session> session_;
 };
 
 
 inline auto default_session(asio::any_io_executor exec = asio::system_executor()) -> session &
 {
-  auto & so = asio::use_service<session_service>(exec.context()).session;
+  auto & so = asio::use_service<session_service>(exec.context()).session_;
   if (!so)
     so.emplace(exec);
   return *so;

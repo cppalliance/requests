@@ -50,7 +50,7 @@ struct async_request_op
                   RequestBody && body,
                   http::fields req)
   {
-    return default_session().async_request(method, path,
+    return default_session(asio::get_associated_executor(handler)).async_request(method, path,
                                            std::forward<RequestBody>(body),
                                            std::move(req),
                                            std::move(handler));
@@ -110,7 +110,8 @@ struct async_download_op
                   http::fields req,
                   filesystem::path download_path)
   {
-    return default_session().async_download(path, std::move(req), std::move(download_path), std::move(handler));
+    return default_session(asio::get_associated_executor(handler))
+        .async_download(path, std::move(req), std::move(download_path), std::move(handler));
   }
 };
 
