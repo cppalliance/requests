@@ -122,7 +122,8 @@ auto basic_session<Executor>::request(
                       || (url.scheme_id() == urls::scheme::wss);
   auto path = url.encoded_target();
   auto host = url.encoded_host();
-
+  if (path.empty())
+    path = "/";
   const auto alloc = req.get_allocator();
   response_type res{alloc};
 
@@ -277,7 +278,7 @@ auto basic_session<Executor>::download(
     return res;
   }
 
-  beast::http::request<beast::http::empty_body, http::fields> hreq{http::verb::head, path, 11,
+  beast::http::request<beast::http::empty_body, http::fields> hreq{http::verb::head, path.empty() ? "/" : path , 11,
                                                             beast::http::empty_body::value_type{}, std::move(req.fields)};
 
   // set mime-type

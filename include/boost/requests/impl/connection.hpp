@@ -371,7 +371,6 @@ struct basic_connection<Stream>::async_connect_op
   void operator()(Self && self)
   {
     using namespace asio::experimental;
-
     make_parallel_group(
         asem::async_lock(this_->write_mtx_, asio::deferred),
         asem::async_lock(this_->read_mtx_, asio::deferred))
@@ -416,6 +415,8 @@ struct basic_connection<Stream>::async_connect_op
                   asem::lock_guard<mutex_type> lock2,
                   std::nullptr_t)
   {
+    lock1 = {};
+    lock2 = {};
     self.complete(ec);
   }
 

@@ -192,20 +192,24 @@ struct basic_connection_pool<Stream>::async_get_connection_op : asio::coroutine
                                            detail::endpoint_hash<endpoint_type>>;
   typename conn_t::iterator itr;
 
+
   std::shared_ptr<connection_type> nconn = nullptr;
+  lock_type lock;
   endpoint_type ep;
 
   using completion_signature_type = void(system::error_code, std::shared_ptr<connection_type>);
-  using step_signature_type       = void(system::error_code, lock_type);
+  using step_signature_type       = void(system::error_code);
 
   auto resume(requests::detail::co_token_t<step_signature_type> self,
-              system::error_code & ec, lock_type lock = {}) -> std::shared_ptr<connection_type>
+              system::error_code & ec) -> std::shared_ptr<connection_type>
   {
     reenter (this)
     {
-      yield asem::async_lock(this_->mutex_, std::move(self));
+      yield this_->mutex_.async_lock(std::move(self));
       if (ec)
         return nullptr;
+
+      lock = {this_->mutex_, std::adopt_lock};
 
       // find an idle connection
       itr = std::find_if(this_->conns_.begin(), this_->conns_.end(),
@@ -236,9 +240,7 @@ struct basic_connection_pool<Stream>::async_get_connection_op : asio::coroutine
         ep = this_->endpoints_.front();
         nconn = this_->template make_connection_<connection_type>(this_->get_executor());
         nconn->set_host(this_->host_);
-        // this isn't ideal, since we don't have connect going on in parallel.
-
-        yield nconn->async_connect(ep, asio::append(std::move(self), std::move(lock))); // don't unlock here.
+        yield nconn->async_connect(ep, std::move(self)); // don't unlock here.
         if (ec)
           return nullptr;
 
@@ -253,7 +255,6 @@ struct basic_connection_pool<Stream>::async_get_connection_op : asio::coroutine
                                return (lhs.second->working_requests() + (lhs.second->is_open() ? 0 : 1))
                                     < (rhs.second->working_requests() + (rhs.second->is_open() ? 0 : 1));
                              });
-      lock = {};
       if (itr == this_->conns_.end())
       {
         ec = asio::error::not_found;
@@ -292,7 +293,6 @@ struct basic_connection_pool<Stream>::async_request_op : asio::coroutine
   template<typename Self>
   void operator()(Self && self, error_code ec = {}, std::shared_ptr<connection_type> conn = nullptr)
   {
-
     reenter(this)
     {
       yield this_->async_get_connection(std::move(self));
@@ -301,7 +301,6 @@ struct basic_connection_pool<Stream>::async_request_op : asio::coroutine
       if (ec)
         return self.complete(ec, response{req.get_allocator()});
       yield conn->async_request(method, path, std::forward<RequestBody>(body), std::move(req), std::move(self));
-
     }
   }
 
