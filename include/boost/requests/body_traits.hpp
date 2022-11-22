@@ -15,10 +15,6 @@
 #include <boost/beast/http/empty_body.hpp>
 #include <boost/beast/http/span_body.hpp>
 #include <boost/beast/http/vector_body.hpp>
-#include <boost/json/array.hpp>
-#include <boost/json/object.hpp>
-#include <boost/json/serialize.hpp>
-#include <boost/json/value.hpp>
 #include <boost/requests/form.hpp>
 #include <boost/url/params_view.hpp>
 #include <boost/url/params_encoded_view.hpp>
@@ -184,55 +180,6 @@ struct request_body_traits<asio::mutable_buffer, void>
     return {cb.data(), cb.size(), false};
   }
 };
-
-template<>
-struct request_body_traits<json::value, void>
-{
-  static core::string_view default_content_type( const json::value &  )
-  {
-    return "application/json";
-  }
-
-  using body_type = beast::http::string_body;
-
-  static typename body_type::value_type make_body(const json::value & js, system::error_code & ec)
-  {
-    return json::serialize(js);
-  }
-};
-
-template<>
-struct request_body_traits<json::object, void>
-{
-  static core::string_view default_content_type( const json::object &  )
-  {
-    return "application/json";
-  }
-
-  using body_type = beast::http::string_body;
-
-  static typename body_type::value_type make_body(const json::object & js, system::error_code & ec)
-  {
-    return json::serialize(js);
-  }
-};
-
-
-template<>
-struct request_body_traits<json::array, void>
-{
-  static core::string_view default_content_type( const json::array &  )
-  {
-    return "application/json";
-  }
-  using body_type = beast::http::string_body;
-
-  static typename body_type::value_type make_body(const json::array & js, system::error_code & ec)
-  {
-    return json::serialize(js);
-  }
-};
-
 
 template<>
 struct request_body_traits<urls::params_encoded_view, void>

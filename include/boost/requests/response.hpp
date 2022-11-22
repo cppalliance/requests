@@ -17,8 +17,6 @@
 #include <boost/config.hpp>
 #include <boost/container/pmr/polymorphic_allocator.hpp>
 #include <boost/core/span.hpp>
-#include <boost/json/parser.hpp>
-#include <boost/json/value.hpp>
 #include <boost/requests/error.hpp>
 #include <boost/requests/fields/link.hpp>
 #include <boost/system/error_code.hpp>
@@ -84,31 +82,6 @@ struct response
     const auto cd = buffer.cdata();
     return span<Byte>(static_cast<const Byte*>(cd.data()), cd.size() / sizeof(Byte));
   }
-
-  auto json(json::storage_ptr ptr,
-            system::error_code & ec) const -> json::value
-  {
-    json::parser ps;
-    ps.write(string_view(), ec);
-    if (ec)
-      return nullptr;
-    else
-      return ps.release();
-  }
-
-  auto json(json::storage_ptr ptr) const -> json::value
-  {
-    boost::system::error_code ec;
-    auto res = json(ptr, ec);
-    if (ec)
-      urls::detail::throw_system_error(ec);
-
-    return res;
-  }
-
-  auto json(system::error_code & ec) const -> json::value { return json(json::storage_ptr(), ec); }
-  auto json()                        const -> json::value { return json(json::storage_ptr()); }
-
 
   using string_body_type = typename beast::http::basic_string_body<char, std::char_traits<char>, allocator_type>;
   using history_type = typename beast::http::response<body_type, fields_type>;

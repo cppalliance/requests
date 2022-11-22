@@ -3,6 +3,7 @@
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
+#include <boost/requests/json.hpp>
 #include <boost/requests/method.hpp>
 #include <boost/requests/session.hpp>
 #include <boost/requests/form.hpp>
@@ -101,7 +102,7 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
                           requests::empty{},
                           requests::headers({{"Test-Header", "it works"}}));
 
-    auto hd = hdr.json().at("headers");
+    auto hd = as_json(hdr).at("headers");
 
     CHECK(hd.at("Host")        == json::value(httpbin()));
     CHECK(hd.at("Test-Header") == json::value("it works"));
@@ -112,7 +113,7 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
   {
     auto hdr = get(hc, u("/get"), requests::headers({{"Test-Header", "it works"}}));
 
-    auto hd = hdr.json().at("headers");
+    auto hd = as_json(hdr).at("headers");
 
     CHECK(hd.at("Host")        == json::value(httpbin()));
     CHECK(hd.at("Test-Header") == json::value("it works"));
@@ -125,7 +126,7 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
     CHECK(hdr.history.size() == 1u);
     CHECK(hdr.history.at(0u).at(beast::http::field::location) == "/get");
 
-    auto hd = hdr.json().at("headers");
+    auto hd = as_json(hdr).at("headers");
 
     CHECK(hd.at("Host")        == json::value(httpbin()));
     CHECK(hd.at("Test-Header") == json::value("it works"));
@@ -202,7 +203,7 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
   {
     auto hdr = delete_(hc, u("/delete"), json::value{{"test-key", "test-value"}}, {});
 
-    auto js = hdr.json();
+    auto js = as_json(hdr);
     CHECK(beast::http::to_status_class(hdr.header.result()) == beast::http::status_class::successful);
     CHECK(js.at("headers").at("Content-Type") == "application/json");
   }
@@ -212,7 +213,7 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
     json::value msg {{"test-key", "test-value"}};
     auto hdr = patch(hc, u("/patch"), msg, {});
 
-    auto js = hdr.json();
+    auto js = as_json(hdr);
     CHECK(hdr.header.result() == beast::http::status::ok);
     CHECK(js.at("headers").at("Content-Type") == "application/json");
     CHECK(js.at("json") == msg);
@@ -224,7 +225,7 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
                         requests::form{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}},
                         {});
 
-    auto js = hdr.json();
+    auto js = as_json(hdr);
     CHECK(hdr.header.result() == beast::http::status::ok);
     CHECK(js.at("headers").at("Content-Type") == "application/x-www-form-urlencoded");
     CHECK(js.at("form") == json::value{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}});
@@ -235,7 +236,7 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
     json::value msg {{"test-key", "test-value"}};
     auto hdr = put(hc, u("/put"), msg, {});
 
-    auto js = hdr.json();
+    auto js = as_json(hdr);
     CHECK(hdr.header.result() == beast::http::status::ok);
     CHECK(js.at("headers").at("Content-Type") == "application/json");
     CHECK(js.at("json") == msg);
@@ -247,7 +248,7 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
                       requests::form{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}},
                       {});
 
-    auto js = hdr.json();
+    auto js = as_json(hdr);
     CHECK(hdr.header.result() == beast::http::status::ok);
     CHECK(js.at("headers").at("Content-Type") == "application/x-www-form-urlencoded");
     CHECK(js.at("form") == json::value{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}});
@@ -258,7 +259,7 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
     json::value msg {{"test-key", "test-value"}};
     auto hdr = post(hc, u("/post"), msg, {});
 
-    auto js = hdr.json();
+    auto js = as_json(hdr);
     CHECK(hdr.header.result() == beast::http::status::ok);
     CHECK(js.at("headers").at("Content-Type") == "application/json");
     CHECK(js.at("json") == msg);
@@ -270,7 +271,7 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
                        requests::form{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}},
                        {});
 
-    auto js = hdr.json();
+    auto js = as_json(hdr);
     CHECK(hdr.header.result() == beast::http::status::ok);
     CHECK(js.at("headers").at("Content-Type") == "application/x-www-form-urlencoded");
     CHECK(js.at("form") == json::value{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}});
@@ -294,7 +295,7 @@ asio::awaitable<void> async_http_pool_request()
         beast::http::verb::get, u("/headers"),
         requests::empty{}, requests::headers({{"Test-Header", "it works"}}));
 
-    auto hd = hdr.json().at("headers");
+    auto hd = as_json(hdr).at("headers");
 
     CHECK(hd.at("Host")        == json::value(url));
     CHECK(hd.at("Test-Header") == json::value("it works"));
@@ -305,7 +306,7 @@ asio::awaitable<void> async_http_pool_request()
     auto h = requests::headers({{"Test-Header", "it works"}});
     auto hdr = co_await async_get(hc, u("/get"), h);
 
-    auto hd = hdr.json().at("headers");
+    auto hd = as_json(hdr).at("headers");
 
     CHECK(hd.at("Host")        == json::value(url));
     CHECK(hd.at("Test-Header") == json::value("it works"));
@@ -320,7 +321,7 @@ asio::awaitable<void> async_http_pool_request()
     CHECK(hdr.history.size() == 1u);
     CHECK(hdr.history.at(0u).at(beast::http::field::location) == "/get");
 
-    auto hd = hdr.json().at("headers");
+    auto hd = as_json(hdr).at("headers");
 
     CHECK(hd.at("Host")        == json::value(url));
     CHECK(hd.at("Test-Header") == json::value("it works"));
@@ -404,7 +405,7 @@ asio::awaitable<void> async_http_pool_request()
     json::value v{{"test-key", "test-value"}};
     auto hdr = co_await async_delete(hc, u("/delete"), v, {});
 
-    auto js = hdr.json();
+    auto js = as_json(hdr);
     CHECK(beast::http::to_status_class(hdr.header.result()) == beast::http::status_class::successful);
     CHECK(js.at("headers").at("Content-Type") == "application/json");
   };
@@ -414,7 +415,7 @@ asio::awaitable<void> async_http_pool_request()
     json::value msg {{"test-key", "test-value"}};
     auto hdr = co_await async_patch(hc, u("/patch"), msg, {});
 
-    auto js = hdr.json();
+    auto js = as_json(hdr);
     CHECK(hdr.header.result() == beast::http::status::ok);
     CHECK(js.at("headers").at("Content-Type") == "application/json");
     CHECK(js.at("json") == msg);
@@ -425,7 +426,7 @@ asio::awaitable<void> async_http_pool_request()
     requests::form f{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}};
     auto hdr = co_await async_patch(hc, u("/patch"), f, {});
 
-    auto js = hdr.json();
+    auto js = as_json(hdr);
     CHECK(hdr.header.result() == beast::http::status::ok);
     CHECK(js.at("headers").at("Content-Type") == "application/x-www-form-urlencoded");
     CHECK(js.at("form") == json::value{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}});
@@ -436,7 +437,7 @@ asio::awaitable<void> async_http_pool_request()
     json::value msg {{"test-key", "test-value"}};
     auto hdr = co_await async_put(hc, u("/put"), msg, {});
 
-    auto js = hdr.json();
+    auto js = as_json(hdr);
     CHECK(hdr.header.result() == beast::http::status::ok);
     CHECK(js.at("headers").at("Content-Type") == "application/json");
     CHECK(js.at("json") == msg);
@@ -447,7 +448,7 @@ asio::awaitable<void> async_http_pool_request()
     requests::form f{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}};
     auto hdr = co_await async_put(hc, u("/put"), f, {});
 
-    auto js = hdr.json();
+    auto js = as_json(hdr);
     CHECK(hdr.header.result() == beast::http::status::ok);
     CHECK(js.at("headers").at("Content-Type") == "application/x-www-form-urlencoded");
     CHECK(js.at("form") == json::value{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}});
@@ -459,7 +460,7 @@ asio::awaitable<void> async_http_pool_request()
 
     auto hdr = co_await async_post(hc, u("/post"), msg, {});
 
-    auto js = hdr.json();
+    auto js = as_json(hdr);
     CHECK(hdr.header.result() == beast::http::status::ok);
     CHECK(js.at("headers").at("Content-Type") == "application/json");
     CHECK(js.at("json") == msg);
@@ -470,7 +471,7 @@ asio::awaitable<void> async_http_pool_request()
     requests::form f = {{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}};
     auto hdr = co_await async_post(hc, u("/post"), f, {});
 
-    auto js = hdr.json();
+    auto js = as_json(hdr);
     CHECK(hdr.header.result() == beast::http::status::ok);
     CHECK(js.at("headers").at("Content-Type") == "application/x-www-form-urlencoded");
     CHECK(js.at("form") == json::value{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}});

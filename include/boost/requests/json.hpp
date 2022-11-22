@@ -10,6 +10,7 @@
 
 #include <boost/container/pmr/polymorphic_allocator.hpp>
 #include <boost/json.hpp>
+#include <boost/requests/body_traits.hpp>
 #include <boost/requests/detail/async_coroutine.hpp>
 #include <boost/requests/error.hpp>
 #include <boost/requests/fields/link.hpp>
@@ -17,14 +18,106 @@
 #include <boost/requests/method.hpp>
 #include <boost/requests/request_settings.hpp>
 #include <boost/system/result.hpp>
+#include <boost/json/parser.hpp>
+#include <boost/json/value.hpp>
+
 #include <boost/range.hpp>
 #include <vector>
 #include <boost/asio/yield.hpp>
+
+#include <boost/json/array.hpp>
+#include <boost/json/object.hpp>
+#include <boost/json/serialize.hpp>
+#include <boost/json/value.hpp>
+
 
 namespace boost
 {
 namespace requests
 {
+
+
+template<>
+struct request_body_traits<json::value, void>
+{
+  static core::string_view default_content_type( const json::value &  )
+  {
+    return "application/json";
+  }
+
+  using body_type = beast::http::string_body;
+
+  static typename body_type::value_type make_body(const json::value & js, system::error_code & ec)
+  {
+    return json::serialize(js);
+  }
+};
+
+template<>
+struct request_body_traits<json::object, void>
+{
+  static core::string_view default_content_type( const json::object &  )
+  {
+    return "application/json";
+  }
+
+  using body_type = beast::http::string_body;
+
+  static typename body_type::value_type make_body(const json::object & js, system::error_code & ec)
+  {
+    return json::serialize(js);
+  }
+};
+
+
+template<>
+struct request_body_traits<json::array, void>
+{
+  static core::string_view default_content_type( const json::array &  )
+  {
+    return "application/json";
+  }
+  using body_type = beast::http::string_body;
+
+  static typename body_type::value_type make_body(const json::array & js, system::error_code & ec)
+  {
+    return json::serialize(js);
+  }
+};
+
+
+
+inline auto as_json(const response & res,
+                    json::storage_ptr ptr,
+                    system::error_code & ec) -> json::value
+{
+  json::parser ps;
+  ps.write(res.string_view(), ec);
+  if (ec)
+    return nullptr;
+  else
+    return ps.release();
+}
+
+inline auto as_json(const response & res, json::storage_ptr ptr = {}) -> json::value
+{
+  boost::system::error_code ec;
+  auto rs = as_json(res, ptr, ec);
+  if (ec)
+    urls::detail::throw_system_error(ec);
+
+  return rs;
+}
+
+inline auto as_json(const response & res, system::error_code & ec) -> json::value
+{
+  return as_json(res, json::storage_ptr(), ec);
+}
+
+
+
+
+
 namespace json
 {
 
