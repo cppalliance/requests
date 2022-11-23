@@ -24,7 +24,7 @@ int main(int argc, char * argv[])
 {
   if (argc < 3)
   {
-    std::cout << "Examples usage ripper https://boost.org index.html" << std::endl;
+    std::cout << "Examples usage wget https://boost.org index.html" << std::endl;
     return 1;
   }
 
