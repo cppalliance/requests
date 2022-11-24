@@ -836,13 +836,13 @@ auto delete_(core::string_view target,
 }
 
 
-auto delete_(core::string_view target,
+inline auto delete_(core::string_view target,
              http::fields req = {}) -> response
 {
   return request(http::verb::delete_, target, empty{}, std::move(req));
 }
 
-auto delete_(core::string_view target,
+inline auto delete_(core::string_view target,
              http::fields req,
              system::error_code & ec) -> response
 {
@@ -850,13 +850,13 @@ auto delete_(core::string_view target,
 }
 
 
-auto connect(core::string_view target,
+inline auto connect(core::string_view target,
              http::fields req = {}) -> response
 {
   return request(http::verb::connect, target, empty{}, std::move(req));
 }
 
-auto connect(core::string_view target,
+inline auto connect(core::string_view target,
              http::fields req,
              system::error_code & ec) -> response
 {
@@ -864,13 +864,13 @@ auto connect(core::string_view target,
 }
 
 
-auto options(core::string_view target,
+inline auto options(core::string_view target,
              http::fields req = {}) -> response
 {
   return request(http::verb::options, target, empty{}, std::move(req));
 }
 
-auto options(core::string_view target,
+inline auto options(core::string_view target,
              http::fields req,
              system::error_code & ec) -> response
 {
@@ -878,13 +878,13 @@ auto options(core::string_view target,
 }
 
 
-auto trace(core::string_view target,
+inline auto trace(core::string_view target,
            http::fields req = {}) -> response
 {
   return request(http::verb::trace, target, empty{}, std::move(req));
 }
 
-auto trace(core::string_view target,
+inline auto trace(core::string_view target,
            http::fields req,
            system::error_code & ec) -> response
 {
@@ -1122,15 +1122,13 @@ auto delete_(urls::url_view target,
 }
 
 
-template<typename RequestBody>
-auto delete_(urls::url_view target,
+inline auto delete_(urls::url_view target,
              http::fields req = {}) -> response
 {
   return request(http::verb::delete_, target, empty{}, std::move(req));
 }
 
-template<typename RequestBody>
-auto delete_(urls::url_view target,
+inline auto delete_(urls::url_view target,
              http::fields req,
              system::error_code & ec) -> response
 {
@@ -1138,15 +1136,13 @@ auto delete_(urls::url_view target,
 }
 
 
-template<typename RequestBody>
-auto connect(urls::url_view target,
+inline auto connect(urls::url_view target,
              http::fields req = {}) -> response
 {
   return request(http::verb::connect, target, empty{}, std::move(req));
 }
 
-template<typename RequestBody>
-auto connect(urls::url_view target,
+inline auto connect(urls::url_view target,
              http::fields req,
              system::error_code & ec) -> response
 {
@@ -1154,31 +1150,28 @@ auto connect(urls::url_view target,
 }
 
 
-template<typename RequestBody>
-auto options(urls::url_view target,
+inline auto options(urls::url_view target,
              http::fields req = {}) -> response
 {
   return request(http::verb::options, target, empty{}, std::move(req));
 }
 
-template<typename RequestBody>
-auto options(urls::url_view target,
-             http::fields req,
-             system::error_code & ec) -> response
+inline auto options(
+    urls::url_view target,
+    http::fields req,
+    system::error_code & ec) -> response
 {
   return request(http::verb::options, target, empty{}, std::move(req), ec);
 }
 
 
-template<typename RequestBody>
-auto trace(urls::url_view target,
+inline auto trace(urls::url_view target,
            http::fields req = {}) -> response
 {
   return request(http::verb::trace, target, empty{}, std::move(req));
 }
 
-template<typename RequestBody>
-auto trace(urls::url_view target,
+inline auto trace(urls::url_view target,
            http::fields req,
            system::error_code & ec) -> response
 {

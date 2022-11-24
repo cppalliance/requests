@@ -19,11 +19,11 @@
 #include <boost/core/span.hpp>
 #include <boost/requests/error.hpp>
 #include <boost/requests/fields/link.hpp>
+#include <boost/requests/http.hpp>
 #include <boost/system/error_code.hpp>
 #include <boost/url/url.hpp>
 #include <boost/url/url_view.hpp>
 #include <memory>
-#include <scoped_allocator>
 #include <string>
 
 namespace boost
