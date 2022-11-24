@@ -123,16 +123,16 @@ struct response
     }
   }
 
-  system::error_code status_as_error(boost::source_location loc = BOOST_CURRENT_LOCATION)
+  system::error_code status_as_error() const
   {
     system::error_code res;
-    res.assign(header.result_int(), http_status_category(), &loc);
+    res.assign(header.result_int(), http_status_category());
     return res;
   }
 
-  void throw_status_if_error(boost::source_location loc = BOOST_CURRENT_LOCATION)
+  void throw_status_if_error() const
   {
-    auto ec = status_as_error(loc);
+    auto ec = status_as_error();
     if (ec)
       boost::throw_exception(system::system_error(ec));
   }

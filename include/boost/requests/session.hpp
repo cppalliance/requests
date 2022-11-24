@@ -69,9 +69,6 @@ struct basic_session
           struct request_options & options()       {return options_;}
     const struct request_options & options() const {return options_;}
 
-    template<typename Allocator>
-    using basic_request = beast::http::basic_fields<Allocator>;
-
     template<typename RequestBody>
     auto request(beast::http::verb method,
                  urls::url_view path,
@@ -319,7 +316,14 @@ struct basic_session
                   RequestBody && body,
                   http::fields req,
                   CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
-    
+
+    template<typename Request, typename Response,
+              BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code)) CompletionToken
+                  BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code))
+    async_single_request(Request & req, Response & res, urls::url_view url,
+                         CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
+
   private:
     asio::ssl::context sslctx_{asio::ssl::context_base::tls_client};
     detail::basic_mutex<executor_type> mutex_;
@@ -342,6 +346,9 @@ struct basic_session
     struct async_download_op;
 
     struct async_get_pool_op;
+
+    template<typename Request, typename Response>
+    struct async_single_request_op;
 
     auto make_request_(http::fields fields) -> requests::request_settings;
 

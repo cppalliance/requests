@@ -397,11 +397,9 @@ auto basic_session<Executor>::download(
   return res;
 }
 
-namespace detail
-{
-
-template<typename Executor, typename Request, typename Response>
-struct async_single_request_op
+template<typename Executor>
+template<typename Request, typename Response>
+struct basic_session<Executor>::async_single_request_op
 {
   basic_session<Executor>* this_;
   Request & req;
@@ -449,20 +447,22 @@ struct async_single_request_op
   }
 };
 
-template<typename Executor, typename Request, typename Response,
+template<typename Executor>
+template<typename Request, typename Response,
           BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code))
-async_single_request(basic_session<Executor>* this_, Request & req, Response & res, urls::url_view url,
+basic_session<Executor>::async_single_request(
+                     Request & req, Response & res, urls::url_view url,
                      CompletionToken && completion_token)
 {
   return asio::async_compose<CompletionToken, void(system::error_code)>(
-      async_single_request_op<Executor, Request, Response>{this_, req, res, url},
+      async_single_request_op<Request, Response>{this, req, res, url},
       completion_token,
-      this_->get_executor()
+      get_executor()
   );
 }
 
-}
+
 
 template<typename Executor>
 template<typename RequestBody>
@@ -650,7 +650,7 @@ struct basic_session<Executor>::async_request_op : asio::coroutine
         ec = ec_;
         goto complete ;
       }
-      yield detail::async_single_request(this_, hreq, rres, url, std::move(self));
+      yield this_->async_single_request(hreq, rres, url, std::move(self));
       while (!ec &&
              (opts.redirect >= redirect_mode::endpoint)
              && ((rc == http::status::moved_permanently)
@@ -662,7 +662,7 @@ struct basic_session<Executor>::async_request_op : asio::coroutine
         if (ec)
           goto complete;
 
-        yield detail::async_single_request(this_, hreq, rres, url, std::move(self));
+        yield this_->async_single_request(hreq, rres, url, std::move(self));
       }
 
       res.buffer = std::move(rres.body());
@@ -904,7 +904,7 @@ struct basic_session<Executor>::async_download_op : asio::coroutine
         return self.complete(ec, std::move(state_->res));
       }
 
-      yield detail::async_single_request(this_, state_->hreq, state_->hres, url, std::move(self));
+      yield this_->async_single_request(state_->hreq, state_->hres, url, std::move(self));
 
       if (ec)
         return self.complete(ec, std::move(state_->res));
@@ -916,7 +916,7 @@ struct basic_session<Executor>::async_download_op : asio::coroutine
         handle_redirect(ec);
         if (ec)
           goto complete;
-        yield detail::async_single_request(this_, state_->hreq, state_->hres, url, std::move(self));
+        yield this_->async_single_request(state_->hreq, state_->hres, url, std::move(self));
 
       }
 
@@ -930,7 +930,7 @@ struct basic_session<Executor>::async_download_op : asio::coroutine
         if (ec)
           goto complete;
 
-        yield detail::async_single_request(this_, state_->hreq, state_->fres, url, std::move(self));
+        yield this_->async_single_request(state_->hreq, state_->fres, url, std::move(self));
         state_->res.header = std::move(state_->fres.base());
         auto res = std::move(state_->res);
         state_ = nullptr;
