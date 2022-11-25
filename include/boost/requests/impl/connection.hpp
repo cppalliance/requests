@@ -1640,10 +1640,11 @@ std::size_t basic_connection<Stream>::stream::read_some(const MutableBuffer & bu
   parser_->get().body().size = itr->size();
   auto res = beast::http::read_some(connection_->next_layer_, connection_->buffer_, *parser_, ec);
 
-  if (ec == beast::http::error::need_buffer)
+  if (!parser_->is_done())
   {
     parser_->get().body().more = true;
-    ec = {};
+    if (ec == beast::http::error::need_buffer)
+      ec = {};
   }
   else
   {
@@ -1680,10 +1681,11 @@ void basic_connection<Stream>::stream::dump(system::error_code & ec)
       parser_->get().body().size = sizeof(data);
       beast::http::read_some(connection_->next_layer_, connection_->buffer_, *parser_, ec);
 
-      if (ec == beast::http::error::need_buffer)
+      if (!parser_->is_done())
       {
         parser_->get().body().more = true;
-        ec = {};
+        if (ec == beast::http::error::need_buffer)
+          ec = {};
       }
       else
         parser_->get().body().more = false;
@@ -1757,10 +1759,12 @@ struct basic_connection<Stream>::stream::async_read_some_op : asio::coroutine
       yield beast::http::async_read_some(this_->connection_->next_layer_, this_->connection_->buffer_,
                                          *this_->parser_, std::move(self));
 
-      if (ec == beast::http::error::need_buffer)
+
+      if (!this_->parser_->is_done())
       {
         this_->parser_->get().body().more = true;
-        ec = {};
+        if (ec == beast::http::error::need_buffer)
+          ec = {};
       }
       else
       {
@@ -1840,10 +1844,11 @@ struct basic_connection<Stream>::stream::async_dump_op : asio::coroutine
                                            this_->connection_->buffer_,
                                            *this_->parser_, std::move(self));
 
-        if (ec == beast::http::error::need_buffer)
+        if (this_->parser_->is_done())
         {
           this_->parser_->get().body().more = true;
-          ec = {};
+          if (ec == beast::http::error::need_buffer)
+            ec = {};
         }
         else
           this_->parser_->get().body().more = false;

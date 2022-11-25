@@ -13,3 +13,4 @@ add_link_options(-fsanitize=address)
 include_directories(include libs/url/include)
 
 add_subdirectory(test)
+add_subdirectory(example)

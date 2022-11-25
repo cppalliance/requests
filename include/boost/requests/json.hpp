@@ -208,10 +208,7 @@ Value read_json(Stream & str, json::storage_ptr ptr = {})
     sp.write_some(buffer, n);
   }
   sp.finish();
-  if (std::is_same<Value, value>::value)
-    return sp.release();
-
-  return ::boost::json::value_to<Value>(sp.release());
+   return ::boost::json::value_to<Value>(sp.release());
 }
 
 template<typename Value = value,
@@ -225,6 +222,7 @@ Value read_json(Stream & str,
   while (!sp.done() && !ec && !str.done())
   {
     const auto n = str.read_some(asio::buffer(buffer), ec);
+    std::string s(buffer, n);
     if (ec)
       break;
     sp.write_some(buffer, n, ec);
@@ -325,9 +323,9 @@ auto get(Connection & conn,
 {
   set_accept_headers(req);
   // this might be a bet idea
-  json::storage_ptr ptr{req.resource()};
+  json::storage_ptr ptr{req.get_allocator().resource()};
   auto s = conn.ropen(http::verb::get, target, empty{}, std::move(req));
-  return { s.header(), read_json<Value>(s, ptr) };
+  return { s.headers(), read_json<Value>(s, ptr) };
 }
 
 
@@ -339,9 +337,10 @@ auto get(Connection & conn,
          system::error_code & ec) -> response<Value>
 {
   set_accept_headers(req);
-  json::storage_ptr ptr{req.resource()};
+  json::storage_ptr ptr{req.get_allocator().resource()};
   auto s = conn.ropen(http::verb::get, target, empty{}, std::move(req));
-  return { s.header(), read_json<Value>(s, ptr, ec) };
+
+  return { s.headers(), read_json<Value>(s, ptr, ec) };
 }
 
 
@@ -357,11 +356,11 @@ auto post(Connection & conn,
           typename Connection::request_type req = {}) -> response<Value>
 {
   set_accept_headers(req);
-  json::storage_ptr ptr{req.resource()};
+  json::storage_ptr ptr{req.get_allocator().resource()};
   auto s = conn.ropen(http::verb::post, target,
                       ::boost::json::value_from(std::forward<RequestBody>(request_body), ptr),
                       std::move(req));
-  return { s.header(), read_json<Value>(s, ptr) };
+  return { s.headers(), read_json<Value>(s, ptr) };
 }
 
 template<typename Value = json::value,
@@ -374,11 +373,11 @@ auto post(Connection & conn,
           system::error_code & ec) -> response<Value>
 {
   set_accept_headers(req);
-  json::storage_ptr ptr{req.resource()};
+  json::storage_ptr ptr{req.get_allocator().resource()};
   auto s = conn.ropen(http::verb::post, target,
                       ::boost::json::value_from(std::forward<RequestBody>(request_body), ptr),
                       std::move(req));
-  return { s.header(), read_json<Value>(s, ec) };
+  return { s.headers(), read_json<Value>(s, ptr, ec) };
 }
 
 template<typename Value = json::value,
@@ -391,11 +390,11 @@ auto patch(Connection & conn,
           system::error_code & ec) -> response<Value>
 {
   set_accept_headers(req);
-  json::storage_ptr ptr{req.resource()};
+  json::storage_ptr ptr{req.get_allocator().resource()};
   auto s = conn.ropen(http::verb::patch, target,
                       ::boost::json::value_from(std::forward<RequestBody>(request_body), ptr),
                       std::move(req));
-  return { s.header(), read_json<Value>(s, ec) };
+  return { s.headers(), read_json<Value>(s, ptr, ec) };
 }
 
 
@@ -408,11 +407,11 @@ auto patch(Connection & conn,
           typename Connection::request_type req = {}) -> response<Value>
 {
   set_accept_headers(req);
-  json::storage_ptr ptr{req.resource()};
+  json::storage_ptr ptr{req.get_allocator().resource()};
   auto s = conn.ropen(http::verb::patch, target,
                       ::boost::json::value_from(std::forward<RequestBody>(request_body), ptr),
                       std::move(req));
-  return { s.header(), read_json<Value>(s, ptr) };
+  return { s.headers(), read_json<Value>(s, ptr) };
 }
 
 
@@ -425,11 +424,11 @@ auto put(Connection & conn,
           typename Connection::request_type req = {}) -> response<optional<Value>>
 {
   set_accept_headers(req);
-  json::storage_ptr ptr{req.resource()};
+  json::storage_ptr ptr{req.get_allocator().resource()};
   auto s = conn.ropen(http::verb::put, target,
                       ::boost::json::value_from(std::forward<RequestBody>(request_body), ptr),
                       std::move(req));
-  return { s.header(), read_optional_json<Value>(s, ptr) };
+  return { s.headers(), read_optional_json<Value>(s, ptr) };
 }
 
 template<typename Value = json::value,
@@ -442,11 +441,11 @@ auto put(Connection & conn,
          system::error_code & ec) -> response<optional<Value>>
 {
   set_accept_headers(req);
-  json::storage_ptr ptr{req.resource()};
+  json::storage_ptr ptr{req.get_allocator().resource()};
   auto s = conn.ropen(http::verb::put, target,
                       ::boost::json::value_from(std::forward<RequestBody>(request_body), ptr),
                       std::move(req));
-  return { s.header(), read_optional_json<Value>(s, ec) };
+  return { s.headers(), read_optional_json<Value>(s, ptr, ec) };
 }
 
 
@@ -459,11 +458,11 @@ auto delete_(Connection & conn,
          typename Connection::request_type req = {}) -> response<optional<Value>>
 {
   set_accept_headers(req);
-  json::storage_ptr ptr{req.resource()};
+  json::storage_ptr ptr{req.get_allocator().resource()};
   auto s = conn.ropen(http::verb::post, target,
                       ::boost::json::value_from(std::forward<RequestBody>(request_body), ptr),
                       std::move(req));
-  return { s.header(), read_optional_json<Value>(s, ptr) };
+  return { s.headers(), read_optional_json<Value>(s, ptr) };
 }
 
 template<typename Value = json::value,
@@ -476,11 +475,11 @@ auto delete_(Connection & conn,
          system::error_code & ec) -> response<optional<Value>>
 {
   set_accept_headers(req);
-  json::storage_ptr ptr{req.resource()};
+  json::storage_ptr ptr{req.get_allocator().resource()};
   auto s = conn.ropen(http::verb::delete_, target,
                       ::boost::json::value_from(std::forward<RequestBody>(request_body), ptr),
                       std::move(req));
-  return { s.header(), read_optional_json<Value>(s, ec) };
+  return { s.headers(), read_optional_json<Value>(s, ptr, ec) };
 }
 
 
@@ -493,11 +492,11 @@ auto delete_(Connection & conn,
              typename Connection::request_type req = {}) -> response<optional<Value>>
 {
   set_accept_headers(req);
-  json::storage_ptr ptr{req.resource()};
+  json::storage_ptr ptr{req.get_allocator().resource()};
   auto s = conn.ropen(http::verb::post, target,
                       empty{},
                       std::move(req));
-  return { s.header(), read_optional_json<Value>(s, ptr) };
+  return { s.headers(), read_optional_json<Value>(s, ptr) };
 }
 
 template<typename Value = json::value,
@@ -509,11 +508,11 @@ auto delete_(Connection & conn,
              system::error_code & ec) -> response<optional<Value>>
 {
   set_accept_headers(req);
-  json::storage_ptr ptr{req.resource()};
+  json::storage_ptr ptr{req.get_allocator().resource()};
   auto s = conn.ropen(http::verb::delete_, target,
                       empty{},
                       std::move(req));
-  return { s.header(), read_optional_json<Value>(s, ec) };
+  return { s.headers(), read_optional_json<Value>(s, ptr, ec) };
 }
 
 
@@ -525,9 +524,9 @@ auto options(Connection & conn,
              typename Connection::request_type req = {}) -> response<Value>
 {
   set_accept_headers(req);
-  json::storage_ptr ptr{req.resource()};
+  json::storage_ptr ptr{req.get_allocator().resource()};
   auto s = conn.ropen(http::verb::options, target, empty{}, std::move(req));
-  return { s.header(), read_json<Value>(s, ptr) };
+  return { s.headers(), read_json<Value>(s, ptr) };
 }
 
 
@@ -539,9 +538,9 @@ auto options(Connection & conn,
              system::error_code & ec) -> response<Value>
 {
   set_accept_headers(req);
-  json::storage_ptr ptr{req.resource()};
+  json::storage_ptr ptr{req.get_allocator().resource()};
   auto s = conn.ropen(http::verb::options, target, empty{}, std::move(req));
-  return { s.header(), read_json<Value>(s, ptr, ec) };
+  return { s.headers(), read_json<Value>(s, ptr, ec) };
 }
 
 namespace detail
