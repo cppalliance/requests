@@ -118,7 +118,8 @@ template<typename Connection, typename RequestBody>
 auto delete_(Connection & conn,
              typename Connection::target_view target,
              RequestBody && request_body,
-             typename Connection::request_type req = {}) -> response
+             typename Connection::request_type req = {})
+    -> typename std::enable_if_t<std::is_same<std::decay_t<RequestBody>, typename Connection::request_type>::value,  response>::type
 {
   return conn.request(http::verb::delete_, target, std::forward<RequestBody>(request_body), std::move(req));
 }
@@ -128,13 +129,14 @@ auto delete_(Connection & conn,
              typename Connection::target_view target,
              RequestBody && request_body,
              typename Connection::request_type req,
-             system::error_code & ec) -> response
+             system::error_code & ec)
+    -> typename std::enable_if_t<std::is_same<std::decay_t<RequestBody>, typename Connection::request_type>::value,  response>::type
 {
   return conn.request(http::verb::delete_, target, std::forward<RequestBody>(request_body), std::move(req), ec);
 }
 
 
-template<typename Connection, typename RequestBody>
+template<typename Connection>
 auto delete_(Connection & conn,
              typename Connection::target_view target,
              typename Connection::request_type req = {}) -> response
@@ -142,7 +144,7 @@ auto delete_(Connection & conn,
   return conn.request(http::verb::delete_, target, empty{}, std::move(req));
 }
 
-template<typename Connection, typename RequestBody>
+template<typename Connection>
 auto delete_(Connection & conn,
              typename Connection::target_view target,
              typename Connection::request_type req,
@@ -152,7 +154,7 @@ auto delete_(Connection & conn,
 }
 
 
-template<typename Connection, typename RequestBody>
+template<typename Connection>
 auto connect(Connection & conn,
              typename Connection::target_view target,
              typename Connection::request_type req = {}) -> response
@@ -160,7 +162,7 @@ auto connect(Connection & conn,
   return conn.request(http::verb::connect, target, empty{}, std::move(req));
 }
 
-template<typename Connection, typename RequestBody>
+template<typename Connection>
 auto connect(Connection & conn,
              typename Connection::target_view target,
              typename Connection::request_type req,
