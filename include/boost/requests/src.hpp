@@ -15,6 +15,7 @@
 #define BOOST_REQUESTS_SOURCE
 #endif
 
+#include <boost/requests/detail/impl/ssl.ipp>
 #include <boost/requests/fields/impl/keep_alive.ipp>
 #include <boost/requests/fields/impl/link.ipp>
 #include <boost/requests/fields/impl/location.ipp>

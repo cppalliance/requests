@@ -17,7 +17,6 @@
 #include "doctest.h"
 #include "string_maker.hpp"
 
-#include <boost/asio/ssl/host_name_verification.hpp>
 #include <boost/asio/experimental/awaitable_operators.hpp>
 
 using namespace boost;

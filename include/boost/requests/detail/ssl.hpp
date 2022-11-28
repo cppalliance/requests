@@ -10,6 +10,10 @@
 
 #include <boost/asio/ssl/stream_base.hpp>
 #include <boost/beast/core/stream_traits.hpp>
+#include <boost/core/detail/string_view.hpp>
+#include <boost/requests/detail/config.hpp>
+
+extern "C" { typedef struct ssl_st SSL; }
 
 namespace boost {
 namespace requests {
@@ -64,8 +68,28 @@ using has_ssl = std::bool_constant<!std::is_null_pointer_v<decltype(get_ssl_laye
 template<typename Stream>
 constexpr bool has_ssl_v = has_ssl<Stream>::value;
 
+BOOST_REQUESTS_DECL bool do_verify_host(SSL * ssl, const std::string & host);
+
+template <typename Stream>
+inline bool verify_host_impl(Stream *stream, const std::string & host)
+{
+  return do_verify_host(stream->native_handle(), host);
+}
+
+inline bool verify_host_impl(std::nullptr_t, const std::string &) {return true;}
+
+
+template<typename Stream>
+bool verify_host(Stream & str, const std::string &host)
+{
+  return verify_host_impl(get_ssl_layer(str), host);
+}
+
 }
 }
 }
 
+#if defined(BOOST_REQUESTS_HEADER_ONLY)
+#include <boost/requests/detail/impl/ssl.ipp>
+#endif
 #endif // BOOST_REQUESTS_DETAIL_SSL_HPP
