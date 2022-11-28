@@ -17,6 +17,9 @@ namespace boost
 namespace requests
 {
 
+template<typename Stream>
+struct basic_connection;
+
 using empty = beast::http::empty_body::value_type;
 
 template<typename Connection>
@@ -154,18 +157,18 @@ auto delete_(Connection & conn,
 }
 
 
-template<typename Connection>
-auto connect(Connection & conn,
-             typename Connection::target_view target,
-             typename Connection::request_type req = {}) -> response
+template<typename Stream>
+auto connect(basic_connection<Stream> & conn,
+             typename basic_connection<Stream>::target_view target,
+             typename basic_connection<Stream>::request_type req = {}) -> response
 {
   return conn.request(http::verb::connect, target, empty{}, std::move(req));
 }
 
-template<typename Connection>
-auto connect(Connection & conn,
-             typename Connection::target_view target,
-             typename Connection::request_type req,
+template<typename Stream>
+auto connect(basic_connection<Stream> & conn,
+             typename basic_connection<Stream>::target_view target,
+             typename basic_connection<Stream>::request_type req,
              system::error_code & ec) -> response
 {
   return conn.request(http::verb::connect, target, empty{}, std::move(req), ec);
@@ -330,16 +333,16 @@ async_delete(Connection & conn,
 }
 
 
-template<typename Connection,  
+template<typename Stream,
          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
                                                response)) CompletionToken
-              BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE( typename Connection::executor_type)>
+              BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE( typename basic_connection<Stream>::executor_type)>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, response))
-async_connect(Connection & conn,
-              typename Connection::target_view target,
-              typename Connection::request_type req  = {},
-              CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
+async_connect(basic_connection<Stream> & conn,
+              typename basic_connection<Stream>::target_view target,
+              typename basic_connection<Stream>::request_type req  = {},
+              CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename basic_connection<Stream>::executor_type))
 {
   return conn.async_request(http::verb::connect, target,
                        empty{}, std::move(req),
@@ -517,25 +520,6 @@ auto delete_(basic_session<Executor> & conn,
   return conn.request(http::verb::delete_, target, empty{}, std::move(req), ec);
 }
 
-
-template<typename Executor, typename RequestBody>
-auto connect(basic_session<Executor> & conn,
-             urls::url_view target,
-             http::fields req = {}) -> response
-{
-  return conn.request(http::verb::connect, target, empty{}, std::move(req));
-}
-
-template<typename Executor, typename RequestBody>
-auto connect(basic_session<Executor> & conn,
-             urls::url_view target,
-             http::fields req,
-             system::error_code & ec) -> response
-{
-  return conn.request(http::verb::connect, target, empty{}, std::move(req), ec);
-}
-
-
 template<typename Executor, typename RequestBody>
 auto options(basic_session<Executor> & conn,
              urls::url_view target,
@@ -687,24 +671,7 @@ async_delete(basic_session<Executor> & conn, urls::url_view target,
                             std::forward<CompletionToken>(completion_token));
 }
 
-
-template<typename Executor,  
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-                                               response)) CompletionToken
-              BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(Executor)>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                   void (boost::system::error_code, response))
-async_connect(basic_session<Executor> & conn, urls::url_view target, 
-              http::fields req  = {},
-              CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor))
-{
-  return conn.async_request(http::verb::connect, target,
-                            empty{}, std::move(req),
-                            std::forward<CompletionToken>(completion_token));
-}
-
-
-template<typename Executor,  
+template<typename Executor,
           BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
                                                response)) CompletionToken
               BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(Executor)>
@@ -852,20 +819,6 @@ inline auto delete_(core::string_view target,
 }
 
 
-inline auto connect(core::string_view target,
-             http::fields req = {}) -> response
-{
-  return request(http::verb::connect, target, empty{}, std::move(req));
-}
-
-inline auto connect(core::string_view target,
-             http::fields req,
-             system::error_code & ec) -> response
-{
-  return request(http::verb::connect, target, empty{}, std::move(req), ec);
-}
-
-
 inline auto options(core::string_view target,
              http::fields req = {}) -> response
 {
@@ -979,19 +932,6 @@ async_delete(core::string_view target,
              CompletionToken && completion_token)
 {
   return async_request(http::verb::delete_, target,
-                       empty{}, std::move(req),
-                       std::forward<CompletionToken>(completion_token));
-}
-
-
-template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response)) CompletionToken>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                   void (boost::system::error_code, response))
-async_connect(core::string_view target,
-              http::fields req,
-              CompletionToken && completion_token)
-{
-  return async_request(http::verb::connect, target,
                        empty{}, std::move(req),
                        std::forward<CompletionToken>(completion_token));
 }
@@ -1138,20 +1078,6 @@ inline auto delete_(urls::url_view target,
 }
 
 
-inline auto connect(urls::url_view target,
-             http::fields req = {}) -> response
-{
-  return request(http::verb::connect, target, empty{}, std::move(req));
-}
-
-inline auto connect(urls::url_view target,
-             http::fields req,
-             system::error_code & ec) -> response
-{
-  return request(http::verb::connect, target, empty{}, std::move(req), ec);
-}
-
-
 inline auto options(urls::url_view target,
              http::fields req = {}) -> response
 {
@@ -1268,19 +1194,6 @@ async_delete(urls::url_view target,
              CompletionToken && completion_token)
 {
   return async_request(http::verb::delete_, target,
-                       empty{}, std::move(req),
-                       std::forward<CompletionToken>(completion_token));
-}
-
-
-template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response)) CompletionToken>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                   void (boost::system::error_code, response))
-async_connect(urls::url_view target,
-              http::fields req,
-              CompletionToken && completion_token)
-{
-  return async_request(http::verb::connect, target,
                        empty{}, std::move(req),
                        std::forward<CompletionToken>(completion_token));
 }

@@ -54,11 +54,9 @@ struct tracker
     std::swap(cnt, lhs.cnt);
     return *this;
   }
-
 };
 
 }
-
 
 
 template<typename Stream>
