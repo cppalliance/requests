@@ -52,34 +52,39 @@ struct basic_connection_pool<Stream>::async_lookup_op : asio::coroutine
   const  urls::authority_view sv;
   constexpr static auto protocol = detail::has_ssl_v<Stream> ? "https" : "http";
   const core::string_view service = sv.has_port() ? sv.port() : protocol;
-  std::shared_ptr<resolver_type> resolver;
+  resolver_type resolver;
 
   using mutex_type = detail::basic_mutex<executor_type>;
   using lock_type = asem::lock_guard<mutex_type>;
 
-  template<typename Self>
-  void operator()(Self && self, std::array<std::size_t, 2u> = {},
-                  system::error_code ec1 = {}, lock_type = {},
-                  system::error_code ec2 = {}, typename resolver_type::results_type eps = {})
+  lock_type lock;
+
+  async_lookup_op(basic_connection_pool<Stream> * this_, urls::authority_view sv, executor_type exec)
+      : this_(this_), sv(sv), resolver(exec) {}
+
+  using completion_signature_type = void(system::error_code);
+  using step_signature_type       = void(system::error_code, typename resolver_type::results_type);
+
+
+  void resume(requests::detail::co_token_t<step_signature_type> self,
+              system::error_code & ec, typename resolver_type::results_type eps = {})
   {
-    if (!resolver)
-      resolver = std::allocate_shared<resolver_type>(self.get_allocator(), this_->get_executor());
-
-
-    if (ec1)
-      return self.complete(ec1);
-
-    if (ec2)
-      return self.complete(ec2);
-
     reenter(this)
     {
-      yield asio::experimental::make_parallel_group(
-          asem::async_lock(this_->mutex_, asio::deferred),
-          resolver->async_resolve(sv.encoded_host_name(), service, asio::deferred)
-          ).async_wait(asio::experimental::wait_for_all(), std::move(self));
+      if (!this_->mutex_.try_lock())
+      {
+        yield this_->mutex_.async_lock(std::move(self));
+      }
+      if (ec)
+        return;
+
+      lock = {this_->mutex_, std::adopt_lock};
+
+      yield resolver.async_resolve(sv.encoded_host_name(), service, std::move(self));
+      if (ec)
+        return;
       if (eps.empty())
-        return self.complete(asio::error::not_found);
+        ec = asio::error::not_found;
       else
         this_->host_ = eps->host_name();
 
@@ -92,13 +97,9 @@ struct basic_connection_pool<Stream>::async_lookup_op : asio::coroutine
               });
 
       this_->endpoints_.assign(r.begin(), r.end());
-      self.complete(error_code{});
     }
   }
 };
-
-template<typename T>
-auto foo(T &&);
 
 template<typename Stream>
 template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code)) CompletionToken>
@@ -107,11 +108,9 @@ BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
 basic_connection_pool<Stream>::async_lookup(urls::authority_view av,
                                             CompletionToken && completion_token)
 {
-  return asio::async_compose<CompletionToken, void(system::error_code)>(
-      async_lookup_op{{}, this, av},
-      completion_token,
-      mutex_
-  );
+  return detail::co_run<async_lookup_op>(
+      std::forward<CompletionToken>(completion_token),
+      this, av, get_executor());
 }
 
 template<typename Stream>
@@ -205,7 +204,10 @@ struct basic_connection_pool<Stream>::async_get_connection_op : asio::coroutine
   {
     reenter (this)
     {
-      yield this_->mutex_.async_lock(std::move(self));
+      if (!this_->mutex_.try_lock())
+      {
+        yield this_->mutex_.async_lock(std::move(self));
+      }
       if (ec)
         return nullptr;
 
@@ -280,7 +282,7 @@ basic_connection_pool<Stream>::async_get_connection(CompletionToken && completio
 }
 
 template<typename Stream>
-template<typename RequestBody, typename Allocator>
+template<typename RequestBody>
 struct basic_connection_pool<Stream>::async_request_op : asio::coroutine
 {
   basic_connection_pool<Stream> *this_;
@@ -312,7 +314,7 @@ struct basic_connection_pool<Stream>::async_request_op : asio::coroutine
 };
 
 template<typename Stream>
-template<typename RequestBody, typename Allocator,
+template<typename RequestBody,
          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
                                                response)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
@@ -325,8 +327,8 @@ basic_connection_pool<Stream>::async_request(beast::http::verb method,
                                              CompletionToken && completion_token)
 {
   return asio::async_compose<CompletionToken, void(system::error_code, response)>(
-      async_request_op<RequestBody, Allocator>{{}, this, method, path,
-                                               std::forward<RequestBody>(body), std::move(req)},
+      async_request_op<RequestBody>{{}, this, method, path,
+                                    std::forward<RequestBody>(body), std::move(req)},
       completion_token,
       mutex_
   );
@@ -335,7 +337,6 @@ basic_connection_pool<Stream>::async_request(beast::http::verb method,
 
 
 template<typename Stream>
-template<typename Allocator>
 struct basic_connection_pool<Stream>::async_download_op : asio::coroutine
 {
   basic_connection_pool<Stream> *this_;
@@ -367,8 +368,7 @@ struct basic_connection_pool<Stream>::async_download_op : asio::coroutine
 
 
 template<typename Stream>
-template<typename Allocator,
-         BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
                                                response)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code,
@@ -380,7 +380,7 @@ basic_connection_pool<Stream>::async_download(urls::pct_string_view path,
 
 {
   return asio::async_compose<CompletionToken, void(system::error_code, response)>(
-      async_download_op<Allocator>{{}, this, path, download_path, std::move(req)},
+      async_download_op{{}, this, path, download_path, std::move(req)},
       completion_token,
       mutex_
   );

@@ -211,7 +211,6 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
     }
 
     template<typename RequestBody,
-              typename Allocator = std::allocator<char>,
               BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
                                                    response)) CompletionToken
                   BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
@@ -241,7 +240,6 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
     }
 
 
-    template<typename Allocator= std::allocator<char> >
     auto download(urls::pct_string_view path,
                   request_settings req,
                   const filesystem::path & download_path) -> response
@@ -253,8 +251,7 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
       return res;
     }
 
-    template<typename Allocator = std::allocator<char>,
-              BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+    template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
                                                    response)) CompletionToken
                   BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
@@ -337,10 +334,10 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
 
     struct async_lookup_op;
     struct async_get_connection_op;
-    template<typename RequestBody, typename Allocator>
+
+    template<typename RequestBody>
     struct async_request_op;
 
-    template<typename Allocator>
     struct async_download_op;
 
     template<typename>
