@@ -122,7 +122,7 @@ auto delete_(Connection & conn,
              typename Connection::target_view target,
              RequestBody && request_body,
              typename Connection::request_type req = {})
-    -> typename std::enable_if_t<std::is_same<std::decay_t<RequestBody>, typename Connection::request_type>::value,  response>::type
+    -> std::enable_if_t<!std::is_same<std::decay_t<RequestBody>, typename Connection::request_type>::value,  response>
 {
   return conn.request(http::verb::delete_, target, std::forward<RequestBody>(request_body), std::move(req));
 }
@@ -133,7 +133,7 @@ auto delete_(Connection & conn,
              RequestBody && request_body,
              typename Connection::request_type req,
              system::error_code & ec)
-    -> typename std::enable_if_t<std::is_same<std::decay_t<RequestBody>, typename Connection::request_type>::value,  response>::type
+    -> std::enable_if_t<!std::is_same<std::decay_t<RequestBody>, typename Connection::request_type>::value,  response>
 {
   return conn.request(http::verb::delete_, target, std::forward<RequestBody>(request_body), std::move(req), ec);
 }
