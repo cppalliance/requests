@@ -30,7 +30,7 @@ void basic_connection_pool<Stream>::lookup(urls::authority_view sv, system::erro
   auto eps = resolver.resolve(sv.encoded_host_name(), service, ec);
 
   if (eps.empty())
-    ec = asio::error::not_found;
+    BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::not_found)
   else
     host_ = eps->host_name();
 
@@ -48,6 +48,9 @@ void basic_connection_pool<Stream>::lookup(urls::authority_view sv, system::erro
 template<typename Stream>
 struct basic_connection_pool<Stream>::async_lookup_op : asio::coroutine
 {
+  using executor_type = typename Stream::executor_type;
+  executor_type get_executor() {return this_->get_executor(); }
+
   basic_connection_pool<Stream> * this_;
   const  urls::authority_view sv;
   constexpr static auto protocol = detail::has_ssl_v<Stream> ? "https" : "http";
@@ -84,7 +87,7 @@ struct basic_connection_pool<Stream>::async_lookup_op : asio::coroutine
       if (ec)
         return;
       if (eps.empty())
-        ec = asio::error::not_found;
+        BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::not_found)
       else
         this_->host_ = eps->host_name();
 
@@ -137,7 +140,7 @@ auto basic_connection_pool<Stream>::get_connection(error_code & ec) -> std::shar
   {
     if (endpoints_.empty())
     {
-      ec = asio::error::not_found;
+      BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::not_found);
       return nullptr;
     }
 
@@ -172,7 +175,7 @@ auto basic_connection_pool<Stream>::get_connection(error_code & ec) -> std::shar
                          });
   if (itr == conns_.end())
   {
-    ec = asio::error::not_found;
+    BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::not_found);
     return nullptr;
   }
   else
@@ -182,6 +185,9 @@ auto basic_connection_pool<Stream>::get_connection(error_code & ec) -> std::shar
 template<typename Stream>
 struct basic_connection_pool<Stream>::async_get_connection_op : asio::coroutine
 {
+  using executor_type = typename Stream::executor_type;
+  executor_type get_executor() {return this_->get_executor(); }
+
   basic_connection_pool<Stream> * this_;
   async_get_connection_op(basic_connection_pool<Stream> * this_) : this_(this_) {}
 
@@ -229,7 +235,7 @@ struct basic_connection_pool<Stream>::async_get_connection_op : asio::coroutine
       {
         if (this_->endpoints_.empty())
         {
-          ec = asio::error::not_found;
+          BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::not_found);
           return nullptr;
         }
 
@@ -259,7 +265,7 @@ struct basic_connection_pool<Stream>::async_get_connection_op : asio::coroutine
                              });
       if (itr == this_->conns_.end())
       {
-        ec = asio::error::not_found;
+        BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::not_found);
         return nullptr;
       }
       else
@@ -285,9 +291,12 @@ template<typename Stream>
 template<typename RequestBody>
 struct basic_connection_pool<Stream>::async_request_op : asio::coroutine
 {
+  using executor_type = typename Stream::executor_type;
+  executor_type get_executor() {return this_->get_executor(); }
+
   basic_connection_pool<Stream> *this_;
   beast::http::verb method;
-  urls::pct_string_view path;
+  urls::url_view path;
   RequestBody body;
   request_settings req;
 
@@ -321,7 +330,7 @@ BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code,
                                          response))
 basic_connection_pool<Stream>::async_request(beast::http::verb method,
-                                             urls::pct_string_view path,
+                                             urls::url_view path,
                                              RequestBody && body,
                                              request_settings req,
                                              CompletionToken && completion_token)
@@ -334,67 +343,16 @@ basic_connection_pool<Stream>::async_request(beast::http::verb method,
   );
 }
 
-
-
-template<typename Stream>
-struct basic_connection_pool<Stream>::async_download_op : asio::coroutine
-{
-  basic_connection_pool<Stream> *this_;
-  urls::pct_string_view path;
-  filesystem::path download_path;
-  request_settings req;
-
-  template<typename Self>
-  void operator()(Self && self, error_code ec = {}, std::shared_ptr<connection_type> conn = nullptr)
-  {
-    reenter(this)
-    {
-      yield this_->async_get_connection(std::move(self));
-      if (!ec && conn == nullptr)
-        ec =  asio::error::not_found;
-      if (ec)
-        return self.complete(ec, response{req.get_allocator()});
-
-      yield conn->async_download(path, std::move(req), std::move(download_path), std::move(self));
-    }
-  }
-
-  template<typename Self>
-  void operator()(Self && self, error_code ec, response res)
-  {
-    self.complete(ec, std::move(res));
-  }
-};
-
-
-template<typename Stream>
-template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-                                               response)) CompletionToken>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                   void (boost::system::error_code,
-                                         response))
-basic_connection_pool<Stream>::async_download(urls::pct_string_view path,
-                                              request_settings req,
-                                              filesystem::path download_path,
-                                              CompletionToken && completion_token)
-
-{
-  return asio::async_compose<CompletionToken, void(system::error_code, response)>(
-      async_download_op{{}, this, path, download_path, std::move(req)},
-      completion_token,
-      mutex_
-  );
-}
-
-
-
 template<typename Stream>
 template<typename RequestBody>
 struct basic_connection_pool<Stream>::async_ropen_op : asio::coroutine
 {
+  using executor_type = typename Stream::executor_type;
+  executor_type get_executor() {return this_->get_executor(); }
+
   basic_connection_pool<Stream> * this_;
   beast::http::verb method;
-  urls::pct_string_view path;
+  urls::url_view path;
   RequestBody && body;
   request_settings req;
 
@@ -407,7 +365,7 @@ struct basic_connection_pool<Stream>::async_ropen_op : asio::coroutine
       if (!ec && conn == nullptr)
         ec =  asio::error::not_found;
       if (ec)
-        return self.complete(ec, typename connection_type::stream{nullptr});
+        return self.complete(ec, typename connection_type::stream{this_->get_executor(), nullptr});
 
       yield conn->async_ropen(method, path, std::forward<RequestBody>(body), std::move(req), std::move(self));
     }
@@ -427,13 +385,66 @@ template<typename RequestBody,
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, typename basic_connection<Stream>::stream))
 basic_connection_pool<Stream>::async_ropen(beast::http::verb method,
-                                           urls::pct_string_view path,
+                                           urls::url_view path,
                                            RequestBody && body,
                                            request_settings req,
                                            CompletionToken && completion_token)
 {
   return asio::async_compose<CompletionToken, void(system::error_code, typename basic_connection<Stream>::stream)>(
       async_ropen_op<RequestBody>{{}, this, method, path, std::forward<RequestBody>(body), std::move(req)},
+      completion_token,
+      mutex_
+  );
+}
+
+template<typename Stream>
+template<typename RequestBody>
+struct basic_connection_pool<Stream>::async_ropen_op_1 : asio::coroutine
+{
+  using executor_type = typename Stream::executor_type;
+  executor_type get_executor() {return this_->get_executor(); }
+
+  basic_connection_pool<Stream> * this_;
+  http::request<RequestBody> & req;
+  request_options opt;
+  cookie_jar * jar;
+
+  template<typename Self>
+  void operator()(Self && self, error_code ec = {}, std::shared_ptr<connection_type> conn = nullptr)
+  {
+    reenter(this)
+    {
+      yield this_->async_get_connection(std::move(self));
+      if (!ec && conn == nullptr)
+        ec =  asio::error::not_found;
+      if (ec)
+        return self.complete(ec, typename connection_type::stream{this_->get_executor(), nullptr});
+
+      yield conn->async_ropen(req, std::move(opt), jar, std::move(self));
+    }
+  }
+
+  template<typename Self>
+  void operator()(Self && self, error_code ec, typename connection_type::stream res)
+  {
+    self.complete(ec, std::move(res));
+  }
+};
+
+
+template<typename Stream>
+template<typename RequestBody,
+          typename CompletionToken>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
+                                   void (boost::system::error_code,
+                                        typename basic_connection<Stream>::stream))
+basic_connection_pool<Stream>::async_ropen(http::request<RequestBody> & req,
+                                           request_options opt,
+                                           cookie_jar * jar,
+                                           CompletionToken && completion_token)
+{
+  return asio::async_compose<CompletionToken, void(system::error_code, typename basic_connection<Stream>::stream)>(
+      async_ropen_op_1<RequestBody>{{}, this, req, std::move(opt), jar},
       completion_token,
       mutex_
   );

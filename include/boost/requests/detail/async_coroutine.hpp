@@ -15,6 +15,8 @@
 #include <boost/asio/cancellation_state.hpp>
 #include <boost/asio/coroutine.hpp>
 #include <boost/asio/dispatch.hpp>
+#include <boost/asio/post.hpp>
+#include <boost/asio/recycling_allocator.hpp>
 #include <boost/container/pmr/polymorphic_allocator.hpp>
 #include <boost/container/pmr/resource_adaptor.hpp>
 #include <boost/system/error_code.hpp>
@@ -39,7 +41,7 @@ struct co_token_t<void()>
   cancellation_slot_type get_cancellation_slot() const {return impl_->slot;}
 
   using allocator_type = container::pmr::polymorphic_allocator<void>;
-  allocator_type get_allocator() const {return impl_->allocator;}
+  allocator_type get_allocator() const {return impl_->get_allocator();}
 
   void operator()()
   {
@@ -50,9 +52,8 @@ struct co_token_t<void()>
   struct base
   {
     virtual void resume(co_token_t<void()> impl) = 0;
-
     asio::cancellation_slot slot;
-    container::pmr::polymorphic_allocator<void> allocator;
+    virtual container::pmr::polymorphic_allocator<void> get_allocator() = 0;
   };
 
   co_token_t(const co_token_t & ) = delete;
@@ -60,6 +61,9 @@ struct co_token_t<void()>
 
 
 private:
+  template<typename...>
+  friend struct co_token_t;
+
   explicit co_token_t(std::shared_ptr<base> impl) : impl_(std::move(impl)) {}
 
   std::shared_ptr<base> impl_;
@@ -75,7 +79,7 @@ struct co_token_t<void(T1)>
   cancellation_slot_type get_cancellation_slot() const {return impl_->slot;}
 
   using allocator_type = container::pmr::polymorphic_allocator<void>;
-  allocator_type get_allocator() const {return impl_->allocator;}
+  allocator_type get_allocator() const {return impl_->get_allocator();}
 
   void operator()(T1 t1 = {})
   {
@@ -83,17 +87,27 @@ struct co_token_t<void(T1)>
     base.resume(std::move(*this), std::move(t1));
   }
 
-  struct base
+  operator co_token_t<void()> () &&
+  {
+    return co_token_t<void()>{impl_};
+  }
+
+  struct base : co_token_t<void()>::base
   {
     virtual void resume(co_token_t<void(T1)> tk, T1 t1) = 0;
-    asio::cancellation_slot slot;
-    container::pmr::polymorphic_allocator<void> allocator;
+    void resume(co_token_t<void()> tk)
+    {
+      resume(co_token_t<void(T1)>{std::static_pointer_cast<base>(std::move(tk.impl_))}, T1{});
+    }
   };
 
   co_token_t(const co_token_t & ) = delete;
   co_token_t(      co_token_t &&) = default;
 
 private:
+  template<typename...>
+  friend struct co_token_t;
+
   explicit co_token_t(std::shared_ptr<base> impl) : impl_(std::move(impl)) {}
 
   std::shared_ptr<base> impl_;
@@ -108,7 +122,7 @@ struct co_token_t<void(T1, T2)>
   cancellation_slot_type get_cancellation_slot() const {return impl_->slot;}
 
   using allocator_type = container::pmr::polymorphic_allocator<void>;
-  allocator_type get_allocator() const {return impl_->allocator;}
+  allocator_type get_allocator() const {return impl_->get_allocator();}
 
   void operator()(T1 t1 = {}, T2 t2 = {})
   {
@@ -116,7 +130,7 @@ struct co_token_t<void(T1, T2)>
     base.resume(std::move(*this), std::move(t1), std::move(t2));
   }
 
-  struct base
+  struct base : co_token_t<void(T1)>::base
   {
     virtual void resume(co_token_t<void(T1, T2)> tk, T1 t1, T2 t2) = 0;
     void resume(co_token_t<void()> tk) final
@@ -145,7 +159,21 @@ struct co_token_t<void(T1, T2)>
     asio::cancellation_slot slot;
     container::pmr::polymorphic_allocator<void> allocator;
   };
+
+  operator co_token_t<void(T1)> () &&
+  {
+    return co_token_t<void(T1)>{impl_};
+  }
+
+  operator co_token_t<void()> () &&
+  {
+    return co_token_t<void()>{impl_};
+  }
+
 private:
+  template<typename...>
+  friend struct co_token_t;
+
   explicit co_token_t(std::shared_ptr<base> impl) : impl_(std::move(impl)) {}
   std::shared_ptr<base> impl_;
   template<typename Implementation, typename> friend struct co_runner;
@@ -164,8 +192,7 @@ struct co_runner<Implementation, void(system::error_code, Args...)>
     void resume(token_type tk, system::error_code ec, Args ... args) override
     {
       using result_type = decltype(impl.resume(std::move(tk), ec, std::move(args)...));
-      return resume_impl(std::is_void<result_type>{}, std::move(tk), std::move(ec), std::move(args)...);
-
+      resume_impl(std::is_void<result_type>{}, std::move(tk), std::move(ec), std::move(args)...);
     }
 
     void resume_impl(std::true_type, token_type tk, system::error_code ec, Args ... args)
@@ -175,12 +202,13 @@ struct co_runner<Implementation, void(system::error_code, Args...)>
       if (impl.is_complete())
       {
         auto h = std::move(handler);
+        assert(buf.use_count() == 1);
+        auto exec = asio::get_associated_executor(h, impl.get_executor());
         buf = nullptr;
-        if (asio::detail::has_executor_type<Handler>::value)
-          asio::dispatch(asio::append(std::move(h), ec));
-        else
-          std::move(h)(ec);
+        asio::dispatch(exec, asio::append(std::move(h), ec));
       }
+      else
+        assert(buf.use_count() > 1);
     }
 
     void resume_impl(std::false_type, token_type tk, system::error_code ec, Args ... args)
@@ -191,13 +219,54 @@ struct co_runner<Implementation, void(system::error_code, Args...)>
       {
         auto h = std::move(handler);
         auto tmp = std::move(res);
+        assert(buf.use_count() == 1);
+        auto exec = asio::get_associated_executor(h, impl.get_executor());
         buf = nullptr;
-        if (asio::detail::has_executor_type<Handler>::value)
-          asio::dispatch(asio::append(std::move(h), ec, std::move(tmp)));
-        else
-          std::move(h)(ec, std::move(tmp));
+        asio::dispatch(exec, asio::append(std::move(h), ec, std::move(tmp)));
       }
+      else
+        assert(buf.use_count() > 1);
     }
+
+    void initiate(token_type tk)
+    {
+      using result_type = decltype(impl.resume(std::move(tk), std::declval<system::error_code&>(), std::declval<Args>()...));
+      initiate_impl(std::is_void<result_type>{}, std::move(tk), {}, Args{}...);
+    }
+
+    void initiate_impl(std::true_type, token_type tk, system::error_code ec, Args ... args)
+    {
+      auto buf = tk.impl_;
+      impl.resume(std::move(tk), ec, std::move(args)...);
+      if (impl.is_complete())
+      {
+        auto h = std::move(handler);
+        assert(buf.use_count() == 1);
+        auto exec = asio::get_associated_executor(h, impl.get_executor());
+        buf = nullptr;
+        asio::post(exec, asio::append(std::move(h), ec));
+      }
+      else
+        assert(buf.use_count() > 1);
+    }
+
+    void initiate_impl(std::false_type, token_type tk, system::error_code ec, Args ... args)
+    {
+      auto buf = tk.impl_;
+      decltype(auto) res = impl.resume(std::move(tk), ec, std::move(args)...);
+      if (impl.is_complete())
+      {
+        auto h = std::move(handler);
+        auto tmp = std::move(res);
+        assert(buf.use_count() == 1);
+        auto exec = asio::get_associated_executor(h, impl.get_executor());
+        buf = nullptr;
+        asio::post(exec, asio::append(std::move(h), ec, std::move(tmp)));
+      }
+      else
+        assert(buf.use_count() > 1);
+    }
+
 
     Implementation impl;
     Handler handler;
@@ -207,7 +276,6 @@ struct co_runner<Implementation, void(system::error_code, Args...)>
     {
       return {};
     }
-
 
     typename token_type::allocator_type get_allocator_impl(container::pmr::polymorphic_allocator<void> alloc)
     {
@@ -247,7 +315,6 @@ struct co_runner<Implementation, void(system::error_code, Args...)>
         : handler(std::forward<Handler_>(h))
         , impl(std::forward<Args_>(args)...)
     {
-      this->token_type::base::allocator = &alloc_res;
       this->token_type::base::slot      = asio::get_associated_cancellation_slot(handler);
     }
   };
@@ -255,10 +322,11 @@ struct co_runner<Implementation, void(system::error_code, Args...)>
   template<typename Handler, typename ... Args_>
   void operator()(Handler && h, Args_ &&... args)
   {
-    auto alloc = asio::get_associated_allocator(h);
+    auto alloc = asio::get_associated_allocator(h, asio::recycling_allocator<void>());
     using impl_t = impl_<std::decay_t<Handler>>;
     token_type tt{std::allocate_shared<impl_t>(alloc, std::forward<Handler>(h), std::forward<Args_>(args)...)};
-    tt();
+    auto * impl = static_cast<impl_t*>(tt.impl_.get());
+    impl->initiate(std::move(tt));
   }
 };
 

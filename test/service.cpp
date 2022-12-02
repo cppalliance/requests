@@ -26,7 +26,7 @@ TEST_CASE("session")
 
   asio::any_io_executor exec{ctx.get_executor()};
 
-  get(requests::default_session(exec), "https://httpbin.org", {});
+  get(requests::default_session(exec), urls::parse_uri("https://httpbin.org").value(), {});
   requests::default_session(tp.get_executor());
   requests::default_session(ctx.get_executor() );
 }

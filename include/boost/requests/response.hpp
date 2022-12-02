@@ -8,6 +8,7 @@
 #ifndef BOOST_REQUESTS_RESPONSE_HPP
 #define BOOST_REQUESTS_RESPONSE_HPP
 
+#include <boost/asio/coroutine.hpp>
 #include <boost/beast/core/flat_buffer.hpp>
 #include <boost/beast/http/basic_dynamic_body.hpp>
 #include <boost/beast/http/empty_body.hpp>
@@ -24,6 +25,7 @@
 #include <boost/url/url.hpp>
 #include <boost/url/url_view.hpp>
 #include <memory>
+#include <scoped_allocator>
 #include <string>
 
 namespace boost
@@ -31,23 +33,107 @@ namespace boost
 namespace requests
 {
 
-struct response
+struct response_base
 {
-  using allocator_type = boost::container::pmr::polymorphic_allocator<char>;
-  using fields_type = beast::http::basic_fields<allocator_type>;
-  using buffer_type = beast::basic_flat_buffer<allocator_type>;
-  using body_type = beast::http::basic_dynamic_body<buffer_type>;
+  using allocator_type = container::pmr::polymorphic_allocator<char>;
+  using buffer_type    = beast::basic_flat_buffer<allocator_type>;
+  using body_type      = beast::http::basic_dynamic_body<buffer_type>;
 
-  beast::http::response_header<fields_type> header;
-  // raw body
-  buffer_type buffer{header.get_allocator()};
+  http::response_header headers;
 
-  int          result_code() const {return header.result_int(); }
-  http::status result()      const {return header.result(); }
+  int          result_code() const {return headers.result_int(); }
+  http::status result()      const {return headers.result(); }
 
-  response(allocator_type alloc) : header(alloc), buffer(alloc) {}
-  response(beast::http::response_header<fields_type> header,
-                 buffer_type buffer) : header(std::move(header)), buffer(std::move(buffer)) {}
+  using string_body_type = typename beast::http::basic_string_body<char, std::char_traits<char>, allocator_type>;
+  using vector_alloc = boost::container::pmr::polymorphic_allocator<typename http::response<body_type>>;
+  using history_type = std::vector<typename http::response<body_type>, vector_alloc>;
+  history_type history{vector_alloc{headers.get_allocator()}};
+
+  response_base(allocator_type alloc,         history_type history) : headers(alloc),             history(std::move(history)) {}
+  response_base(http::response_header header, history_type history) : headers(std::move(header)), history(std::move(history)) {}
+
+  response_base(allocator_type alloc        ) : headers(alloc),             history (vector_alloc{alloc}) {}
+  response_base(http::response_header header) : headers(std::move(header)), history (vector_alloc{headers.get_allocator()}) {}
+
+  ~response_base() = default;
+
+  response_base(const response_base & ) = default;
+  response_base(response_base && ) noexcept = default;
+
+  response_base& operator=(const response_base & ) = default;
+  response_base& operator=(response_base && ) noexcept = default;
+
+  bool ok () const
+  {
+    using namespace beast::http;
+    const auto s = to_status_class(headers.result());
+    return s == status_class::client_error || s == status_class::server_error;
+  }
+  explicit operator bool() const { return ok(); }
+
+  bool is_redirect() const
+  {
+    using s = beast::http::status;
+    switch (headers.result())
+    {
+    case s::moved_permanently: return true;
+    case s::found: return true;
+    case s::temporary_redirect: return true;
+    case s::permanent_redirect: return true;
+    default : return false;
+    }
+  }
+  bool is_permanent_redirect() const
+  {
+    using s = beast::http::status;
+    switch (headers.result())
+    {
+    case s::moved_permanently: return true;
+    case s::permanent_redirect: return true;
+    default : return false;
+    }
+  }
+
+  system::error_code status_as_error() const
+  {
+    system::error_code res;
+    res.assign(headers.result_int(), http_status_category());
+    return res;
+  }
+
+  void throw_status_if_error() const
+  {
+    auto ec = status_as_error();
+    if (ec)
+      boost::throw_exception(system::system_error(ec));
+  }
+
+  system::result<std::vector<struct link>> link() const
+  {
+    std::vector<struct link> res;
+
+    for (const auto & l : boost::make_iterator_range(headers.equal_range(beast::http::field::link)))
+    {
+      auto ll = parse_link_field(l.value());
+      if (ll.has_error())
+        return ll.error();
+
+      res.insert(res.end(), ll->begin(), ll->end());
+    }
+    return res;
+  }
+};
+
+
+struct response : response_base
+{
+  buffer_type buffer{headers.get_allocator()};
+
+  response(allocator_type alloc = {}) : response_base(alloc), buffer(alloc) {}
+  response(http::response_header header, buffer_type buffer) : response_base(std::move(header)), buffer(std::move(buffer)) {}
+  response(response_base         header, buffer_type buffer) : response_base(std::move(header)), buffer(std::move(buffer)) {}
+
+  response(http::response_header header, history_type history, buffer_type buffer) : response_base(std::move(header), std::move(history)), buffer(std::move(buffer)) {}
 
   response(const response & ) = default;
   response(response && ) noexcept = default;
@@ -71,12 +157,11 @@ struct response
     return string_view<Char, CharTraits>().to_string(std::forward<Allocator_>(alloc));
   }
 
-
   template<typename Char = char,
            typename CharTraits = std::char_traits<char>>
   auto string() const -> std::basic_string<Char, CharTraits, allocator_type>
   {
-    return string_view<Char, CharTraits>().to_string(header.get_allocator());
+    return string_view<Char, CharTraits>().to_string(headers.get_allocator());
   }
 
   template<typename Byte = unsigned char>
@@ -85,75 +170,13 @@ struct response
     const auto cd = buffer.cdata();
     return span<Byte>(static_cast<const Byte*>(cd.data()), cd.size() / sizeof(Byte));
   }
-
-  using string_body_type = typename beast::http::basic_string_body<char, std::char_traits<char>, allocator_type>;
-  using history_type = typename beast::http::response<body_type, fields_type>;
-  using vector_alloc = boost::container::pmr::polymorphic_allocator<history_type>;
-
-  std::vector<history_type, vector_alloc> history{vector_alloc{header.get_allocator()}};
-
-  bool ok () const
-  {
-    using namespace beast::http;
-    const auto s = to_status_class(header.result());
-    return s == status_class::client_error || s == status_class::server_error;
-  }
-  explicit operator bool() const { return ok(); }
-
-  bool is_redirect() const
-  {
-    using s = beast::http::status;
-    switch (header.result())
-    {
-    case s::moved_permanently: return true;
-    case s::found: return true;
-    case s::temporary_redirect: return true;
-    case s::permanent_redirect: return true;
-    default : return false;
-    }
-  }
-  bool is_permanent_redirect() const
-  {
-    using s = beast::http::status;
-    switch (header.result())
-    {
-    case s::moved_permanently: return true;
-    case s::permanent_redirect: return true;
-    default : return false;
-    }
-  }
-
-  system::error_code status_as_error() const
-  {
-    system::error_code res;
-    res.assign(header.result_int(), http_status_category());
-    return res;
-  }
-
-  void throw_status_if_error() const
-  {
-    auto ec = status_as_error();
-    if (ec)
-      boost::throw_exception(system::system_error(ec));
-  }
-
-  system::result<std::vector<struct link>> link() const
-  {
-    std::vector<struct link> res;
-
-    for (const auto & l : boost::make_iterator_range(header.equal_range(beast::http::field::link)))
-    {
-      auto ll = parse_link_field(l.value());
-      if (ll.has_error())
-        return ll.error();
-
-      res.insert(res.end(), ll->begin(), ll->end());
-    }
-    return res;
-  }
 };
 
 }
 }
+
+#if defined(BOOST_REQUESTS_HEADER_ONLY)
+#include <boost/requests/impl/response.ipp>
+#endif
 
 #endif // BOOST_REQUESTS_RESPONSE_HPP

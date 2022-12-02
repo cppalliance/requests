@@ -11,6 +11,7 @@
 #include <boost/requests/connection_pool.hpp>
 #include <boost/requests/cookie.hpp>
 #include <boost/requests/cookie_jar.hpp>
+#include <boost/requests/download.hpp>
 #include <boost/requests/error.hpp>
 #include <boost/requests/form.hpp>
 #include <boost/requests/http.hpp>

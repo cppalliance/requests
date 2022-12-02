@@ -65,8 +65,8 @@ struct request_body_traits<std::basic_string<Char, Traits, Alloc>, void>
     return "text/plain; charset=utf-8";
   }
   using body_type = beast::http::basic_string_body<Char, Traits, Alloc>;
-  static typename body_type::value_type make_body(const std::basic_string<Char, Traits, Alloc> & str,
-                                                  system::error_code & ec)
+  static const typename body_type::value_type & make_body(const std::basic_string<Char, Traits, Alloc> & str,
+                                                          system::error_code & ec)
   {
     return str;
   }
@@ -266,8 +266,6 @@ struct request_body_traits<std::filesystem::path, void>
 };
 
 #endif
-
-// application/x-www-form-urlencoded
 
 }
 }

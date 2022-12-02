@@ -12,16 +12,13 @@
 
 #include <boost/requests/connection.hpp>
 
-namespace boost {
-namespace requests {
+namespace boost
+{
+namespace requests
+{
 
 template struct basic_connection<asio::ip::tcp::socket>;
 template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>;
-
-template struct basic_connection<asio::ip::tcp::socket>::                   async_request_op<beast::http::empty_body>;
-template struct basic_connection<asio::ip::tcp::socket>::                   async_request_op<beast::http::string_body>;
-template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_request_op<beast::http::empty_body>;
-template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>::async_request_op<beast::http::string_body>;
 
 }
 }

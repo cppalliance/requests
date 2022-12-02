@@ -11,6 +11,7 @@
 #include <boost/asio/detached.hpp>
 #include <boost/asio/readable_pipe.hpp>
 #include <boost/asio/writable_pipe.hpp>
+#include <boost/asio/post.hpp>
 #include <boost/asio/write.hpp>
 #include <boost/asio/yield.hpp>
 
@@ -22,6 +23,9 @@ struct my_coro : asio::coroutine
 {
   asio::readable_pipe source;
   asio::writable_pipe sink;
+
+  using executor_type = asio::any_io_executor;
+  executor_type get_executor() {return source.get_executor(); }
 
   char buf[4096];
   system::error_code ec_;
@@ -58,6 +62,10 @@ struct my_coro : asio::coroutine
         yield sink.async_write_some(asio::buffer(buf, n), std::move(token));
         if (ec)
           break;
+        yield {
+          requests::detail::co_token_t<void()> tt = std::move(token);
+          asio::post(sink.get_executor(), std::move(tt));
+        };
       }
     }
   }
@@ -84,7 +92,6 @@ TEST_CASE("develop")
                     [&](system::error_code ec, std::size_t n)
                     {
                       source.close();
-                      printf("EC 2: %s\n", ec.message().c_str());
                     });
 
   ctx.run();

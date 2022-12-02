@@ -34,6 +34,12 @@
   return ::boost::system::error_code((ev), &loc##__LINE__);       \
 }
 
+#define BOOST_REQUESTS_ASSIGN_EC(ec, ev)                          \
+{                                                                 \
+  static constexpr auto loc##__LINE__((BOOST_CURRENT_LOCATION));  \
+  ec.assign((ev), &loc##__LINE__);                                \
+}
+
 #if defined(BOOST_REQUESTS_SOURCE)
 
 #else
@@ -75,6 +81,10 @@ using basic_mutex = asem::basic_mutex<boost::asem::mt, Executor>;
 
 #if !defined(BOOST_REQUESTS_DEFAULT_POOL_SIZE)
 #define BOOST_REQUESTS_DEFAULT_POOL_SIZE 6
+#endif
+
+#if !defined(BOOST_REQUESTS_CHUNK_SIZE)
+#define BOOST_REQUESTS_CHUNK_SIZE 4096
 #endif
 
 #if !defined(BOOST_REQUESTS_MAX_URL_LENGTH)

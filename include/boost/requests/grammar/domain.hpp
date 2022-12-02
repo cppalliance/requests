@@ -9,9 +9,6 @@
 #include <boost/url/grammar.hpp>
 #include <boost/url/rfc/pchars.hpp>
 
-#include <boost/requests/detail/define.hpp>
-#include <boost/requests/detail/state_machine.hpp>
-
 namespace boost {
 namespace requests {
 namespace grammar {
@@ -171,5 +168,4 @@ domain_t domain;
 } // requests
 } // boost
 
-#include <boost/requests/detail/undef.hpp>
 #endif //BOOST_REQUESTS_COOKIES_GRAMMAR_DOMAIN_HPP

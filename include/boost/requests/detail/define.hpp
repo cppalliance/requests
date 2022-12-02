@@ -5,5 +5,16 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#define checked_call(...) BOOST_REQUESTS_CHECK_ERROR(__VA_ARGS__)
-#define state(...) BOOST_REQUESTS_STATE(__VA_ARGS__)
+#define await(coro) \
+  coro = {}; \
+  while (!coro.is_complete()) \
+    yield
+
+#define await_lock(Mutex, Lock) \
+  if (!Mutex.try_lock())   \
+  {                       \
+    yield Mutex.async_lock(std::move(self)); \
+    if (ec)               \
+       break;             \
+  }                       \
+  Lock = asem::lock_guard<decltype(Mutex)>{Mutex, std::adopt_lock}

@@ -9,6 +9,7 @@
 #define BOOST_REQUESTS_HTTP_HPP
 
 #include <boost/beast/http/buffer_body.hpp>
+#include <boost/beast/http/dynamic_body.hpp>
 #include <boost/beast/http/empty_body.hpp>
 #include <boost/beast/http/file_body.hpp>
 #include <boost/beast/http/string_body.hpp>
@@ -21,7 +22,6 @@
 
 namespace boost {
 namespace requests {
-
 namespace http {
 
 using boost::beast::http::field;

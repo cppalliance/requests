@@ -10,6 +10,7 @@
 
 
 #include "doctest.h"
+#include <boost/core/demangle.hpp>
 #include <boost/core/detail/string_view.hpp>
 #include <boost/requests/fields/set_cookie.hpp>
 #include <boost/asio/multiple_exceptions.hpp>
@@ -19,6 +20,16 @@
 
 namespace doctest
 {
+
+
+template<>
+struct StringMaker<std::type_info >
+{
+  static String convert(const std::type_info  & t)
+  {
+    return String(boost::core::demangle(t.name()).c_str());
+  }
+};
 
 template<>
 struct StringMaker<boost::core::string_view>
@@ -34,7 +45,10 @@ struct StringMaker<boost::system::error_code>
 {
   static String convert(boost::system::error_code ec)
   {
-    return toString(ec.message());
+    if (ec.has_location())
+        return toString(ec.location().to_string() + ": " + ec.message());
+    else
+        return toString(ec.message());
   }
 };
 
