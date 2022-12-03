@@ -55,6 +55,10 @@ struct co_token_t<void()>
     container::pmr::polymorphic_allocator<void> allocator;
   };
 
+  co_token_t(const co_token_t & ) = delete;
+  co_token_t(      co_token_t &&) = default;
+
+
 private:
   explicit co_token_t(std::shared_ptr<base> impl) : impl_(std::move(impl)) {}
 
@@ -85,6 +89,10 @@ struct co_token_t<void(T1)>
     asio::cancellation_slot slot;
     container::pmr::polymorphic_allocator<void> allocator;
   };
+
+  co_token_t(const co_token_t & ) = delete;
+  co_token_t(      co_token_t &&) = default;
+
 private:
   explicit co_token_t(std::shared_ptr<base> impl) : impl_(std::move(impl)) {}
 
@@ -111,6 +119,28 @@ struct co_token_t<void(T1, T2)>
   struct base
   {
     virtual void resume(co_token_t<void(T1, T2)> tk, T1 t1, T2 t2) = 0;
+    void resume(co_token_t<void()> tk) final
+    {
+      resume(co_token_t<void(T1, T2)>{std::static_pointer_cast<base>(std::move(tk.impl_))}, T1{}, T2{});
+    }
+    void resume(co_token_t<void(T1)> tk, T1 t1)
+    {
+      resume(co_token_t<void(T1, T2)>{std::static_pointer_cast<base>(std::move(tk.impl_)) }, std::move(t1), T2{});
+    }
+  };
+
+  co_token_t(const co_token_t & ) = delete;
+  co_token_t(      co_token_t &&) = default;
+
+  operator co_token_t<void(T1)> () &&
+  {
+    return co_token_t<void(T1)>{impl_};
+  }
+
+  operator co_token_t<void()> () &&
+  {
+    return co_token_t<void()>{impl_};
+  }
 
     asio::cancellation_slot slot;
     container::pmr::polymorphic_allocator<void> allocator;
@@ -146,7 +176,10 @@ struct co_runner<Implementation, void(system::error_code, Args...)>
       {
         auto h = std::move(handler);
         buf = nullptr;
-        asio::dispatch(asio::append(std::move(h), ec));
+        if (asio::detail::has_executor_type<Handler>::value)
+          asio::dispatch(asio::append(std::move(h), ec));
+        else
+          std::move(h)(ec);
       }
     }
 
