@@ -159,18 +159,55 @@ struct co_runner<Implementation, void(system::error_code, Args...)>
         auto h = std::move(handler);
         auto tmp = std::move(res);
         buf = nullptr;
-        asio::dispatch(asio::append(std::move(h), ec, std::move(tmp)));
+        if (asio::detail::has_executor_type<Handler>::value)
+          asio::dispatch(asio::append(std::move(h), ec, std::move(tmp)));
+        else
+          std::move(h)(ec, std::move(tmp));
       }
     }
 
     Implementation impl;
     Handler handler;
 
+
+    typename token_type::allocator_type get_allocator_impl(std::allocator<void>)
+    {
+      return {};
+    }
+
+
+    typename token_type::allocator_type get_allocator_impl(container::pmr::polymorphic_allocator<void> alloc)
+    {
+      return alloc;
+    }
+
+    typename token_type::allocator_type get_allocator() override
+    {
+      return get_allocator_impl(asio::get_associated_allocator(handler));
+    }
     container::pmr::resource_adaptor_imp<
       typename std::allocator_traits<asio::associated_allocator_t<Handler>>::template rebind_alloc<char>
         > alloc_res{
       asio::get_associated_allocator(handler)
     };
+
+    template<typename T>
+    container::pmr::memory_resource * get_resource(container::pmr::polymorphic_allocator<T> alloc)
+    {
+      return alloc.resource();
+    }
+    template<typename Alloc>
+    container::pmr::memory_resource * get_resource(Alloc alloc)
+    {
+      return &alloc_res;
+    }
+
+    template<typename T>
+    container::pmr::memory_resource * get_resource(std::allocator<T> other_alloc)
+    {
+      return boost::container::pmr::get_default_resource();
+    }
+
 
     template<typename Handler_, typename ... Args_>
     impl_(Handler_ && h, Args_ && ... args)
