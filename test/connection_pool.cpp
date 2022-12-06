@@ -101,9 +101,9 @@ TEST_CASE_TEMPLATE("sync-request", Pool,
 
   SUBCASE("headers")
   {
-    auto hdr = hc.request(beast::http::verb::get, urls::url_view( urls::url_view("/headers")),
-                          requests::empty{},
-                          {requests::headers({{"Test-Header", "it works"}}), {false}});
+    auto hdr = request(hc, beast::http::verb::get, urls::url_view( urls::url_view("/headers")),
+                           requests::empty{},
+                           {requests::headers({{"Test-Header", "it works"}}), {false}});
 
     auto hd = as_json(hdr).at("headers");
 
@@ -325,7 +325,7 @@ asio::awaitable<void> async_http_pool_request()
   auto headers = [](Pool & hc, core::string_view url) -> asio::awaitable<void>
   {
     requests::request_settings r{requests::headers({{"Test-Header", "it works"}}), {false}};
-    auto hdr = co_await hc.async_request(
+    auto hdr = co_await async_request(hc,
                           beast::http::verb::get,  urls::url_view("/headers"),
                           requests::empty{}, r);
 

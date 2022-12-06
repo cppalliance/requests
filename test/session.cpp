@@ -97,7 +97,7 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
 
   SUBCASE("headers")
   {
-    auto hdr = hc.request(beast::http::verb::get,
+    auto hdr = request(hc, beast::http::verb::get,
                           u("/headers"),
                           requests::empty{},
                           requests::headers({{"Test-Header", "it works"}}));
@@ -136,8 +136,8 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
   {
     system::error_code ec;
     auto res = get(hc, u("/redirect/10"), {}, ec);
-    CHECK(res.history.size() == 4);
-    CHECK(beast::http::to_status_class(res.headers.result()) == beast::http::status_class::redirection);
+    CHECK(res.history.size() == 5);
+    CHECK(res.headers.begin() == res.headers.end());
     CHECK(ec == requests::error::too_many_redirects);
   }
 
@@ -289,7 +289,7 @@ asio::awaitable<void> async_http_pool_request()
 
   auto headers = [](requests::basic_session<exec_t> & hc, core::string_view url) -> asio::awaitable<void>
   {
-    auto hdr = co_await hc.async_request(
+    auto hdr = co_await async_request(hc,
         beast::http::verb::get, u("/headers"),
         requests::empty{}, requests::headers({{"Test-Header", "it works"}}));
 

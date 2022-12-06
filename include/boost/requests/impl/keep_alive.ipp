@@ -36,9 +36,8 @@ bool interpret_keep_alive_response(keep_alive & ka,
 
   if (urls::grammar::ci_is_equal(conn_itr->value(), "close"))
     should_close = true;
-
-  if (!urls::grammar::ci_is_equal(conn_itr->value(), "keep-alive"))
-    ec = asio::error::invalid_argument;
+  else if (!urls::grammar::ci_is_equal(conn_itr->value(), "keep-alive"))
+    BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::invalid_argument);
 
   if (!should_close)
   {

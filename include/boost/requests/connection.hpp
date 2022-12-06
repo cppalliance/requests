@@ -135,50 +135,6 @@ struct basic_connection : private detail::stream_base
                                        void (boost::system::error_code))
     async_close(CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
 
-    template<typename RequestBody, typename ResponseBody>
-    void single_request(
-        http::request<RequestBody> &req,
-        http::response<ResponseBody> & res,
-        system::error_code & ec);
-
-    template<typename RequestBody, typename ResponseBody>
-    void single_request(
-        http::request<RequestBody> & req,
-        http::response<ResponseBody> & res)
-    {
-      boost::system::error_code ec;
-      single_request(req, res, ec);
-      if (ec)
-        urls::detail::throw_system_error(ec);
-    }
-
-    template<typename RequestBody, typename ResponseBody>
-    void single_header_request(
-        http::request<RequestBody> &req,
-        http::response_parser<ResponseBody> & res,
-        system::error_code & ec);
-
-    template<typename RequestBody, typename ResponseBody>
-    void single_header_request(
-        http::request<RequestBody> & req,
-        http::response_header & res)
-    {
-      boost::system::error_code ec;
-      single_header_request(req, res, ec);
-      if (ec)
-        urls::detail::throw_system_error(ec);
-    }
-
-    template<typename RequestBody,
-             typename ResponseBody,
-             BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code)) CompletionToken
-             BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
-    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                       void (boost::system::error_code))
-    async_single_request(http::request<RequestBody> &req,
-                         http::response<ResponseBody> & res,
-                         CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
-
     bool is_open() const final
     {
       return beast::get_lowest_layer(next_layer_).is_open();
@@ -212,40 +168,6 @@ struct basic_connection : private detail::stream_base
     void set_host(core::string_view sv, system::error_code & ec);
     core::string_view host() const {return host_;}
     constexpr static redirect_mode supported_redirect_mode() {return redirect_mode::endpoint;}
-
-    template<typename RequestBody>
-    auto request(beast::http::verb method,
-                 urls::url_view path,
-                 RequestBody && body,
-                 request_settings req,
-                 system::error_code & ec) -> response;
-
-    template<typename RequestBody>
-    auto request(beast::http::verb method,
-                 urls::url_view path,
-                 RequestBody && body,
-                 request_settings req)
-        -> response
-    {
-      boost::system::error_code ec;
-      auto res = request(method, path, std::move(body), std::move(req), ec);
-      if (ec)
-        throw_exception(system::system_error(ec, "request"));
-      return res;
-    }
-
-    template<typename RequestBody,
-        BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-                                               response)) CompletionToken
-            BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
-    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                    void (boost::system::error_code,
-                                          response))
-    async_request(beast::http::verb method,
-                  urls::url_view path,
-                  RequestBody && body,
-                  request_settings req,
-                  CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
 
     using request_type = request_settings;
 
@@ -368,12 +290,6 @@ struct basic_connection : private detail::stream_base
 
     struct async_close_op;
     struct async_connect_op;
-
-    template<typename, typename>
-    struct async_single_request_op;
-
-    template<typename RequestBody>
-    struct async_request_op;
 
     template<typename RequestBody>
     struct async_ropen_op;

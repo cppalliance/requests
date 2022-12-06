@@ -95,25 +95,11 @@ TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, reques
   asio::ip::tcp::resolver rslvr{ctx};
   auto ep = *rslvr.resolve(url, requests::detail::has_ssl_v<Conn> ? "https" : "http").begin();
 
-
   hc.connect(ep);
-  SUBCASE("single-request")
-  {
-    requests::http::request<beast::http::empty_body> req{beast::http::verb::get, "/headers", 11};
-    requests::http::response<beast::http::string_body> res;
-
-    hc.single_request(req, res);
-
-    auto js = json::parse(res.body());
-
-    CHECK(js.at("headers").at("Host").as_string() == url);
-    CHECK(js.at("headers").at("User-Agent").as_string() == "Requests-" BOOST_BEAST_VERSION_STRING);
-
-  }
 
   SUBCASE("headers")
   {
-    auto hdr = hc.request(beast::http::verb::get, urls::url_view("/headers"),
+    auto hdr = request(hc, beast::http::verb::get, urls::url_view("/headers"),
                           requests::empty{},
                           {requests::headers({{"Test-Header", "it works"}}), {false}});
 
@@ -343,31 +329,6 @@ TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, reques
   }
 }
 
-asio::awaitable<void> async_http_exception()
-{
-  auto url = httpbin();
-
-  using exec_t = typename asio::use_awaitable_t<>::executor_with_default<asio::any_io_executor>;
-  exec_t exec{co_await asio::this_coro::executor};
-
-  requests::basic_http_connection<exec_t> hc{exec};;
-  hc.set_host(url);
-
-  typename asio::ip::tcp::resolver::rebind_executor<exec_t>::other rslvr{exec};
-  auto ep = *(co_await rslvr.async_resolve(url, "http")).begin();
-
-  co_await hc.async_connect(ep);
-
-  requests::http::request<beast::http::empty_body> req{beast::http::verb::get, "/headers", 11};
-  requests::http::response<beast::http::string_body> res;
-
-  co_await hc.async_single_request(req, res);
-
-  auto js = json::parse(res.body());
-
-  CHECK(js.at("headers").at("Host").as_string() == url);
-  CHECK(js.at("headers").at("User-Agent").as_string() == "Requests-" BOOST_BEAST_VERSION_STRING);
-}
 
 
 template<typename Conn>
@@ -389,7 +350,7 @@ asio::awaitable<void> async_https_request()
   auto headers = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
     requests::request_settings r{requests::headers({{"Test-Header", "it works"}}), {false}};
-    auto hdr = co_await hc.async_request(
+    auto hdr = co_await async_request(hc,
         beast::http::verb::get, urls::url_view("/headers"),
         requests::empty{}, r);
 

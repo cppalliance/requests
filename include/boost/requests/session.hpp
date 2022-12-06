@@ -69,40 +69,6 @@ struct basic_session
           struct request_options & options()       {return options_;}
     const struct request_options & options() const {return options_;}
 
-    template<typename RequestBody>
-    auto request(beast::http::verb method,
-                 urls::url_view path,
-                 RequestBody && body,
-                 http::fields req,
-                 system::error_code & ec) -> response;
-
-    template<typename RequestBody>
-    auto request(beast::http::verb method,
-                 urls::url_view path,
-                 RequestBody && body,
-                 http::fields req)
-        -> response
-    {
-      boost::system::error_code ec;
-      auto res = request(method, path, std::move(body), std::move(req), ec);
-      if (ec)
-        throw_exception(system::system_error(ec, "request"));
-      return res;
-    }
-
-    template<typename RequestBody,
-              BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-                                                   response)) CompletionToken
-                  BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
-    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                       void (boost::system::error_code,
-                                            response))
-    async_request(beast::http::verb method,
-                  urls::url_view path,
-                  RequestBody && body,
-                  http::fields req,
-                  CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
-
     using request_type = http::fields;
 
     // possibly make it a distinct return type.
@@ -188,13 +154,6 @@ struct basic_session
                 http::request<RequestBody> & req,
                 CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
 
-    template<typename Request, typename Response,
-              BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code)) CompletionToken
-                  BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
-    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code))
-    async_single_request(Request & req, Response & res, urls::url_view url,
-                         CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
-
   private:
     asio::ssl::context sslctx_{asio::ssl::context_base::tls_client};
     detail::basic_mutex<executor_type> mutex_;
@@ -211,18 +170,11 @@ struct basic_session
     boost::container::pmr::synchronized_pool_resource pmr_;
     cookie_jar jar_{boost::container::pmr::polymorphic_allocator<char>(&pmr_)};
 
-    template<typename RequestBody>
-    struct async_request_op;
-
-    struct async_download_op;
 
     struct async_get_pool_op;
 
     template<typename RequestBody>
     struct async_ropen_op;
-
-    template<typename Request, typename Response>
-    struct async_single_request_op;
 
     auto make_request_(http::fields fields) -> requests::request_settings;
 

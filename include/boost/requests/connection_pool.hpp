@@ -178,50 +178,6 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
     std::size_t limit() const {return limit_;}
     std::size_t active() const {return conns_.size();}
 
-
-    template<typename RequestBody, typename Allocator = std::allocator<char>>
-    auto request(beast::http::verb method,
-                 urls::url_view path,
-                 RequestBody && body,
-                 request_settings req,
-                 system::error_code & ec) -> response
-    {
-      auto conn = get_connection(ec);
-      if (!ec && conn == nullptr)
-        BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::not_found);
-      if (ec)
-        return response{req.get_allocator()};
-
-      assert(conn != nullptr);
-      return conn->request(method, path, body, std::move(req), ec);
-    }
-
-    template<typename RequestBody, typename Allocator = std::allocator<char>>
-    auto request(beast::http::verb method,
-                 urls::url_view path,
-                 RequestBody && body,
-                 request_settings req)
-        -> response
-    {
-      boost::system::error_code ec;
-      auto res = request(method, path, std::move(body), std::move(req), ec);
-      if (ec)
-        throw_exception(system::system_error(ec, "request"));
-      return res;
-    }
-
-    template<typename RequestBody,
-              BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response)) CompletionToken
-                  BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
-    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                       void (boost::system::error_code,
-                                            response))
-    async_request(beast::http::verb method,
-                  urls::url_view path,
-                  RequestBody && body,
-                  request_settings req,
-                  CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
-
     using request_type = request_settings;
 
     std::shared_ptr<connection_type> get_connection(error_code & ec);
@@ -336,9 +292,6 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
 
     struct async_lookup_op;
     struct async_get_connection_op;
-
-    template<typename RequestBody>
-    struct async_request_op;
 
     template<typename>
     struct async_ropen_op;

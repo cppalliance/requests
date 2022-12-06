@@ -289,62 +289,6 @@ basic_connection_pool<Stream>::async_get_connection(CompletionToken && completio
 
 template<typename Stream>
 template<typename RequestBody>
-struct basic_connection_pool<Stream>::async_request_op : asio::coroutine
-{
-  using executor_type = typename Stream::executor_type;
-  executor_type get_executor() {return this_->get_executor(); }
-
-  basic_connection_pool<Stream> *this_;
-  beast::http::verb method;
-  urls::url_view path;
-  RequestBody body;
-  request_settings req;
-
-
-  template<typename Self>
-  void operator()(Self && self, error_code ec = {}, std::shared_ptr<connection_type> conn = nullptr)
-  {
-    reenter(this)
-    {
-      yield this_->async_get_connection(std::move(self));
-      if (!ec && conn == nullptr)
-        return self.complete(asio::error::not_found, response{req.get_allocator()});
-      if (ec)
-        return self.complete(ec, response{req.get_allocator()});
-      yield conn->async_request(method, path, std::forward<RequestBody>(body), std::move(req), std::move(self));
-    }
-  }
-
-  template<typename Self>
-  void operator()(Self && self, error_code ec, response res)
-  {
-    self.complete(ec, std::move(res));
-  }
-};
-
-template<typename Stream>
-template<typename RequestBody,
-         BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-                                               response)) CompletionToken>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                   void (boost::system::error_code,
-                                         response))
-basic_connection_pool<Stream>::async_request(beast::http::verb method,
-                                             urls::url_view path,
-                                             RequestBody && body,
-                                             request_settings req,
-                                             CompletionToken && completion_token)
-{
-  return asio::async_compose<CompletionToken, void(system::error_code, response)>(
-      async_request_op<RequestBody>{{}, this, method, path,
-                                    std::forward<RequestBody>(body), std::move(req)},
-      completion_token,
-      mutex_
-  );
-}
-
-template<typename Stream>
-template<typename RequestBody>
 struct basic_connection_pool<Stream>::async_ropen_op : asio::coroutine
 {
   using executor_type = typename Stream::executor_type;

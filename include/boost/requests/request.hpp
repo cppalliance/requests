@@ -16,44 +16,64 @@ namespace boost
 {
 namespace requests
 {
+namespace detail
+{
 
-template<typename RequestBody>
-auto request(beast::http::verb method,
+template<typename Connection, typename RequestBody = empty>
+struct async_request_op;
+
+}
+
+template<typename Connection, typename RequestBody>
+auto request(Connection & conn,
+             beast::http::verb method,
              urls::url_view path,
              RequestBody && body,
-             http::fields req,
+             typename Connection::request_type req,
              system::error_code & ec) -> response;
 
-template<typename RequestBody>
-auto request(beast::http::verb method,
+template<typename Connection, typename RequestBody>
+auto request(Connection & conn,
+             beast::http::verb method,
              urls::url_view path,
              RequestBody && body,
-             http::fields req)
+             typename Connection::request_type req)
     -> response
 {
   boost::system::error_code ec;
-  auto res = request(method, path, std::forward<RequestBody>(body), std::move(req), ec);
+  auto res = request(conn, method, path, std::forward<RequestBody>(body), std::move(req), ec);
   if (ec)
     throw_exception(system::system_error(ec, "request"));
   return res;
 }
 
+
+
+
 template<typename RequestBody>
 auto request(beast::http::verb method,
-             core::string_view path,
+             urls::url_view path,
              RequestBody && body,
              http::fields req,
              system::error_code & ec) -> response
 {
-  auto url = urls::parse_uri(path);
-  if (url.has_error())
-  {
-    ec = url.error();
-    return response{req.get_allocator()};
-  }
-  else
-    return request(method, url.value(), std::forward<RequestBody>(body), req, ec);
+  return request(default_session(), method, path, std::forward<RequestBody>(body), std::move(req), ec);
 }
+
+template<typename RequestBody>
+auto request(beast::http::verb method,
+             urls::url_view path,
+             RequestBody && body,
+             http::fields req)
+    -> response
+{
+  boost::system::error_code ec;
+  auto res = request(method, path, std::forward<RequestBody>(body), std::move(req), ec);
+  if (ec)
+    throw_exception(system::system_error(ec, "request"));
+  return res;
+}
+
 
 template<typename RequestBody>
 auto request(beast::http::verb method,
@@ -68,19 +88,6 @@ auto request(beast::http::verb method,
     throw_exception(system::system_error(ec, "request"));
   return res;
 }
-
-
-template<typename RequestBody,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-                                               response)) CompletionToken>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                   void (boost::system::error_code,
-                                        response))
-async_request(beast::http::verb method,
-              urls::url_view path,
-              RequestBody && body,
-              http::fields req,
-              CompletionToken && completion_token);
 
 template<typename RequestBody,
           BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response)) CompletionToken>
@@ -93,6 +100,18 @@ async_request(beast::http::verb method,
               http::fields req,
               CompletionToken && completion_token);
 
+template<typename Connection,
+          typename RequestBody,
+          BOOST_ASIO_COMPLETION_TOKEN_FOR( void (system::error_code, response)) CompletionToken
+              BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(typename Connection::executor_type)>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (system::error_code, response))
+async_request(Connection & conn,
+              beast::http::verb method,
+              urls::url_view target,
+              RequestBody && body,
+              typename Connection::request_type req,
+              CompletionToken && completion_token
+                  BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(typename Connection::executor_type));
 }
 }
 

@@ -23,7 +23,6 @@ TEST_CASE("session")
   asio::io_context ctx;
   asio::thread_pool tp;
 
-
   asio::any_io_executor exec{ctx.get_executor()};
 
   get(requests::default_session(exec), urls::parse_uri("https://httpbin.org").value(), {});

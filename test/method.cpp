@@ -124,8 +124,8 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
     system::error_code ec;
     requests::default_session().options().max_redirects = 3;
     auto res = requests::get(u("/redirect/10"), {}, ec);
-    CHECK(res.history.size() == 2);
-    CHECK(beast::http::to_status_class(res.headers.result()) == beast::http::status_class::redirection);
+    CHECK(res.history.size() == 3);
+    CHECK(res.headers.begin() == res.headers.end());
     CHECK(ec == requests::error::too_many_redirects);
   }
 
