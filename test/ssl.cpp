@@ -13,9 +13,13 @@
 #include "doctest.h"
 
 using namespace boost;
-
+/*
 TEST_CASE("ssl")
 {
+  asio::ssl::context sslctx{asio::ssl::context_base::tls_client};
+  sslctx.set_verify_mode(asio::ssl::verify_peer);
+  sslctx.set_default_verify_paths();
+
   asio::io_context ctx;
 
   asio::ip::tcp::resolver res{ctx};
@@ -25,9 +29,7 @@ TEST_CASE("ssl")
 
   REQUIRE(ep.size() > 0);
 
-  asio::ssl::context sslctx{asio::ssl::context_base::tls_client};
-  sslctx.set_verify_mode(asio::ssl::verify_peer);
-  sslctx.set_default_verify_paths();
+
 
   asio::ssl::stream<asio::ip::tcp::socket > s{ctx, sslctx};
 
@@ -42,6 +44,6 @@ TEST_CASE("ssl")
   CHECK(requests::detail::verify_host(s, "www.httpbin.org"));
   CHECK(requests::detail::verify_host(s, "api.httpbin.org"));
   CHECK(!requests::detail::verify_host(s, "too.many.subdomains.httpbin.org"));
-
 }
 
+*/
