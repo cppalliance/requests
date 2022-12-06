@@ -1153,10 +1153,15 @@ auto basic_connection<Stream>::ropen(
   using body_type = typename body_traits::body_type;
   constexpr auto is_secure = detail::has_ssl_v<Stream>;
 
+  if ((path.has_port() && (get_port(path) != endpoint_.port()))
+  && (path.has_authority() && (path.encoded_host() != host()))
+  && (path.has_scheme() && (path.host() != (detail::has_ssl_v<Stream> ? "https" : "http"))))
+    BOOST_REQUESTS_ASSIGN_EC(ec, error::wrong_host)
+
+
   if (!is_secure && req.opts.enforce_tls)
   {
-    static constexpr auto loc((BOOST_CURRENT_LOCATION));
-    ec.assign(error::insecure, &loc);
+    BOOST_REQUESTS_ASSIGN_EC(ec, error::insecure);
     return stream{get_executor(), this};
   }
 
@@ -1276,6 +1281,11 @@ struct basic_connection<Stream>::async_ropen_op
         hreq(prepare_request(method, path.encoded_target(), this_->host(), std::forward<RequestBody_>(body), std::move(req), ec_)),
         req(*hreq)
   {
+
+        if ((path.has_port() && (get_port(path) != this_->endpoint_.port()))
+            && (path.has_authority() && (path.encoded_host() != this_->host()))
+            && (path.has_scheme() && (path.host() != (detail::has_ssl_v<Stream> ? "https" : "http"))))
+          BOOST_REQUESTS_ASSIGN_EC(ec_, error::wrong_host)
   }
 
   using completion_signature_type = void(system::error_code, stream);

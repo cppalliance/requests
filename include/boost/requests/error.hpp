@@ -44,6 +44,8 @@ enum class error
   invalid_redirect,
   /// The request violates the tls requirement
   insecure,
+  /// The target host is invalid
+  wrong_host
 };
 
 BOOST_REQUESTS_DECL

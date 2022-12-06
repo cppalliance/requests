@@ -82,6 +82,7 @@ struct request_category_t final : system::error_category
     case error::forbidden_redirect: return "redirect-forbidden";
     case error::insecure: return "insecure";
     case error::invalid_redirect: return "invalid-redirect";
+    case error::wrong_host: return "wrong-host";
 
     default: return "unknown error";
     }
