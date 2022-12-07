@@ -156,20 +156,6 @@ struct co_token_t<void(T1, T2)>
     return co_token_t<void()>{impl_};
   }
 
-    asio::cancellation_slot slot;
-    container::pmr::polymorphic_allocator<void> allocator;
-  };
-
-  operator co_token_t<void(T1)> () &&
-  {
-    return co_token_t<void(T1)>{impl_};
-  }
-
-  operator co_token_t<void()> () &&
-  {
-    return co_token_t<void()>{impl_};
-  }
-
 private:
   template<typename...>
   friend struct co_token_t;
