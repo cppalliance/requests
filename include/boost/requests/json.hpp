@@ -131,6 +131,12 @@ struct response : response_base
   using allocator_type = container::pmr::polymorphic_allocator<char>;
   using fields_type = http::fields;
 
+  response(allocator_type alloc,         history_type history, Value && value) : response_base(std::move(alloc),  std::move(history)), value(std::move(value)) {}
+  response(http::response_header header, history_type history, Value && value) : response_base(std::move(header), std::move(history)), value(std::move(value)) {}
+
+  response(allocator_type alloc        , Value && value) : response_base(std::move(alloc)),  value(std::move(value)) {}
+  response(http::response_header header, Value && value) : response_base(std::move(header)), value(std::move(value)) {}
+
   using value_type = Value;
   value_type value;
 
@@ -257,7 +263,7 @@ inline void set_accept_headers(requests::request_settings & hd)
 template<typename Value = json::value,
          typename Connection>
 auto get(Connection & conn,
-         typename Connection::target_view target,
+         urls::url_view target,
          typename Connection::request_type req = {}) -> response<Value>
 {
   set_accept_headers(req);
@@ -271,7 +277,7 @@ auto get(Connection & conn,
 template<typename Value = json::value,
           typename Connection>
 auto get(Connection & conn,
-         typename Connection::target_view target,
+         urls::url_view target,
          typename Connection::request_type req,
          system::error_code & ec) -> response<Value>
 {
@@ -290,7 +296,7 @@ template<typename Value = json::value,
          typename RequestBody,
          typename Connection>
 auto post(Connection & conn,
-          typename Connection::target_view target,
+          urls::url_view target,
           RequestBody && request_body,
           typename Connection::request_type req = {}) -> response<Value>
 {
@@ -306,7 +312,7 @@ template<typename Value = json::value,
           typename RequestBody,
           typename Connection>
 auto post(Connection & conn,
-          typename Connection::target_view target,
+          urls::url_view target,
           RequestBody && request_body,
           typename Connection::request_type req,
           system::error_code & ec) -> response<Value>
@@ -323,7 +329,7 @@ template<typename Value = json::value,
          typename RequestBody,
          typename Connection>
 auto patch(Connection & conn,
-          typename Connection::target_view target,
+          urls::url_view target,
           RequestBody && request_body,
           typename Connection::request_type req,
           system::error_code & ec) -> response<Value>
@@ -341,7 +347,7 @@ template<typename Value = json::value,
           typename RequestBody,
           typename Connection>
 auto patch(Connection & conn,
-          typename Connection::target_view target,
+          urls::url_view target,
           RequestBody && request_body,
           typename Connection::request_type req = {}) -> response<Value>
 {
@@ -358,7 +364,7 @@ template<typename Value = json::value,
           typename RequestBody,
           typename Connection>
 auto put(Connection & conn,
-          typename Connection::target_view target,
+          urls::url_view target,
           RequestBody && request_body,
           typename Connection::request_type req = {}) -> response<optional<Value>>
 {
@@ -374,7 +380,7 @@ template<typename Value = json::value,
           typename RequestBody,
           typename Connection>
 auto put(Connection & conn,
-         typename Connection::target_view target,
+         urls::url_view target,
          RequestBody && request_body,
          typename Connection::request_type req,
          system::error_code & ec) -> response<optional<Value>>
@@ -392,7 +398,7 @@ template<typename Value = json::value,
           typename RequestBody,
           typename Connection>
 auto delete_(Connection & conn,
-         typename Connection::target_view target,
+         urls::url_view target,
          RequestBody && request_body,
          typename Connection::request_type req = {}) -> response<optional<Value>>
 {
@@ -408,7 +414,7 @@ template<typename Value = json::value,
           typename RequestBody,
           typename Connection>
 auto delete_(Connection & conn,
-         typename Connection::target_view target,
+         urls::url_view target,
          RequestBody && request_body,
          typename Connection::request_type req,
          system::error_code & ec) -> response<optional<Value>>
@@ -427,7 +433,7 @@ template<typename Value = json::value,
           typename RequestBody,
           typename Connection>
 auto delete_(Connection & conn,
-             typename Connection::target_view target,
+             urls::url_view target,
              typename Connection::request_type req = {}) -> response<optional<Value>>
 {
   set_accept_headers(req);
@@ -442,7 +448,7 @@ template<typename Value = json::value,
           typename RequestBody,
           typename Connection>
 auto delete_(Connection & conn,
-             typename Connection::target_view target,
+             urls::url_view target,
              typename Connection::request_type req,
              system::error_code & ec) -> response<optional<Value>>
 {
@@ -459,7 +465,7 @@ auto delete_(Connection & conn,
 template<typename Value = json::value,
           typename Connection>
 auto options(Connection & conn,
-             typename Connection::target_view target,
+             urls::url_view target,
              typename Connection::request_type req = {}) -> response<Value>
 {
   set_accept_headers(req);
@@ -472,7 +478,7 @@ auto options(Connection & conn,
 template<typename Value = json::value,
           typename Connection>
 auto options(Connection & conn,
-             typename Connection::target_view target,
+             urls::url_view target,
              typename Connection::request_type req,
              system::error_code & ec) -> response<Value>
 {
@@ -617,7 +623,7 @@ struct async_request_json_op : asio::coroutine
 
   Connection & conn;
   http::verb method;
-  typename Connection::target_view target;
+  urls::url_view target;
   RequestBody && request_body;
   typename Connection::request_type req;
   json::storage_ptr ptr{req.get_allocator().resource()};
@@ -627,7 +633,7 @@ struct async_request_json_op : asio::coroutine
 
   async_request_json_op(Connection * conn,
        http::verb method,
-       typename Connection::target_view target,
+       urls::url_view target,
        RequestBody && request_body,
        typename Connection::request_type req)
       : conn(*conn), method(method), target(target),
@@ -675,7 +681,7 @@ struct async_request_optional_json_op : asio::coroutine
 
   Connection & conn;
   http::verb method;
-  typename Connection::target_view target;
+  urls::url_view target;
   RequestBody && request_body;
   typename Connection::request_type req;
   json::storage_ptr ptr{req.get_allocator().resource()};
@@ -685,7 +691,7 @@ struct async_request_optional_json_op : asio::coroutine
 
   async_request_optional_json_op(Connection * conn,
                         http::verb method,
-                        typename Connection::target_view target,
+                        urls::url_view target,
                         RequestBody && request_body,
                         typename Connection::request_type req)
       : conn(*conn), method(method), target(target),
@@ -732,7 +738,7 @@ template<typename Value = value,
             BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(typename Connection::executor_type)>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, Value))
 async_get(Connection & conn,
-          typename Connection::target_view target,
+          urls::url_view target,
           typename Connection::request_type req = {},
           CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
 {
@@ -748,7 +754,7 @@ template<typename Value = value,
               BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(typename Connection::executor_type)>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, Value))
 async_post(Connection & conn,
-           typename Connection::target_view target,
+           urls::url_view target,
            RequestBody && request_body,
            typename Connection::request_type req = {},
            CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
@@ -766,7 +772,7 @@ template<typename Value = value,
               BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(typename Connection::executor_type)>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, Value))
 async_patch(Connection & conn,
-           typename Connection::target_view target,
+           urls::url_view target,
            RequestBody && request_body,
            typename Connection::request_type req = {},
            CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
@@ -783,7 +789,7 @@ template<typename Value = value,
               BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(typename Connection::executor_type)>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, Value))
 async_put(Connection & conn,
-          typename Connection::target_view target,
+          urls::url_view target,
           RequestBody && request_body,
           typename Connection::request_type req = {},
           CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
@@ -801,7 +807,7 @@ template<typename Value = value,
               BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(typename Connection::executor_type)>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, Value))
 async_delete(Connection & conn,
-            typename Connection::target_view target,
+            urls::url_view target,
             RequestBody && request_body,
             typename Connection::request_type req = {},
             CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
@@ -819,7 +825,7 @@ template<typename Value = value,
               BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(typename Connection::executor_type)>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, Value))
 async_delete(Connection & conn,
-             typename Connection::target_view target,
+             urls::url_view target,
              typename Connection::request_type req = {},
              CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
 {
@@ -835,7 +841,7 @@ template<typename Value = value,
               BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(typename Connection::executor_type)>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, Value))
 async_options(Connection & conn,
-              typename Connection::target_view target,
+              urls::url_view target,
               typename Connection::request_type req = {},
               CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
 {

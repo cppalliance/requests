@@ -201,7 +201,7 @@ auto delete_(Connection & conn,
   s.read(res.buffer);
   res.headers = std::move(s).headers();
   res.history = std::move(s).history();
-  return s;
+  return res;
 }
 
 template<typename Connection>
@@ -224,7 +224,8 @@ template<typename Connection, typename RequestBody>
 auto delete_(Connection & conn,
            urls::url_view target,
            RequestBody && request_body,
-           typename Connection::request_type req = {}) -> response
+           typename Connection::request_type req = {})
+    -> typename std::enable_if_t<!std::is_same<std::decay_t<RequestBody>, typename Connection::request_type>::value, response>::type
 {
   auto s = conn.ropen(http::verb::delete_, target, std::forward<RequestBody>(request_body), std::move(req));
   response res{req.get_allocator()};
@@ -253,7 +254,7 @@ auto delete_(Connection & conn,
 
 template<typename Stream>
 auto connect(basic_connection<Stream> & conn,
-             typename basic_connection<Stream>::target_view target,
+             urls::url_view target,
              typename basic_connection<Stream>::request_type req = {}) -> response_base
 {
   auto s = conn.ropen(http::verb::connect, target, empty{}, std::move(req));
@@ -262,7 +263,7 @@ auto connect(basic_connection<Stream> & conn,
 
 template<typename Stream>
 auto connect(basic_connection<Stream> & conn,
-             typename basic_connection<Stream>::target_view target,
+             urls::url_view target,
              typename basic_connection<Stream>::request_type req,
              system::error_code & ec) -> response_base
 {
@@ -448,7 +449,7 @@ template<typename Stream,
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, response))
 async_connect(basic_connection<Stream> & conn,
-              typename basic_connection<Stream>::target_view target,
+              urls::url_view target,
               typename basic_connection<Stream>::request_type req  = {},
               CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename basic_connection<Stream>::executor_type))
 {
