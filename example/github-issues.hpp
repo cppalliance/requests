@@ -12,6 +12,7 @@
 #include <boost/requests/json.hpp>
 #include <boost/variant2.hpp>
 #include <boost/container/pmr/unsynchronized_pool_resource.hpp>
+#include <boost/url/experimental/format.hpp>
 
 namespace github
 {
@@ -21,6 +22,8 @@ using boost::variant2::variant;
 using boost::optional;
 using boost::system::error_code;
 using boost::system::result;
+
+using boost::urls::experimental::format_relative_ref;
 
 // https://docs.github.com/en/rest/issues/issues
 using string_view = boost::core::string_view;
@@ -450,7 +453,7 @@ struct list_issues_query
   int per_page = 30;
   int page = 1;
 
-  auto make_query(boost::core::string_view pt) const -> boost::urls::pct_string_view
+  auto make_query(boost::core::string_view pt) const -> boost::urls::url_view
   {
     static boost::urls::url storage;
     storage.set_path(pt);
@@ -490,7 +493,7 @@ struct list_issues_query
     if (per_page != 30) params.set("per_page", std::to_string(per_page));
     if (page != 1)      params.set("page",     std::to_string(page));
 
-    return storage.encoded_target();
+    return storage;
   }
 };
 
@@ -536,13 +539,17 @@ struct issue_client
   response<std::vector<issue>> list_issues(std::string owner, list_issues_query opt = {})
   {
     return boost::requests::json::get<std::vector<issue>>(
-        conn_, opt.make_query("/orgs/" + owner + "/issues"), settings_);
+        conn_,
+        opt.make_query(format_relative_ref("/repos/{owner}/issues", owner).encoded_target()),
+        settings_);
   }
 
   response<std::vector<issue>> list_issues(std::string owner, list_issues_query opt,error_code & ec)
   {
     return boost::requests::json::get<std::vector<issue>>(
-        conn_,  opt.make_query("/orgs/" + owner + "/issues"), settings_, ec);
+        conn_,
+        opt.make_query(format_relative_ref("/repos/{owner}/issues", owner).encoded_target()),
+        settings_, ec);
   }
 
   template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<std::vector<issue>>)) CompletionToken>
@@ -550,7 +557,8 @@ struct issue_client
     async_list_issues(std::string owner, list_issues_query opt, CompletionToken && completion_token)
   {
     return boost::requests::json::async_get<std::vector<issue>>(
-        conn_, opt.make_query("/orgs/" + owner + "/issues"),
+        conn_,
+        opt.make_query(format_relative_ref("/repos/{owner}/issues", owner).encoded_target()),
         settings_, std::forward<CompletionToken>(completion_token));
   }
 
@@ -558,12 +566,13 @@ struct issue_client
   response<std::vector<issue>> list_issues(std::string owner, std::string repository, list_issues_query opt = {})
   {
     return boost::requests::json::get<std::vector<issue>>(
-        conn_, opt.make_query("/repos/" + owner + "/" + repository + "/issues"), settings_);
+        conn_, opt.make_query(format_relative_ref("/repos/{owner}/{repository}/issues", owner, repository).encoded_target()), settings_);
   }
   response<std::vector<issue>> list_issues(std::string owner, std::string repository, list_issues_query opt, error_code & ec)
   {
     return boost::requests::json::get<std::vector<issue>>(
-        conn_, opt.make_query("/repos/" + owner + "/" + repository + "/issues"), settings_, ec);
+        conn_, opt.make_query(format_relative_ref("/repos/{owner}/{repository}/issues", owner, repository).encoded_target()),
+        settings_, ec);
 
   }
   template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<std::vector<issue>>)) CompletionToken>
@@ -571,7 +580,7 @@ struct issue_client
     async_list_issues(std::string owner, std::string repository, list_issues_query opt, CompletionToken && completion_token)
   {
     return boost::requests::json::async_get<std::vector<issue>>(
-        conn_, opt.make_query("/repos/" + owner + "/" + repository + "/issues"),
+        conn_, opt.make_query(format_relative_ref("/repos/{owner}/{repository}/issues", owner, repository).encoded_target()),
         settings_, std::forward<CompletionToken>(completion_token));
 
   }
@@ -579,33 +588,45 @@ struct issue_client
   // Create an issue
   response<issue> create_issue(std::string owner, std::string repository, std::string title, create_issue_options opts = {})
   {
-    return boost::requests::json::post<issue>(conn_, "/repos/" + owner + "/" + repository + "/issues",
-                                              boost::json::value_from(opts, storage()), settings_);
+    return boost::requests::json::post<issue>(
+        conn_,
+        format_relative_ref("/repos/{owner}/{repository}/issues", owner, repository),
+        boost::json::value_from(opts, storage()), settings_);
   }
   response<issue> create_issue(std::string owner, std::string repository, std::string title, create_issue_options opts, error_code & ec)
   {
-    return boost::requests::json::post<issue>(conn_, "/repos/" + owner + "/" + repository + "/issues",
-                                              boost::json::value_from(opts, storage()), settings_, ec);
+    return boost::requests::json::post<issue>(
+        conn_,
+        format_relative_ref("/repos/{owner}/{repository}/issues", owner, repository),
+        boost::json::value_from(opts, storage()), settings_, ec);
   }
   template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<issue>)) CompletionToken>
   BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, response<issue>))
     async_create_issue(std::string owner, std::string repository, std::string title, create_issue_options opts,
                        CompletionToken && completion_token)
   {
-    return boost::requests::json::async_post<issue>(conn_, "/repos/" + owner + "/" + repository + "/issues",
-                                                    boost::json::value_from(opts, storage()),
-                                                    settings_, std::forward<CompletionToken>(completion_token));
+    return boost::requests::json::async_post<issue>(
+        conn_,
+        format_relative_ref("/repos/{owner}/{repository}/issues", owner, repository),
+        boost::json::value_from(opts, storage()),
+        settings_, std::forward<CompletionToken>(completion_token));
   }
 
 
   // Get an issue
   response<issue> get_issue(std::string owner, std::string repository, int issue_number)
   {
-    return boost::requests::json::get<issue>(conn_, "/repos/" + owner + "/" + repository + "/issues/" + std::to_string(issue_number), settings_);
+    return boost::requests::json::get<issue>(
+        conn_,
+        format_relative_ref("/repos/{owner}/{repository}/issues/{issue_number}", owner, repository, issue_number),
+        settings_);
   }
   response<issue> get_issue(std::string owner, std::string repository, int issue_number, error_code & ec)
   {
-    return boost::requests::json::get<issue>(conn_, "/repos/" + owner + "/" + repository + "/issues/" + std::to_string(issue_number), settings_, ec);
+    return boost::requests::json::get<issue>(
+        conn_,
+        format_relative_ref("/repos/{owner}/{repository}/issues/{issue_number}", owner, repository, issue_number),
+        settings_, ec);
   }
 
   template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<issue>)) CompletionToken>
@@ -613,23 +634,29 @@ struct issue_client
     async_get_issue(std::string owner, std::string repository, int issue_number,
                     CompletionToken && completion_token)
   {
-    return boost::requests::json::async_get<issue>(conn_, "/repos/" + owner + "/" + repository + "/issues/" + std::to_string(issue_number), settings_,
-                                                   std::forward<CompletionToken>(completion_token));
+    return boost::requests::json::async_get<issue>(
+        conn_,
+        format_relative_ref("/repos/{owner}/{repository}/issues/{issue_number}", owner, repository, issue_number),
+        settings_, std::forward<CompletionToken>(completion_token));
   }
 
 
   // Update an issue
   response<issue> update_issue(std::string owner, std::string repository, int issue_number, update_issue_options opts = {})
   {
-    return boost::requests::json::post<issue>(conn_, "/repos/" + owner + "/" + repository + "/issues/" + std::to_string(issue_number),
-                                              boost::json::value_from(opts, storage()),
-                                              settings_);
+    return boost::requests::json::post<issue>(
+        conn_,
+        format_relative_ref("/repos/{owner}/{repository}/issues/{issue_number}", owner, repository, issue_number),
+        boost::json::value_from(opts, storage()),
+        settings_);
   }
   response<issue> update_issue(std::string owner, std::string repository, int issue_number, update_issue_options opts, error_code & ec)
   {
-    return boost::requests::json::post<issue>(conn_, "/repos/" + owner + "/" + repository + "/issues/" + std::to_string(issue_number),
-                                              boost::json::value_from(opts, storage()),
-                                              settings_, ec);
+    return boost::requests::json::post<issue>(
+        conn_,
+        format_relative_ref("/repos/{owner}/{repository}/issues/{issue_number}", owner, repository, issue_number),
+        boost::json::value_from(opts, storage()),
+        settings_, ec);
   }
 
   template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<issue>)) CompletionToken>
@@ -637,22 +664,26 @@ struct issue_client
   async_update_issue(std::string owner, std::string repository, int issue_number, update_issue_options opts,
                      CompletionToken && completion_token)
   {
-    return boost::requests::json::async_post<issue>(conn_, "/repos/" + owner + "/" + repository + "/issues/" + std::to_string(issue_number),
-                                                    boost::json::value_from(opts, storage()),
-                                                    settings_, std::forward<CompletionToken>(completion_token));
+    return boost::requests::json::async_post<issue>(
+        conn_,
+        format_relative_ref("/repos/{owner}/{repository}/issues/{issue_number}", owner, repository, issue_number),
+        boost::json::value_from(opts, storage()),
+        settings_, std::forward<CompletionToken>(completion_token));
   }
 
   // Lock an issue
   boost::requests::response lock_issue(std::string owner, std::string repository, int issue_number, lock_reason reason)
   {
-    return boost::requests::put(conn_,
-        "/repos/" + owner + "/" + repository + "/issues/" + std::to_string(issue_number) + "/lock",
+    return boost::requests::put(
+        conn_,
+        format_relative_ref("/repos/{owner}/{repository}/issues/{issue_number}/lock", owner, repository, issue_number),
         boost::json::value({{"lock_reason", boost::json::value_from(reason, storage())}}, storage()), settings_);
   }
   boost::requests::response lock_issue(std::string owner, std::string repository, int issue_number, lock_reason reason, error_code & ec)
   {
-    return boost::requests::put(conn_,
-        "/repos/" + owner + "/" + repository + "/issues/" + std::to_string(issue_number) + "/lock",
+    return boost::requests::put(
+        conn_,
+        format_relative_ref("/repos/{owner}/{repository}/issues/{issue_number}/lock", owner, repository, issue_number),
         boost::json::value({{"lock_reason", boost::json::value_from(reason, storage())}}, storage()), settings_, ec);
   }
 
@@ -661,22 +692,27 @@ struct issue_client
     async_lock_issue(std::string owner, std::string repository, int issue_number, lock_reason reason,
                      CompletionToken && completion_token)
   {
-    return boost::requests::async_put(conn_,
-        "/repos/" + owner + "/" + repository + "/issues/" + std::to_string(issue_number) + "/lock",
+    return boost::requests::async_put(
+        conn_,
+        format_relative_ref("/repos/{owner}/{repository}/issues/{issue_number}/lock", owner, repository, issue_number),
         boost::json::value{{{"lock_reason", boost::json::value_from(reason, storage())}}, storage()}, settings_,
         std::forward<CompletionToken>(completion_token));
   }
   // Unlock an issue
   boost::requests::response unlock_issue(std::string owner, std::string repository, int issue_number)
   {
-    return boost::requests::delete_(conn_,
-        "/repos/" + owner + "/" + repository + "/issues/" + std::to_string(issue_number) + "/lock", settings_);
+    return boost::requests::delete_(
+        conn_,
+        format_relative_ref("/repos/{owner}/{repository}/issues/{issue_number}/lock", owner, repository, issue_number),
+        settings_);
   }
 
   boost::requests::response unlock_issue(std::string owner, std::string repository, int issue_number, error_code & ec)
   {
-    return boost::requests::delete_(conn_,
-      "/repos/" + owner + "/" + repository + "/issues/" + std::to_string(issue_number) + "/lock", settings_, ec);
+    return boost::requests::delete_(
+        conn_,
+        format_relative_ref("/repos/{owner}/{repository}/issues/{issue_number}/lock", owner, repository, issue_number),
+        settings_, ec);
   }
 
   template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, boost::requests::response)) CompletionToken>
@@ -686,7 +722,7 @@ struct issue_client
   {
     return boost::requests::async_delete(
         conn_,
-        "/repos/" + owner + "/" + repository + "/issues/" + std::to_string(issue_number) + "/lock", settings_,
+        format_relative_ref("/repos/{owner}/{repository}/issues/{issue_number}/lock", owner, repository, issue_number), settings_,
         std::forward<CompletionToken>(completion_token));
   }
 
