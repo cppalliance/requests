@@ -225,7 +225,8 @@ auto delete_(Connection & conn,
            urls::url_view target,
            RequestBody && request_body,
            typename Connection::request_type req = {})
-    -> typename std::enable_if_t<!std::is_same<std::decay_t<RequestBody>, typename Connection::request_type>::value, response>::type
+    -> typename std::enable_if_t<!std::is_same<std::decay_t<RequestBody>,
+                                               typename Connection::request_type>::value, response>
 {
   auto s = conn.ropen(http::verb::delete_, target, std::forward<RequestBody>(request_body), std::move(req));
   response res{req.get_allocator()};
