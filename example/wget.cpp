@@ -12,6 +12,7 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
+#include <boost/requests/download.hpp>
 #include <boost/requests/method.hpp>
 #include <boost/requests/json.hpp>
 #include <boost/requests/request_settings.hpp>
@@ -28,6 +29,6 @@ int main(int argc, char * argv[])
     return 1;
   }
 
-  boost::requests::download(argv[1], {}, argv[2]);
+  boost::requests::download(boost::urls::parse_uri(argv[1]).value(), {}, argv[2]);
   return 0;
 }

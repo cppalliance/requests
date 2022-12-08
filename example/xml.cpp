@@ -95,12 +95,12 @@ int main(int argc, char * argv[])
   pugi::xml_document doc;
 
   doc.load_string(hello_world_svg);
-  auto r = requests::post("https://httpbin.org/post", doc);
+  auto r = requests::post(urls::url_view("https://httpbin.org/post"), doc);
 
   std::cout << "Sent content: " << as_json(r).at("headers").at("Content-Type") << std::endl;
 
 
-  r = requests::get("https://httpbin.org");
+  r = requests::get(urls::url_view("https://httpbin.org"));
 
   auto index = as_xml(r);
   std::cout << "Title " << index.first_element_by_path("./html/head/meta/title").text().get() << std::endl;

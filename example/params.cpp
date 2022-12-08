@@ -28,6 +28,6 @@ int main(int argc, char * argv[])
   u.params() = {{"key1", "value1"}, {"key2", "value2"}};
   auto r = requests::get(u);
 
-  std::cout << r.header <<  r.string_view() << std::endl;
+  std::cout << r.headers <<  r.string_view() << std::endl;
   return 0;
 }

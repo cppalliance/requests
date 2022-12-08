@@ -15,20 +15,20 @@ using namespace boost;
 
 int main(int argc, char * argv[])
 {
-  auto r = requests::get("https://api.github.com/events");
-  r = requests::post("https://httpbin.org/post", json::value{{"key", "value"}});
-  std::cout << r.header << r.string_view() << std::endl;
+  auto r = requests::get(urls::url_view{"https://api.github.com/events"});
+  r = requests::post(urls::url_view{"https://httpbin.org/post"}, json::value{{"key", "value"}});
+  std::cout << r.headers << r.string_view() << std::endl;
 
-  r = requests::put("https://httpbin.org/put", json::value{{"key","value"}});
-  std::cout << r.header << r.string_view() << std::endl;
+  r = requests::put(urls::url_view{"https://httpbin.org/put"}, json::value{{"key","value"}});
+  std::cout << r.headers << r.string_view() << std::endl;
 
-  r = requests::delete_("https://httpbin.org/delete");
-  std::cout << r.header << r.string_view() << std::endl;
+  r = requests::delete_(urls::url_view{"https://httpbin.org/delete"});
+  std::cout << r.headers << r.string_view() << std::endl;
 
-  r = requests::head("https://httpbin.org/get");
-  std::cout << r.header << r.string_view() << std::endl;
+  r = requests::head(urls::url_view{"https://httpbin.org/get"});
+  std::cout << r.headers << r.string_view() << std::endl;
 
-  r = requests::options("https://httpbin.org/get");
-  std::cout << r.header << r.string_view() << std::endl;
+  r = requests::options(urls::url_view{"https://httpbin.org/get"});
+  std::cout << r.headers << r.string_view() << std::endl;
   return 0;
 }

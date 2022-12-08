@@ -32,7 +32,7 @@ using namespace boost;
 int main(int argc, char * argv[])
 {
   asio::io_context ctx;
-  auto fr = requests::async_get("https://httpbin.org/basic-auth/user/pass",
+  auto fr = requests::async_get(urls::url_view("https://httpbin.org/basic-auth/user/pass"),
                                 requests::headers({requests::basic_auth("user", "pass")}),
                                 asio::bind_executor(ctx, asio::use_future));
 
@@ -41,7 +41,7 @@ int main(int argc, char * argv[])
 
   std::cout << r.result_code() << std::endl;
   // 200
-  std::cout << r.header["Content-Type"] << std::endl;
+  std::cout << r.headers["Content-Type"] << std::endl;
   // 'application/json; charset=utf8'
 
   std::cout << r.string_view() << std::endl;

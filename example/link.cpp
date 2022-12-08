@@ -41,7 +41,7 @@ int main(int argc, char * argv[])
   auto r = requests::get(u);
   if (r.ok())
   {
-    std::cerr << "Erorr getting events: " << r.header << r.string_view() << std::endl;
+    std::cerr << "Erorr getting events: " << r.headers << r.string_view() << std::endl;
     return 1;
   }
 
@@ -62,7 +62,7 @@ int main(int argc, char * argv[])
     r = requests::get(next);
     if (r.ok())
     {
-      std::cerr << "Erorr getting events: " << r.header << r.string_view() << std::endl;
+      std::cerr << "Erorr getting events: " << r.headers << r.string_view() << std::endl;
       return 1;
     }
 
