@@ -21,6 +21,7 @@
 
 #include <iostream>
 #include <boost/asio/ssl/host_name_verification.hpp>
+#include "extern.hpp"
 
 using namespace boost;
 

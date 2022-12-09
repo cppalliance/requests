@@ -271,6 +271,8 @@ struct basic_connection : private detail::stream_base
     auto ropen(http::request<http::string_body> & req, request_options opt, cookie_jar * jar, system::error_code & ec) -> stream;
 
   private:
+    template<typename >
+    friend struct basic_connection;
 
     template<typename Body>
     void write_impl(http::request<Body> & req,

@@ -19,6 +19,7 @@
 #include "string_maker.hpp"
 
 #include <boost/asio/experimental/awaitable_operators.hpp>
+#include "extern.hpp"
 
 using namespace boost;
 
