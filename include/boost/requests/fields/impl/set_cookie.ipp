@@ -35,7 +35,7 @@ system::result<set_cookie> parse_set_cookie_field(core::string_view input)
             ug::tuple_rule(
                     ug::token_rule(grammar::cookie_token),
                     ug::squelch(ug::literal_rule("=")),
-                    ug::token_rule(grammar::cookie_octets),
+                    ug::optional_rule(ug::token_rule(grammar::cookie_octets)),
                     ug::range_rule(
                         ug::tuple_rule(
                             ug::squelch(ug::literal_rule("; ")),
@@ -51,7 +51,7 @@ system::result<set_cookie> parse_set_cookie_field(core::string_view input)
     const auto & value = *res;
     set_cookie sc{
         std::get<0>(value),
-        std::get<1>(value),
+        std::get<1>(value).value_or(""),
         std::get<2>(value)
     };
 

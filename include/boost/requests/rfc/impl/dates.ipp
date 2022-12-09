@@ -158,15 +158,20 @@ date_1123_t::parse(
 {
   namespace ug = boost::urls::grammar;
   using namespace detail;
-  constexpr auto sp = urls::grammar::squelch(urls::grammar::literal_rule(" "));
+  constexpr auto sp = ug::squelch(ug::literal_rule(" "));
+  // RFC 2616 only allows space, but `-` is sometimes in use, that's minor enough to tolerate
+  constexpr auto dsp = ug::squelch(
+        ug::variant_rule(
+          ug::literal_rule(" "),
+          ug::literal_rule("-")))
+        ;
 
   constexpr auto date1 =
       ug::tuple_rule(
-
           fixed_token_rule<2u>(ug::digit_chars),
-          sp,
+          dsp,
           month,
-          sp,
+          dsp,
           fixed_token_rule<4u>(ug::digit_chars)
       );
 

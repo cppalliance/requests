@@ -5,7 +5,9 @@
 #ifndef BOOST_REQUESTS_COOKIES_COOKIE_HPP
 #define BOOST_REQUESTS_COOKIES_COOKIE_HPP
 
-#include "boost/requests/fields/set_cookie.hpp"
+#include <boost/requests/fields/set_cookie.hpp>
+#include <boost/container/pmr/monotonic_buffer_resource.hpp>
+#include <boost/url/grammar/string_token.hpp>
 #include <boost/core/detail/string_view.hpp>
 #include <string>
 
@@ -50,15 +52,14 @@ inline std::size_t cookie_pair_length(std::pair<core::string_view, core::string_
     return p.first.size() + p.second.size() + 1u;
 }
 
-template<typename Allocator>
-inline void append_cookie_pair(
-        std::basic_string<char, std::char_traits<char>, Allocator> & res,
+inline char* append_cookie_pair(
+        char * res,
         std::pair<core::string_view, core::string_view> p)
 {
-    res += p.first;
-    res += '=';
-    res += p.second;
-
+    res = std::copy(p.first.begin(), p.first.end(), res);
+    *(res++) = '=';
+    res= std::copy(p.second.begin(), p.second.end(), res);
+    return res;
 }
 
 inline std::size_t cookie_pair_length(const set_cookie &  p)
@@ -66,14 +67,14 @@ inline std::size_t cookie_pair_length(const set_cookie &  p)
     return p.name.size() + p.value.size() + 1u;
 }
 
-template<typename Allocator>
-inline void append_cookie_pair(
-        std::basic_string<char, std::char_traits<char>, Allocator> & res,
+inline char * append_cookie_pair(
+        char * res,
         const set_cookie & p)
 {
-    res += p.name;
-    res += "=";
-    res += p.value;
+    res = std::copy(p.name.begin(), p.name.end(), res);
+    *(res++) = '=';
+    res= std::copy(p.value.begin(), p.value.end(), res);
+    return res;
 }
 
 
@@ -82,26 +83,22 @@ inline std::size_t cookie_pair_length(const cookie &  p)
     return p.name.size() + p.value.size() + 1u;
 }
 
-template<typename Alloc1>
-inline void append_cookie_pair(
-        std::basic_string<char, std::char_traits<char>, Alloc1> & res,
+inline char * append_cookie_pair(
+        char * res,
         const cookie & p)
 {
-    res += p.name;
-    res += "=";
-    res += p.value;
+    res = std::copy(p.name.begin(), p.name.end(), res);
+    *(res++) = '=';
+    res= std::copy(p.value.begin(), p.value.end(), res);
+    return res;
 }
 
-
-}
 
 template<typename Range,
-         typename Allocator = std::allocator<char>>
-std::basic_string<char, std::char_traits<char>, Allocator>
-        make_cookie_field(Range && range, Allocator && alloc = {})
+         typename StringToken = urls::string_token::return_string>
+auto make_cookie_field(Range && range, StringToken && token = {})
+    -> typename std::decay_t<StringToken>::result_type
 {
-    std::basic_string<char, std::char_traits<char>, Allocator> res{std::forward<Allocator>(alloc)};
-
     std::size_t sz = 0u;
     for (auto && val : range)
     {
@@ -109,17 +106,50 @@ std::basic_string<char, std::char_traits<char>, Allocator>
             sz += 2u;
         sz += detail::cookie_pair_length(val);
     }
-    res.reserve(sz);
-
+    auto res = token.prepare(sz);
+    bool initial = true;
     for (auto && val : range)
     {
-        if (!res.empty())
-            res += "; ";
-        detail::append_cookie_pair(res, val);
+        if (!initial)
+        {
+          *(res++) = ';';
+          *(res++) = ' ';
+        }
+        initial = false;
+        res = detail::append_cookie_pair(res, val);
     }
-    return res;
+    return token.result();
 }
 
+struct monotonic_token : urls::grammar::string_token::arg
+{
+  unsigned char buf[4096];
+  boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
+
+  char * data = nullptr;
+  std::size_t size = 0u;
+
+  monotonic_token() = default;
+  monotonic_token(const monotonic_token &) = delete;
+
+  using result_type = core::string_view;
+
+  char * prepare(std::size_t size_)
+  {
+    if (size_ == 0u)
+      return nullptr;
+    else
+      return data = static_cast<char*>(memres.allocate(size = size_, 1u));
+  }
+
+  core::string_view result() const
+  {
+    return core::string_view(data, size);
+  }
+
+};
+
+}
 
 }
 }

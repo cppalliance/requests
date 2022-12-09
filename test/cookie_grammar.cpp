@@ -78,6 +78,12 @@ TEST_CASE("sane-cookie-date")
     CHECK(std::chrono::system_clock::time_point(std::chrono::seconds(1)) ==
           urls::grammar::parse("Thu, 01 Jan 1970 00:00:01 GMT",  requests::rfc::sane_cookie_date));
 
+    CHECK(std::chrono::system_clock::time_point(std::chrono::seconds(0)) ==
+          urls::grammar::parse("Thu, 01-Jan-1970 00:00:00 GMT",  requests::rfc::sane_cookie_date));
+
+    CHECK(std::chrono::system_clock::time_point(std::chrono::hours(1)) ==
+          urls::grammar::parse("Thu, 01-Jan-1970 01:00:00 GMT",  requests::rfc::sane_cookie_date));
+
 }
 
 
@@ -207,7 +213,7 @@ TEST_CASE("set-cookie")
 
     std::array<requests::set_cookie, 8> cks = {*v1, *v2, *v4, *v5, *v6, *v7, *v8, *v9};
 
-    CHECK(requests::make_cookie_field(cks)
+    CHECK(requests::detail::make_cookie_field(cks)
         == "theme=light; sessionToken=abc123; LSID=DQAAAKEaem_vYg; HSID=AYQEVnDKrdst; SSID=Ap4PGTEq; lu=Rg3vHJZnehYLjVg7qi3bZjzg; made_write_conn=1295214458; reg_fb_gate=deleted"
     );
 }

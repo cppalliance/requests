@@ -321,8 +321,8 @@ auto post(Connection & conn,
   set_accept_headers(req);
   json::storage_ptr ptr{req.get_allocator().resource()};
   auto s = conn.ropen(http::verb::post, target,
-                      ::boost::json::value_from(std::forward<RequestBody>(request_body), ptr, ec),
-                      std::move(req));
+                      ::boost::json::value_from(std::forward<RequestBody>(request_body), ptr),
+                      std::move(req), ec);
   return { std::move(s).headers(),  std::move(s).history(), read_json<Value>(s, ptr, ec) };
 }
 

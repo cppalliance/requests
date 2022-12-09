@@ -197,7 +197,7 @@ auto basic_session<Executor>::ropen(
   response_base::history_type history{req.get_allocator()};
 
   if (!url.encoded_target().empty() && req.target().empty())
-    req.target(url.encoded_target());
+    req.target(url.encoded_resource());
 
   auto do_ropen =
       [&](http::request<Body> & req, request_options opts) -> stream
@@ -227,10 +227,8 @@ auto basic_session<Executor>::ropen(
   }
 
   {
-    unsigned char buf[4096];
-    boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
-    container::pmr::polymorphic_allocator<char> alloc2{&memres};
-    auto cc = jar_.get(host, is_secure, url.encoded_path(), alloc2);
+    detail::monotonic_token mv;
+    auto cc = jar_.get(host, is_secure, url.encoded_path(), mv);
     if (!cc.empty())
       req.set(http::field::cookie, cc);
   }
@@ -298,12 +296,10 @@ auto basic_session<Executor>::ropen(
       url = url_cache;
     }
 
-    req.base().target(url.encoded_path());
+    req.base().target(url.encoded_resource());
     {
-      unsigned char buf[4096];
-      boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
-      container::pmr::polymorphic_allocator<char> alloc2{&memres};
-      auto cc = jar_.get(host, is_secure, url.encoded_path(), alloc2);
+      detail::monotonic_token mv;
+      auto cc = jar_.get(host, is_secure, url.encoded_path(), mv);
       if (!cc.empty())
         req.base().set(http::field::cookie, cc);
     }
@@ -353,7 +349,7 @@ auto basic_session<Executor>::ropen(
     return stream{get_executor(), nullptr};
 
 
-  beast::http::request<body_type, http::fields> hreq{method, url.encoded_target(), 11,
+  beast::http::request<body_type, http::fields> hreq{method, url.encoded_resource(), 11,
                                                      std::move(bd),
                                                      std::move(fields)};
 
@@ -419,11 +415,9 @@ struct basic_session<Executor>::async_ropen_op : asio::coroutine
         fields.set(http::field::content_type, nm);
     }
 
-        {
-      unsigned char buf[4096];
-      boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
-      using allocator_type = boost::container::pmr::polymorphic_allocator<char>;
-      auto cc = this_->jar_.template get<allocator_type>(host, is_secure, path,  &memres);
+    {
+      detail::monotonic_token mv;
+      auto cc = this_->jar_.get(host, is_secure, path,  mv);
       if (!cc.empty())
         fields.set(http::field::cookie, cc);
     }
@@ -471,10 +465,8 @@ struct basic_session<Executor>::async_ropen_op : asio::coroutine
       }
 
       {
-        unsigned char buf[4096];
-        boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
-        container::pmr::polymorphic_allocator<char> alloc2{&memres};
-        auto cc = this_->jar_.get(url.encoded_host(), is_secure, url.encoded_path(), alloc2);
+        detail::monotonic_token mv;
+        auto cc = this_->jar_.get(url.encoded_host(), is_secure, url.encoded_path(), mv);
         if (!cc.empty())
           req.set(http::field::cookie, cc);
       }
@@ -544,12 +536,10 @@ struct basic_session<Executor>::async_ropen_op : asio::coroutine
 
         }
 
-        req.base().target(url.encoded_path());
+        req.base().target(url.encoded_resource());
         {
-          unsigned char buf[4096];
-          boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
-          container::pmr::polymorphic_allocator<char> alloc2{&memres};
-          auto cc = this_->jar_.get(url.encoded_host(), is_secure, url.encoded_path(), alloc2);
+          detail::monotonic_token mv;
+          auto cc = this_->jar_.get(url.encoded_host(), is_secure, url.encoded_path(), mv);
           if (!cc.empty())
             req.base().set(http::field::cookie, cc);
         }
