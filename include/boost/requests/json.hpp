@@ -284,9 +284,9 @@ auto get(Connection & conn,
 {
   set_accept_headers(req);
   json::storage_ptr ptr{req.get_allocator().resource()};
-  auto s = conn.ropen(http::verb::get, target, empty{}, std::move(req));
+  auto s = conn.ropen(http::verb::get, target, empty{}, std::move(req), ec);
 
-  return { s.headers(), read_json<Value>(s, ptr, ec) };
+  return { std::move(s).headers(),  std::move(s).history(), read_json<Value>(s, ptr, ec) };
 }
 
 
@@ -321,9 +321,9 @@ auto post(Connection & conn,
   set_accept_headers(req);
   json::storage_ptr ptr{req.get_allocator().resource()};
   auto s = conn.ropen(http::verb::post, target,
-                      ::boost::json::value_from(std::forward<RequestBody>(request_body), ptr),
+                      ::boost::json::value_from(std::forward<RequestBody>(request_body), ptr, ec),
                       std::move(req));
-  return { s.headers(), read_json<Value>(s, ptr, ec) };
+  return { std::move(s).headers(),  std::move(s).history(), read_json<Value>(s, ptr, ec) };
 }
 
 template<typename Value = json::value,
@@ -338,9 +338,9 @@ auto patch(Connection & conn,
   set_accept_headers(req);
   json::storage_ptr ptr{req.get_allocator().resource()};
   auto s = conn.ropen(http::verb::patch, target,
-                      ::boost::json::value_from(std::forward<RequestBody>(request_body), ptr),
+                      ::boost::json::value_from(std::forward<RequestBody>(request_body), ptr, ec),
                       std::move(req));
-  return { s.headers(), read_json<Value>(s, ptr, ec) };
+  return { std::move(s).headers(),  std::move(s).history(), read_json<Value>(s, ptr, ec) };
 }
 
 
@@ -389,9 +389,9 @@ auto put(Connection & conn,
   set_accept_headers(req);
   json::storage_ptr ptr{req.get_allocator().resource()};
   auto s = conn.ropen(http::verb::put, target,
-                      ::boost::json::value_from(std::forward<RequestBody>(request_body), ptr),
+                      ::boost::json::value_from(std::forward<RequestBody>(request_body), ptr, ec),
                       std::move(req));
-  return { s.headers(), read_optional_json<Value>(s, ptr, ec) };
+  return { std::move(s).headers(),  std::move(s).history(), read_optional_json<Value>(s, ptr, ec) };
 }
 
 
@@ -405,7 +405,7 @@ auto delete_(Connection & conn,
 {
   set_accept_headers(req);
   json::storage_ptr ptr{req.get_allocator().resource()};
-  auto s = conn.ropen(http::verb::post, target,
+  auto s = conn.ropen(http::verb::delete_, target,
                       ::boost::json::value_from(std::forward<RequestBody>(request_body), ptr),
                       std::move(req));
   return { std::move(s).headers(),  std::move(s).history(), read_optional_json<Value>(s, ptr) };
@@ -423,9 +423,9 @@ auto delete_(Connection & conn,
   set_accept_headers(req);
   json::storage_ptr ptr{req.get_allocator().resource()};
   auto s = conn.ropen(http::verb::delete_, target,
-                      ::boost::json::value_from(std::forward<RequestBody>(request_body), ptr),
+                      ::boost::json::value_from(std::forward<RequestBody>(request_body), ptr, ec),
                       std::move(req));
-  return { s.headers(), read_optional_json<Value>(s, ptr, ec) };
+  return { std::move(s).headers(),  std::move(s).history(), read_optional_json<Value>(s, ptr, ec) };
 }
 
 
@@ -439,7 +439,7 @@ auto delete_(Connection & conn,
 {
   set_accept_headers(req);
   json::storage_ptr ptr{req.get_allocator().resource()};
-  auto s = conn.ropen(http::verb::post, target,
+  auto s = conn.ropen(http::verb::delete_, target,
                       empty{},
                       std::move(req));
   return { std::move(s).headers(),  std::move(s).history(), read_optional_json<Value>(s, ptr) };
@@ -457,8 +457,8 @@ auto delete_(Connection & conn,
   json::storage_ptr ptr{req.get_allocator().resource()};
   auto s = conn.ropen(http::verb::delete_, target,
                       empty{},
-                      std::move(req));
-  return { s.headers(), read_optional_json<Value>(s, ptr, ec) };
+                      std::move(req), ec);
+  return { std::move(s).headers(),  std::move(s).history(), read_optional_json<Value>(s, ptr, ec) };
 }
 
 
@@ -485,8 +485,8 @@ auto options(Connection & conn,
 {
   set_accept_headers(req);
   json::storage_ptr ptr{req.get_allocator().resource()};
-  auto s = conn.ropen(http::verb::options, target, empty{}, std::move(req));
-  return { s.headers(), read_json<Value>(s, ptr, ec) };
+  auto s = conn.ropen(http::verb::options, target, empty{}, std::move(req), ec);
+  return { std::move(s).headers(),  std::move(s).history(), read_json<Value>(s, ptr, ec) };
 }
 
 
@@ -509,9 +509,9 @@ auto get(urls::url_view target,
 {
   set_accept_headers(req);
   json::storage_ptr ptr{req.get_allocator().resource()};
-  auto s = default_session().ropen(http::verb::get, target, empty{}, std::move(req));
+  auto s = default_session().ropen(http::verb::get, target, empty{}, std::move(req), ec);
 
-  return { s.headers(), read_json<Value>(s, ptr, ec) };
+  return { std::move(s).headers(),  std::move(s).history(), read_json<Value>(s, ptr, ec) };
 }
 
 
@@ -543,8 +543,8 @@ auto post(urls::url_view target,
   json::storage_ptr ptr{req.get_allocator().resource()};
   auto s = default_session().ropen(http::verb::post, target,
                       ::boost::json::value_from(std::forward<RequestBody>(request_body), ptr),
-                      std::move(req));
-  return { s.headers(), read_json<Value>(s, ptr, ec) };
+                      std::move(req), ec);
+  return { std::move(s).headers(),  std::move(s).history(), read_json<Value>(s, ptr, ec) };
 }
 
 template<typename Value = json::value,
@@ -558,8 +558,8 @@ auto patch(urls::url_view target,
   json::storage_ptr ptr{req.get_allocator().resource()};
   auto s = default_session().ropen(http::verb::patch, target,
                       ::boost::json::value_from(std::forward<RequestBody>(request_body), ptr),
-                      std::move(req));
-  return { s.headers(), read_json<Value>(s, ptr, ec) };
+                      std::move(req), ec);
+  return { std::move(s).headers(),  std::move(s).history(), read_json<Value>(s, ptr, ec) };
 }
 
 
@@ -604,7 +604,7 @@ auto put(urls::url_view target,
   auto s = default_session().ropen(http::verb::put, target,
                       ::boost::json::value_from(std::forward<RequestBody>(request_body), ptr),
                       std::move(req));
-  return { s.headers(), read_optional_json<Value>(s, ptr, ec) };
+  return { std::move(s).headers(),  std::move(s).history(), read_optional_json<Value>(s, ptr, ec) };
 }
 
 
@@ -616,7 +616,7 @@ auto delete_(urls::url_view target,
 {
   set_accept_headers(req);
   json::storage_ptr ptr{req.get_allocator().resource()};
-  auto s = default_session().ropen(http::verb::post, target,
+  auto s = default_session().ropen(http::verb::delete_, target,
                       ::boost::json::value_from(std::forward<RequestBody>(request_body), ptr),
                       std::move(req));
   return { std::move(s).headers(),  std::move(s).history(), read_optional_json<Value>(s, ptr) };
@@ -633,8 +633,8 @@ auto delete_(urls::url_view target,
   json::storage_ptr ptr{req.get_allocator().resource()};
   auto s = default_session().ropen(http::verb::delete_, target,
                       ::boost::json::value_from(std::forward<RequestBody>(request_body), ptr),
-                      std::move(req));
-  return { s.headers(), read_optional_json<Value>(s, ptr, ec) };
+                      std::move(req), ec);
+  return { std::move(s).headers(),  std::move(s).history(), read_optional_json<Value>(s, ptr, ec) };
 }
 
 
@@ -646,7 +646,7 @@ auto delete_(urls::url_view target,
 {
   set_accept_headers(req);
   json::storage_ptr ptr{req.get_allocator().resource()};
-  auto s = default_session().ropen(http::verb::post, target,
+  auto s = default_session().ropen(http::verb::delete_, target,
                       empty{},
                       std::move(req));
   return { std::move(s).headers(),  std::move(s).history(), read_optional_json<Value>(s, ptr) };
@@ -662,8 +662,8 @@ auto delete_(urls::url_view target,
   json::storage_ptr ptr{req.get_allocator().resource()};
   auto s = default_session().ropen(http::verb::delete_, target,
                       empty{},
-                      std::move(req));
-  return { s.headers(), read_optional_json<Value>(s, ptr, ec) };
+                      std::move(req), ec);
+  return { std::move(s).headers(),  std::move(s).history(), read_optional_json<Value>(s, ptr, ec) };
 }
 
 
@@ -687,8 +687,8 @@ auto options(urls::url_view target,
 {
   set_accept_headers(req);
   json::storage_ptr ptr{req.get_allocator().resource()};
-  auto s = default_session().ropen(http::verb::options, target, empty{}, std::move(req));
-  return { s.headers(), read_json<Value>(s, ptr, ec) };
+  auto s = default_session().ropen(http::verb::options, target, empty{}, std::move(req), ec);
+  return { std::move(s).headers(),  std::move(s).history(), read_json<Value>(s, ptr, ec) };
 }
 
 namespace detail
@@ -892,7 +892,7 @@ struct async_request_optional_json_op : asio::coroutine
   executor_type get_executor() {return conn.get_executor(); }
 
   using completion_signature_type = void(system::error_code, response<optional<Value>>);
-  using step_signature_type       = void(system::error_code, variant2::variant<typename Connection::stream, optional<value>>);
+  using step_signature_type       = void(system::error_code, variant2::variant<variant2::monostate, typename Connection::stream, optional<value>>);
 
   Connection & conn;
   http::verb method;
@@ -904,17 +904,18 @@ struct async_request_optional_json_op : asio::coroutine
 
   response<optional<Value>> rb{req.get_allocator()};
 
+  template<typename RequestBody_>
   async_request_optional_json_op(Connection * conn,
                                  http::verb method,
                                  urls::url_view target,
-                                 RequestBody && request_body,
+                                 RequestBody_ && request_body,
                                  typename Connection::request_type req)
       : conn(*conn), method(method), target(target),
-        request_body(std::forward<RequestBody>(request_body)), req(std::move(req)) {}
+        request_body(std::forward<RequestBody_>(request_body)), req(std::move(req)) {}
 
   response<optional<Value>> & resume(requests::detail::co_token_t<step_signature_type> self,
                           system::error_code & ec,
-                          variant2::variant<typename Connection::stream, optional<value>> s)
+                          variant2::variant<variant2::monostate, typename Connection::stream, optional<value>> s)
   {
     reenter(this)
     {
@@ -923,7 +924,7 @@ struct async_request_optional_json_op : asio::coroutine
                              std::move(req), std::move(self));
       if (!ec)
       {
-        str_.emplace(std::move(variant2::get<0>(s)));
+        str_.emplace(std::move(variant2::get<1>(s)));
         yield async_read_json(*str_, ptr, std::move(self));
       }
 
@@ -932,9 +933,9 @@ struct async_request_optional_json_op : asio::coroutine
       if (ec)
         break;
 
-      if (variant2::get<1>(s))
+      if (variant2::get<2>(s))
       {
-        auto v = ::boost::json::try_value_to<Value>(*variant2::get<1>(s));
+        auto v = ::boost::json::try_value_to<Value>(*variant2::get<2>(s));
         if (v)
           rb.value = std::move(*v);
         else
@@ -949,9 +950,9 @@ struct async_request_optional_json_op : asio::coroutine
 
 template<typename Value = value,
           typename Connection,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, Value)) CompletionToken
+          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<Value>)) CompletionToken
             BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(typename Connection::executor_type)>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, Value))
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, response<Value>))
 async_get(Connection & conn,
           urls::url_view target,
           typename Connection::request_type req = {},
@@ -965,9 +966,9 @@ async_get(Connection & conn,
 template<typename Value = value,
           typename Connection,
           typename RequestBody,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, Value)) CompletionToken
+          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<Value>)) CompletionToken
               BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(typename Connection::executor_type)>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, Value))
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, response<Value>))
 async_post(Connection & conn,
            urls::url_view target,
            RequestBody && request_body,
@@ -975,7 +976,7 @@ async_post(Connection & conn,
            CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
 {
   return requests::detail::co_run<detail::async_request_json_op<
-      Connection, Value>>(std::forward<CompletionToken>(completion_token),
+      Connection, Value, std::decay_t<RequestBody>>>(std::forward<CompletionToken>(completion_token),
                           &conn, http::verb::post,  target, std::forward<RequestBody>(request_body), std::move(req));
 }
 
@@ -983,9 +984,9 @@ async_post(Connection & conn,
 template<typename Value = value,
           typename Connection,
           typename RequestBody,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, Value)) CompletionToken
+          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<Value>)) CompletionToken
               BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(typename Connection::executor_type)>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, Value))
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, response<Value>))
 async_patch(Connection & conn,
            urls::url_view target,
            RequestBody && request_body,
@@ -993,16 +994,16 @@ async_patch(Connection & conn,
            CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
 {
   return requests::detail::co_run<detail::async_request_json_op<
-       Connection, Value>>(std::forward<CompletionToken>(completion_token),
+       Connection, Value, std::decay_t<RequestBody>>>(std::forward<CompletionToken>(completion_token),
                            &conn, http::verb::patch,  target, std::forward<RequestBody>(request_body), std::move(req));
 }
 
 template<typename Value = value,
           typename Connection,
           typename RequestBody,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, Value)) CompletionToken
+          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<Value>)) CompletionToken
               BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(typename Connection::executor_type)>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, Value))
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, response<Value>))
 async_put(Connection & conn,
           urls::url_view target,
           RequestBody && request_body,
@@ -1010,7 +1011,7 @@ async_put(Connection & conn,
           CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
 {
   return requests::detail::co_run<detail::async_request_optional_json_op<
-      Connection, Value>>(std::forward<CompletionToken>(completion_token),
+      Connection, Value, std::decay_t<RequestBody>>>(std::forward<CompletionToken>(completion_token),
                           &conn, http::verb::put,  target, std::forward<RequestBody>(request_body), std::move(req));
 }
 
@@ -1018,9 +1019,9 @@ async_put(Connection & conn,
 template<typename Value = value,
           typename Connection,
           typename RequestBody,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, Value)) CompletionToken
+          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<Value>)) CompletionToken
               BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(typename Connection::executor_type)>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, Value))
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, response<Value>))
 async_delete(Connection & conn,
             urls::url_view target,
             RequestBody && request_body,
@@ -1028,7 +1029,7 @@ async_delete(Connection & conn,
             CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
 {
   return requests::detail::co_run<detail::async_request_json_op<
-      Connection, Value>>(std::forward<CompletionToken>(completion_token),
+      Connection, Value, std::decay_t<RequestBody>>>(std::forward<CompletionToken>(completion_token),
                           &conn, http::verb::delete_,  target, std::forward<RequestBody>(request_body), std::move(req));
 }
 
@@ -1036,9 +1037,9 @@ async_delete(Connection & conn,
 template<typename Value = value,
           typename Connection,
           typename RequestBody,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, Value)) CompletionToken
+          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<Value>)) CompletionToken
               BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(typename Connection::executor_type)>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, Value))
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, response<Value>))
 async_delete(Connection & conn,
              urls::url_view target,
              typename Connection::request_type req = {},
@@ -1052,9 +1053,9 @@ async_delete(Connection & conn,
 
 template<typename Value = value,
           typename Connection,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, Value)) CompletionToken
+          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<Value>)) CompletionToken
               BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(typename Connection::executor_type)>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, Value))
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, response<Value>))
 async_options(Connection & conn,
               urls::url_view target,
               typename Connection::request_type req = {},
@@ -1094,8 +1095,8 @@ struct async_free_request_op
 
 template<typename Value = value,
           typename Connection,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, Value)) CompletionToken>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, Value))
+          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<Value>)) CompletionToken>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, response<Value>))
 async_get(urls::url_view target,
           http::fields req,
           CompletionToken && completion_token)
@@ -1108,8 +1109,8 @@ async_get(urls::url_view target,
 
 template<typename Value = value,
           typename RequestBody,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, Value)) CompletionToken>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, Value))
+          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<Value>)) CompletionToken>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, response<Value>))
 async_post(urls::url_view target,
            RequestBody && request_body,
            http::fields req,
@@ -1125,15 +1126,15 @@ async_post(urls::url_view target,
 template<typename Value = value,
           typename Connection,
           typename RequestBody,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, Value)) CompletionToken>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, Value))
+          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<Value>)) CompletionToken>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, response<Value>))
 async_patch(urls::url_view target,
             RequestBody && request_body,
             http::fields req,
             CompletionToken && completion_token)
 {
   return asio::async_initiate<CompletionToken,
-                              void(boost::system::error_code, Value)>(
+                              void(boost::system::error_code, response<Value>)>(
       detail::async_free_request_op{}, completion_token,
       http::verb::patch,  target, std::forward<RequestBody>(request_body), std::move(req));
 }
@@ -1141,15 +1142,15 @@ async_patch(urls::url_view target,
 template<typename Value = value,
           typename Connection,
           typename RequestBody,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, Value)) CompletionToken>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, Value))
+          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<Value>)) CompletionToken>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, response<Value>))
 async_put(urls::url_view target,
           RequestBody && request_body,
           http::fields req,
           CompletionToken && completion_token)
 {
   return asio::async_initiate<CompletionToken,
-                              void(boost::system::error_code, Value)>(
+                              void(boost::system::error_code, response<Value>)>(
       detail::async_free_request_op{}, completion_token,
       http::verb::put,  target, std::forward<RequestBody>(request_body), std::move(req));
 }
@@ -1157,15 +1158,15 @@ async_put(urls::url_view target,
 
 template<typename Value = value,
           typename RequestBody,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, Value)) CompletionToken>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, Value))
+          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<Value>)) CompletionToken>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, response<Value>))
 async_delete(urls::url_view target,
              RequestBody && request_body,
              http::fields req,
              CompletionToken && completion_token)
 {
   return asio::async_initiate<CompletionToken,
-                              void(boost::system::error_code, Value)>(
+                              void(boost::system::error_code, response<Value>)>(
       detail::async_free_request_op{}, completion_token,
       http::verb::delete_,  target, std::forward<RequestBody>(request_body), std::move(req));
 }
@@ -1173,28 +1174,28 @@ async_delete(urls::url_view target,
 
 template<typename Value = value,
           typename RequestBody,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, Value)) CompletionToken>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, Value))
+          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<Value>)) CompletionToken>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, response<Value>))
 async_delete(urls::url_view target,
              http::fields req,
              CompletionToken && completion_token)
 {
   return asio::async_initiate<CompletionToken,
-                              void(boost::system::error_code, Value)>(
+                              void(boost::system::error_code, response<Value>)>(
       detail::async_free_request_op{}, completion_token,
       http::verb::delete_,  target, empty{}, std::move(req));
 }
 
 
 template<typename Value = value,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, Value)) CompletionToken>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, Value))
+          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<Value>)) CompletionToken>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, response<Value>))
 async_options(urls::url_view target,
               http::fields req,
               CompletionToken && completion_token)
 {
   return asio::async_initiate<CompletionToken,
-                              void(boost::system::error_code, Value)>(
+                              void(boost::system::error_code, response<Value>)>(
       detail::async_free_request_op{}, completion_token,
       http::verb::options,  target, empty{}, std::move(req));
 }
