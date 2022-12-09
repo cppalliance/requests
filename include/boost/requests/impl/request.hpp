@@ -91,7 +91,7 @@ struct async_request_op : asio::coroutine
 };
 
 
-struct async_free_request_op : asio::coroutine
+struct async_free_request_op
 {
   template<typename Handler,
            typename RequestBody,
