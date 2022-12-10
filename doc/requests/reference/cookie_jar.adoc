@@ -1,0 +1,46 @@
+## cookie_jar.hpp
+[#cookie_jar]
+
+[source, cpp]
+----
+namespace boost::requests
+{
+
+// See https://www.rfc-editor.org/rfc/rfc6265#section-5.3
+// Match the domain of a domain to a pattern
+bool domain_match(core::string_view full, core::string_view pattern);
+
+// Match a full path to the sub path.
+bool path_match(core::string_view full, core::string_view pattern);
+
+struct cookie_jar final
+{
+    using allocator_type = boost::container::pmr::polymorphic_allocator<char>;
+    // The set used to store the
+    boost::unordered_set<cookie, cookie_hash, cookie_equal,
+                         typename std::allocator_traits<allocator_type>::template rebind_alloc<cookie>> content;
+
+    cookie_jar(allocator_type allocator = {}) : content(std::move(allocator)) {}
+
+    /// Set a cookie. Returns true when the cooki was inserted.
+    bool set(const set_cookie & set,
+             core::string_view request_host,
+             bool from_non_http_api = false,
+             urls::pct_string_view request_uri_path = "/",
+             const public_suffix_list & public_suffixes = default_public_suffix_list());
+
+    // Get a cookie value for the given parameters.
+    template<typename StringToken = urls::string_token::return_string>
+    auto get(core::string_view request_host,
+             bool is_secure = false,
+             urls::pct_string_view request_uri_path = "/",
+             StringToken && token = {}) const
+        -> typename std::decay_t<StringToken>::result_type;
+
+    // drop any expired cookies
+    void drop_expired(const std::chrono::system_clock::time_point nw = std::chrono::system_clock::now());
+};
+
+
+}
+----

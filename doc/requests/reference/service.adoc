@@ -1,0 +1,25 @@
+## service.hpp
+[#service]
+
+
+[source,cpp]
+----
+namespace boost::requests
+{
+
+struct session_service : asio::execution_context::service
+{
+  using executor_type = asio::any_io_executor;
+  using session_type = basic_session<executor_type>;
+
+  session_service(asio::execution_context & ctx);
+  ~session_service();
+  void shutdown() override;
+  void destroy();
+};
+
+// get the session of the execution_context of the passed executor.
+auto default_session(asio::any_io_executor exec = asio::system_executor()) -> session &;
+
+}
+----

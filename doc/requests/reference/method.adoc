@@ -1,0 +1,81 @@
+## method.hpp
+[#reference::method]
+
+[source,cpp]
+----
+namespace boost::requests
+{
+
+// methods - those with optional request bodies are overloaded
+template<typename Connection, typename RequestBody>
+auto ~method~(
+        Connection & conn,
+        urls::url_view target,
+        RequestBody && request_body, // omitted if not required
+        typename Connection::request_type req = {}) -> response;
+
+template<typename Connection, typename RequestBody>
+auto ~method~(
+        Connection & conn,
+        urls::url_view target,
+        RequestBody && request_body, // omitted if not required
+        typename Connection::request_type req,
+        system::error_code & ec) -> response;
+
+template<typename Connection,
+         typename RequestBody,
+         asio::completion_token_for<void (boost::system::error_code, response)> CompletionToken
+              asio::default_token_t<executor_type>>
+auto
+async_~method~(
+        Connection & conn,
+        urls::url_view target,
+        RequestBody && request_body,
+        typename Connection::request_type req  = {},
+        CompletionToken && completion_token asio::default_token_t<executor_type>());
+
+template<typename RequestBody>
+auto ~method~(
+    urls::url_view target,
+    RequestBody && request_body,
+    http::fields req = {}) -> response;
+
+template<typename RequestBody>
+auto ~method~(
+        urls::url_view target,
+        RequestBody && request_body,
+        http::fields req,
+        system::error_code & ec) -> response;
+
+template<typename RequestBody,
+         asio::completion_token_for<void (boost::system::error_code, response)> CompletionToken>
+auto async_~method~(
+        urls::url_view target,
+        RequestBody && request_body,
+        http::fields req,
+        CompletionToken && completion_token)
+
+}
+----
+
+The method header contains methods to send and receive method messages.
+
+Below is a table of all available methods.
+
+Methods with an optional request body are overloaded.
+
+[cols="1,1,1,1,1,1"]
+|===
+|Http Method | Name | Async-Name | Response body footnote:[never means the type is <<response_base>>]  | Request Body | Remarks
+
+| *GET*     | `get`     | `async_get`     | always   | never    |
+| *HEAD*    | `head`    | `async_head`    | never    | never    |
+| *POST*    | `post`    | `async_post`    | always   | always   |
+| *PUT*     | `put`     | `async_put`     | optional | always   |
+| *PATCH*   | `patch`   | `async_patch`   | optional | always   |
+| *DELETE*  | `delete_` | `async_delete`  | optional | optional |
+| *OPTIONS* | `options` | `async_options` | optional | never    |
+| *TRACE*   | `trace`   | `async_trace`   | never    | never    |
+| *CONNECT* | `connect` | `async_connect` | never    | always   | Can only be used on a `<<connection>>`
+
+|===

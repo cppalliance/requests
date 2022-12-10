@@ -1,0 +1,26 @@
+## form.hpp
+[#form]
+
+[source,cpp]
+----
+struct form
+{
+  form(std::initializer_list<urls::param_view> params);
+  form(form && ) = default;
+  form(const form & ) = default;
+  form(form & rhs) : storage(rhs.storage) {}
+
+  // construct the from any container
+  template<typename Container>
+  form(Container && ct);
+};
+----
+
+The form class is a utility class to sent `application/x-www-form-urlencoded` data in a request.
+
+[source,cpp]
+----
+requests::post(urls::url_view("https://httpbin.org/post"),
+               requests::form{{"foo", "42"}, {"bar", "21"}});
+----
+

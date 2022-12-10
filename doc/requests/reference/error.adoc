@@ -1,0 +1,42 @@
+## error.hpp
+[#error]
+
+[source,cpp]
+----
+namespace boost::requests {
+
+/// The type of error code used by the library
+using error_code = boost::system::error_code;
+
+/// The type of system error thrown by the library
+using system_error = boost::system::system_error;
+
+/// The type of error category used by the library
+using error_category = boost::system::error_category;
+
+error_category & http_status_category();
+
+error_code make_error(beast::http::status stat);
+
+/// Error codes returned from library operations
+enum class error
+{
+  /// The redirect limit was exceeded
+  too_many_redirects = 1,
+  /// The redirect is disallowed by the settings
+  forbidden_redirect,
+  /// The redirect was invalid
+  invalid_redirect,
+  /// The request violates the tls requirement
+  insecure,
+  /// The target host is invalid
+  wrong_host
+};
+
+error_category & request_category();
+
+error_code
+make_error_code(error e);
+
+} // boost::requests
+----

@@ -1,0 +1,265 @@
+////
+Copyright 2022 Klemens Morgenstern
+
+Distributed under the Boost Software License, Version 1.0.
+
+See accompanying file LICENSE_1_0.txt or copy at
+http://www.boost.org/LICENSE_1_0.txt
+////
+[#high-level]
+# High level Interface
+
+## Method functions
+
+The high level interface consists of free functions to perform requests.
+These will follow redirects & return the body as raw memory.
+
+[source,cpp]
+----
+requests::response res = requests::get(urls::url_view("https://boost.org/index.html"));
+----
+
+The `get` does the same as the following call to `request`:
+
+[source,cpp]
+----
+requests::response res = requests::request(
+    requests::http::verb::get, // < method
+    urls::url_view("https://boost.org/index.html"),
+    requests::empty{}); // < request body
+----
+
+The `request` method requires users to specify the request body (which must `empty` for `get`), which can means the interface does allow ill-formed requests.
+`request` always returns a <<response>> object. The `response` response to `request` may contain an empty body, while the named function may use <<response_base>> to indicate at compile time that the method never has a response with a body.
+
+[source,cpp]
+----
+requests::response_base res = requests::head(urls::url_view("https://boost.org/index.html"));
+----
+
+Every method-function has multiple overloads, as exemplified by the following overloads of `get`:
+
+[source.cpp]
+----
+// default-session requests
+auto get(urls::url_view target, http::fields req = {}) -> response;
+// non-throwing overload
+auto get(urls::url_view target, http::fields req, system::error_code & ec) -> response;
+
+// request on a connection, session or pool
+template<typename Connection>
+auto get(Connection & conn,
+         urls::url_view target,
+         typename Connection::request_type req = {}) -> response;
+
+// non-throwing overload
+template<typename Connection>
+auto get(Connection & conn,
+         urls::url_view target,
+         typename Connection::request_type req,
+         system::error_code & ec) -> response
+----
+
+The overloads without a `Connection` parameter use the <<default_session>>.
+
+The `req` argument indicates how to perform the request. 
+On a session request and one on a <<session>> those are the request headers, 
+for connections & pools it's a <<request_settings>>. 
+This is because the non-header attributes in `request_settings` are part of the session.
+
+If the `method` has a body it's argument is passed between the `target` & `req` arguments:
+
+[source.cpp]
+----
+template<typename RequestBody>
+auto post(
+    urls::url_view target,
+    RequestBody && request_body,
+    http::fields req = {}) -> response;
+----
+
+If the request-body is optional (as with `delete`), the function will provide overloads for either case, e.g.:
+
+
+[source.cpp]
+----
+auto delete_(urls::url_view target, RequestBody && request_body, http::fields req = {}) -> response;
+auto delete_(urls::url_view target,                              http::fields req = {}) -> response;
+----
+
+Additionally, every method has an asynchronous overload:
+
+[sourem,cpp]
+----
+
+template< typename CompletionToken>
+auto async_get(urls::url_view target, http::fields req, CompletionToken && completion_token);
+
+template<typename Connection, typename CompletionToken>
+auto async_get(Connection & conn,
+                urls::url_view target,
+                typename Connection::request_type req,
+                CompletionToken && completion_token);
+----
+
+Which will have a signature of `void(system::error_code, response)` or `void(system::error_code, respose_base)`, depending on the http method. The version that takes a `Connection` paramter supports https://www.boost.org/doc/libs/master/doc/html/boost_asio/reference/default_completion_token.html[default completion tokens].
+
+Below are all the http methods:
+
+[#method-table]
+
+[cols="1,1,1,1,1,1"]
+|===
+|Http Method | Name | Async-Name | Response body footnote:[never means the type is <<response_base>>]  | Request Body | Remarks
+
+| *GET*     | `get`     | `async_get`     | always   | never    |
+| *HEAD*    | `head`    | `async_head`    | never    | never    |
+| *POST*    | `post`    | `async_post`    | always   | always   |
+| *PUT*     | `put`     | `async_put`     | optional | always   |
+| *PATCH*   | `patch`   | `async_patch`   | optional | always   |
+| *DELETE*  | `delete_` | `async_delete`  | optional | optional |
+| *OPTIONS* | `options` | `async_options` | optional | never    |
+| *TRACE*   | `trace`   | `async_trace`   | never    | never    |
+| *CONNECT* | `connect` | `async_connect` | never    | always   | Can only be used on a `<<connection>>`
+
+|=== 
+
+## Request Body
+
+The body used for the requests requires specializations of <<body_traits>>, 
+which is an adaptor for the beast-bodies and provides a default mime-type. 
+
+NOTE: The traits mime-type will only be used for `Content-Type` if not already set in the headers.
+
+[source,cpp]
+----
+requests::post(
+    urls::url_view("https://httpbin.org/post")
+        R"({"message" : "hello-world"})");
+----
+
+The above will use a `span<char>` to represent the data and set the data to `"text/plain; charset=utf-8"`.
+
+You can override the `Content-Type` by just setting it manually:
+
+[source,cpp]
+----
+requests::post(
+    urls::url_view("https://httpbin.org/post")
+        R"({"message" : "hello-world"})",
+    requests::headers({{"Content-Type", "application/json"}}));
+----
+
+
+## Allocations
+
+All types used in requests, responses & headers use a `boost::container::pmr::polymorphic_allocator`. 
+Any response object will take the allocator from the request object. 
+E.g. if a user wishes to use a `monotonic_resource` for a request, his code might look like this:
+
+[source,cpp]
+----
+char buf[8096];
+container::pmr::monotonic_buffer_resource memres{buf, 8096};
+requests::response res = requests::get(
+    urls::url_view("https://boost.org/index.html"),
+    requests::headers({}, &memres));
+
+assert(res.headers.get_allocator().resource() == &memres);
+----
+
+This allows users to modify the allocation strategy without introducing more templates than necessary.
+
+The types used from `boost::beast` are aliased in `requests::http` with the proper allocator:
+
+[source,cpp]
+----
+using fields = boost::beast::http::basic_fields<boost::container::pmr::polymorphic_allocator<char>>;
+
+using request_header  = beast::http::request_header <fields>;
+using response_header = beast::http::response_header<fields>;
+
+template<typename Body> using request  = beast::http::request <Body, fields>;
+template<typename Body> using response = beast::http::response<Body, fields>;
+
+template<typename Body> using request_parser  = beast::http::request_parser <Body, boost::container::pmr::polymorphic_allocator<char>>;
+template<typename Body> using response_parser = beast::http::response_parser<Body, boost::container::pmr::polymorphic_allocator<char>>;
+----
+
+NOTE: This does nto apply to the memory allocated for async operations, which wills till use the `asio::associated_allocator`.
+
+## Request settings
+
+<<request_settings>> dictate how a request performs. It contains the `headers`, <<request_options>> and a pointer to the cookie_jar.
+When performing the request through a <<session>> the options & jar pointer will be injected from the session itself.
+
+## Redirects
+
+Redirects are automatically handled, and every redirect response is stored in the <<response_base.history>> field.
+
+The <<request_options.redirect>> sets the mode of redirection, which can be adjusted based on security concerns.
+
+The default mode is <<redirect_mode.private_domain>>, which allows redirect within one subdomain, such as `boost.org` to `api.boost.org`.
+
+The private domain patterns are available through the <<default_public_suffix_list>>.
+
+## Json
+
+Since json is ubiquitous in http requests due to it's usage in `REST APIs`, requests has special treatment for it.
+
+The <<json>> namespace provides http method similar to the ones in the <<requests>> namespace; although it ignores the methods that never have a return body. The resulting type is an instancation of <<json::response>> which will contain a parse json body. If the method's return body is optional, it'll be wrapped in `boost::optional`.
+
+This means, by default a function like <<json::get>> will return `json::response<json::value>` and <<json::delete_>> `json::response<optional<json::value>>`.
+
+[source,cpp]
+----
+json::response<json::value>           res = json::get    ("https://httpbin.org/get");
+json::response<optional<json::value>> oes = json::delete_("https://httpbin.org/delete");
+----
+
+It is also possible to directly convert the json into a struct, if `try_value_to` is valid for the type.
+
+[source,cpp]
+----
+struct httpbin_res
+{
+    json::object args;
+    unordered_map<json::string, json::string> headers;
+    json::string origin;
+    json::string url;
+};
+
+inline system::result<httpbin_res> tag_invoke(json::try_value_to_tag<httpbin_res>, const json::value & val);
+
+json::response<httpbin_res>           res = json::get    <httpbin_res>("https://httpbin.org/get");
+json::response<optional<httpbin_res>> oes = json::delete_<httpbin_res>("https://httpbin.org/delete");
+----
+
+Similarly, the request_body will be treated as if it is `json`, i.e. it will attempt to use `boost::json::value_from` 
+to send json data.
+
+Since `json::storage_ptr` uses `boost::container::pmr::memory_resource`, the result will use the same resource.
+
+[source,cpp]
+----
+auto ptr = boost::json::make_shared_resource<boost::json::monotonic_resource>();
+
+json::response<json::value> res = get(
+    urls::url_view("https://httpbin.org/headers"), 
+    requests::headers({}, ptr.get()));
+
+assert(ptr == res.value.storage());
+----
+
+## Download
+
+For big items, that should be directly transffered into files, `requests` provides the <<download>> function. 
+It will perform a `GET` request and directly write it to disk. If the path points to a directory the path
+will be deduced from the url-path.
+
+[source, cpp]
+----
+requests::response_base res = requests::download(
+    urls::url_view("https://boostorg.jfrog.io/artifactory/main/release/1.80.0/source/boost_1_80_0.tar.gz"),  
+    {}, filesystem::current_path());
+----

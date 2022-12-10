@@ -18,7 +18,6 @@ struct request_options {
   redirect_mode redirect{private_domain};
   /// The maximum of allowed redirectse
   std::size_t max_redirects{12};
-
 };
 
 /// The default options used by sessions.

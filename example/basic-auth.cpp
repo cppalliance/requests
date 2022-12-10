@@ -30,6 +30,8 @@ using namespace boost;
 
 int main(int argc, char * argv[])
 {
+
+  // tag::motivatingExample[]
   auto r = requests::get(urls::url_view("https://httpbin.org/basic-auth/user/pass"),
                          requests::headers({requests::basic_auth("user", "pass")}));
 
@@ -43,5 +45,6 @@ int main(int argc, char * argv[])
 
   std::cout << as_json(r) << std::endl;
   // {'authenticated': True, ...}
+  // end::motivatingExample[]
   return 0;
 }

@@ -1,0 +1,24 @@
+# Reference
+
+`completion_handler_for` and `default_token` are used instead of verbose asio macros.
+
+include::reference/body_traits.adoc[]
+include::reference/connection.adoc[]
+include::reference/connection_pool.adoc[]
+include::reference/cookie.adoc[]
+include::reference/cookie_jar.adoc[]
+include::reference/download.adoc[]
+include::reference/error.adoc[]
+include::reference/form.adoc[]
+include::reference/http.adoc[]
+include::reference/json.adoc[]
+include::reference/method.adoc[]
+include::reference/mime_types.adoc[]
+include::reference/public_suffix.adoc[]
+include::reference/redirect.adoc[]
+include::reference/request_options.adoc[]
+include::reference/request_settings.adoc[]
+include::reference/response.adoc[]
+include::reference/service.adoc[]
+include::reference/session.adoc[]
+include::reference/stream.adoc[]

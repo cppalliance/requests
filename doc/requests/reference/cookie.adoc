@@ -1,0 +1,27 @@
+## cookie.hpp
+[#cookie]
+
+[source, cpp]
+----
+namespace boost::requests
+{
+
+struct cookie
+{
+  using allocator_type = boost::container::pmr::polymorphic_allocator<char>;
+  using string_type = std::basic_string<char, std::char_traits<char>, allocator_type>;
+
+  cookie(allocator_type && alloc) : name(alloc), value(alloc), domain(alloc), path(alloc) {}
+  cookie(cookie &&) noexcept = default;
+  cookie(cookie && val, allocator_type && alloc);
+
+  string_type name, value;
+  std::chrono::system_clock::time_point expiry_time;
+  string_type domain, path;
+  std::chrono::system_clock::time_point creation_time{std::chrono::system_clock::now()},
+                                     last_access_time{std::chrono::system_clock::now()};
+  bool persistent_flag, host_only_flag, secure_only_flag, http_only_flag;
+};
+
+}
+----

@@ -1,0 +1,99 @@
+## session.hpp
+[#session]
+
+
+[source,cpp]
+----
+namespace boost::requests
+{
+
+template<typename Executor = asio::any_io_executor>
+struct basic_session
+{
+    /// The type of the executor associated with the object.
+    typedef Executor executor_type;
+
+    /// Rebinds the timer type to another executor.
+    template<typename Executor1>
+    struct rebind_executor
+    {
+        /// The timer type when rebound to the specified executor.
+        typedef basic_session<Executor1> other;
+    };
+
+    /// Constructor.
+    explicit basic_session(const executor_type &ex);
+
+    /// Construct a session from a context.
+    template<typename ExecutionContext>
+    explicit basic_session(ExecutionContext &context);
+
+    /// Rebinding construcotr.
+    template<typename Executor2>
+    explicit basic_session(basic_session<Executor2> && sess);
+
+    /// Get the executor associated with the object.
+    executor_type get_executor() BOOST_ASIO_NOEXCEPT;
+
+          struct request_options & options()       {return options_;}
+    const struct request_options & options() const {return options_;}
+
+    // A variant of pools, depending on the url
+    using pool_ptr = variant2::variant<std::shared_ptr<basic_http_connection_pool<Executor>>,
+                                       std::shared_ptr<basic_https_connection_pool<Executor>>>;
+
+    // Get a pool for a given url.
+    pool_ptr get_pool(urls::url_view url, error_code & ec);
+    pool_ptr get_pool(urls::url_view url);
+    template<asio::token_for<void (boost::system::error_code, pool_ptr)> CompletionToken
+                  = asio::default_token_t<executor_type>>
+    auto async_get_pool(urls::url_view path,
+                        CompletionToken && token = asio::default_token_t<executor_type>());
+
+    void shutdown();
+    using stream = basic_stream<Executor>;
+
+    /// Build a request internally and initiate it.
+    template<typename RequestBody>
+    auto ropen(beast::http::verb method,
+               urls::url_view path,
+               RequestBody && body,
+               http::fields req,
+               system::error_code & ec) -> stream;
+
+    template<typename RequestBody>
+    auto ropen(beast::http::verb method,
+               urls::url_view path,
+               RequestBody && body,
+               http::fields req) -> stream;
+   
+    template<typename RequestBody,
+             asio::token_for<void (boost::system::error_code,
+                                   stream<Executor>)> CompletionToken
+                  = asio::default_token_t<executor_type>>
+    auto async_ropen(beast::http::verb method,
+                     urls::url_view path,
+                     RequestBody && body,
+                     http::fields req,
+                     CompletionToken && token = asio::default_token_t<executor_type>());
+
+    /// Send a preexisting request.
+    template<typename Body>
+    auto ropen(urls::url_view url, http::request<Body>& req, system::error_code & ec) -> stream;
+
+    template<typename Body>
+    auto ropen(urls::url_view url, http::request<Body>& req) -> stream;
+
+    template<typename RequestBody,
+             asio::token_for<void (boost::system::error_code,
+                                   basic_stream<Executor>)> CompletionToken
+                  = asio::default_token_t<executor_type>>
+    auto async_ropen(urls::url_view url,
+                     http::request<RequestBody> & req,
+                     CompletionToken && token = asio::default_token_t<executor_type>());
+};
+
+typedef basic_session<> session;
+
+}
+----

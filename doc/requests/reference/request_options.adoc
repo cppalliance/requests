@@ -1,0 +1,23 @@
+## request_options.hpp
+[#reference::request_options]
+
+
+[source,cpp]
+----
+namespace boost::requests
+{
+/// The basic options attached to any request
+struct request_options
+{
+  /// Only allow SSL requests
+  bool enforce_tls{true};
+  /// The allowed redirect mode.
+  redirect_mode redirect{private_domain};
+  /// The maximum of allowed redirectse
+  std::size_t max_redirects{12};
+};
+
+/// The default options used by sessions.
+request_options & default_options();
+}
+----

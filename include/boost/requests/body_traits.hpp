@@ -62,8 +62,16 @@ struct request_body_traits<std::basic_string<Char, Traits, Alloc>, void>
 {
   constexpr static core::string_view default_content_type(const std::basic_string<Char, Traits, Alloc> &)
   {
-    return "text/plain; charset=utf-8";
+    if (sizeof(Char) == 1)
+      return "text/plain; charset=utf-8";
+    else if (sizeof(Char) == 2)
+      return "text/plain; charset=utf-16";
+    else if (sizeof(Char) == 4)
+      return "text/plain; charset=utf-32";
+    else
+      return "text/plain";
   }
+
   using body_type = beast::http::basic_string_body<Char, Traits, Alloc>;
   static const typename body_type::value_type & make_body(const std::basic_string<Char, Traits, Alloc> & str,
                                                           system::error_code & ec)
@@ -122,7 +130,14 @@ struct request_body_traits<core::basic_string_view<Char>, void>
 {
   constexpr static core::string_view default_content_type( core::basic_string_view<Char>)
   {
-    return "text/plain; charset=utf-8";
+    if (sizeof(Char) == 1)
+      return "text/plain; charset=utf-8";
+    else if (sizeof(Char) == 2)
+      return "text/plain; charset=utf-16";
+    else if (sizeof(Char) == 4)
+      return "text/plain; charset=utf-32";
+    else
+      return "text/plain";
   }
 
   using body_type = beast::http::span_body<Char>;

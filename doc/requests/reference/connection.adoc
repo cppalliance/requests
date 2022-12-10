@@ -1,0 +1,184 @@
+## connection.hpp
+[#connection]
+
+A connection pool represents a single http connection to and endpoint.
+
+[source,cpp]
+----
+namespace boost::requests
+{
+
+template<typename Stream>
+struct basic_connection
+{
+    /// The type of the next layer.
+    typedef typename std::remove_reference<Stream>::type next_layer_type;
+
+    /// The type of the executor associated with the object.
+    typedef typename next_layer_type::executor_type executor_type;
+
+    /// The type of the executor associated with the object.
+    typedef typename next_layer_type::lowest_layer_type lowest_layer_type;
+
+    /// Rebinds the socket type to another executor.
+    template<typename Executor1>
+    struct rebind_executor
+    {
+        /// The socket type when rebound to the specified executor.
+        typedef basic_connection<typename next_layer_type::
+                    template rebind_executor<Executor1>::other> other;
+    };
+
+    /// Get the executor
+    executor_type get_executor() noexcept;
+
+    /// Get the underlying stream
+    const next_layer_type &next_layer() const noexcept;
+
+    /// Get the underlying stream
+    next_layer_type &next_layer() noexcept;
+
+    /// The protocol-type of the lowest layer.
+    using protocol_type = typename beast::lowest_layer_type<next_layer_type>::protocol_type;
+
+    /// The endpoint of the lowest lowest layer.
+    using endpoint_type = typename protocol_type::endpoint;
+
+    /// Construct a stream.
+    /**
+     * @param args The arguments to be passed to initialise the underlying stream.
+     *
+     * Everything else will be default constructed
+     */
+    template<typename ... Args>
+    explicit basic_connection(Args && ... args);
+
+    /// Move construct a connection
+    basic_connection(basic_connection && ) noexcept = default;
+
+    /// Rebinding constructor;
+    template<typename Other>
+    basic_connection(basic_connection<Other> && lhs);
+
+    /// Connect to an endpoint
+    void connect(endpoint_type ep);
+    void connect(endpoint_type ep, system::error_code & ec);
+
+    template<asio::token_for<void (boost::system::error_code)> CompletionToken
+                  asio::default_token_t<executor_type>>
+    auto async_connect(endpoint_type ep,
+                      CompletionToken && token = asio::default_token_t<executor_type>());
+
+    /// Close the socket.
+    void close();
+    void close(system::error_code & ec);
+
+    template<asio::token_for<void (boost::system::error_code)> CompletionToken =
+                 asio::default_token_t<executor_type>>
+    auto async_close(CompletionToken && token = asio::default_token_t<executor_type>());
+
+    // Check if the connection is open.
+    bool is_open() const final;
+
+    // Get the Endpoint
+    endpoint_type endpoint() const {return endpoint_;}
+
+    // Timeout of the last connection-alive message
+    std::chrono::system_clock::time_point timeout() const;
+    // Amount of ongoing requests.
+    std::size_t working_requests() const;
+
+    // Reserve memory for the internal buffer.
+    void reserve(std::size_t size);
+
+    // Set the host of the endpoint
+    void set_host(core::string_view sv);
+    void set_host(core::string_view sv, system::error_code & ec);
+    // Get the host name
+    core::string_view host() const;
+
+    /// The stream type returned by ropen.
+    using stream = basic_stream<executor_type>;
+
+    /// Build a request internally and initiate it.
+    template<typename RequestBody>
+    auto ropen(beast::http::verb method,
+               urls::url_view path,
+               RequestBody && body,
+               request_settings req,
+               system::error_code & ec) -> stream;
+
+    template<typename RequestBody>
+    auto ropen(beast::http::verb method,
+               urls::url_view path,
+               RequestBody && body,
+               request_settings req) -> stream;
+
+   template<typename RequestBody,
+             typename CompletionToken
+                  = asio::default_token_t<executor_type>>
+    auto async_ropen(beast::http::verb method,
+                     urls::url_view path,
+                     RequestBody && body,
+                     request_settings req,
+                     CompletionToken && token = asio::default_token_t<executor_type>());
+
+    /// Send a preexisting request.
+    template<typename RequestBody>
+    auto ropen(http::request<RequestBody> & req,
+               request_options opt,
+               cookie_jar * jar,
+               system::error_code & ec) -> stream;
+
+    template<typename RequestBody>
+    auto ropen(beast::http::verb method,
+               urls::url_view path,
+               http::request<RequestBody> & req,
+               request_options opt,
+               cookie_jar * jar) -> stream;
+
+
+    template<typename RequestBody,
+             typename CompletionToken
+                  = asio::default_token_t<executor_type>>
+    auto async_ropen(http::request<RequestBody> & req,
+                     request_options opt,
+                     cookie_jar * jar = nullptr,
+                     CompletionToken && token = asio::default_token_t<executor_type>());
+};
+
+template<typename Executor = asio::any_io_executor>
+using basic_http_connection  = basic_connection<
+        asio::basic_stream_socket<asio::ip::tcp, Executor>>;
+
+template<typename Executor = asio::any_io_executor>
+using basic_https_connection = basic_connection<
+        asio::ssl::stream<asio::basic_stream_socket<asio::ip::tcp, Executor>>>;
+
+using http_connection  = basic_http_connection<>;
+using https_connection = basic_https_connection<>;
+
+}
+----
+
+### connect
+[#connection::connect]
+
+The connection function opens a connection to an endpoint.
+This will also perform the ssl handshake for ssl connections,
+which is why the host needs to be set previously with <<connection::set_host>>
+because the handshake will certify the hostname as well.
+
+### set_host
+[#connection::set_host]
+
+The `set_host` function sets the internal host-name and
+does apply it to ssl verification if used.
+
+NOTE: You will also need to set this field for domain socket connection, as it'll also be sent in the http request.
+
+### close
+
+Closing a connection can involve an asynchronous operation if the socket is using ssl,
+which is why `async_close` is provided.
+

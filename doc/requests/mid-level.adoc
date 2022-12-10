@@ -1,0 +1,91 @@
+////
+Copyright 2022 Klemens Morgenstern
+
+Distributed under the Boost Software License, Version 1.0.
+
+See accompanying file LICENSE_1_0.txt or copy at
+http://www.boost.org/LICENSE_1_0.txt
+////
+
+# Mid-level
+
+## Connections, Pools & Sessions
+
+The basic building block is a <<connection>>, which usually represents a single socket; this can be a tcp socket, a tcp socket or a domain socket. As such, a <<connection>> works on a single endpoint.
+
+The pool is a dynamic collection of connections, working on a hostname & protocol pair, becuse they can provide multiple endpoints. THe pool will manage the amount of connections and distributing them over multiple endpoints.
+
+A session represents a map of pools & hostname-protocol pairs, exclusively for `http` and `https`. It owns the cookie_jar & request settings, such as the <<redirect_mode>>.
+
+[ditaa]
+....
+/---------\
+| Session |
+\---------/
+   :   :
+   :   :  hostname   /------------\  list   /------------------\
+   :   \------------>| http_pool  |-------->| http_connection  |
+   :                 \------------/         \------------------/
+   :
+   :      hostname   /------------\  list   /------------------\
+   \---------------->| https_pool |-------->| https_connection |
+                     \------------/         \------------------/
+....
+
+requests brings a <<default_session>>, which will be inserted into an `asio::execution_context` through `use_service`.
+By default that means the `asio::system_executor` is used. The `async` versions of the global function will however use the
+`associated_executor` to install the default session in.
+
+## stream
+
+The fundamental building block used by high level functions is the <<stream>>, which is a response read that implements
+the asio concepts of https://www.boost.org/doc/libs/develop/doc/html/boost_asio/reference/SyncReadStream.html[SyncReadStream] and https://www.boost.org/doc/libs/develop/doc/html/boost_asio/reference/AsyncReadStream.html[AsyncReadStream].
+
+That means that any read algorithm that works on classes like `asio::ip::tcp::socket` will also work on the `requests::stream`.
+
+[source,cpp]
+----
+std::size_t read_line(requests::stream &str, 
+                      DynamicBuffer_v2 && buf)
+{
+    asio::read_until(str, buf, '\n');
+}
+----
+
+Stream algorithms used by the high level functions are:
+
+* <<read_json>>
+* <<read_optional_json>>
+* <<write_to_file>>
+
+## ropen
+
+To obtain a `stream` session, connections & pools provide `ropen` and `async_ropen` functions.
+
+These can either be used to construct a request on the fly, using the <<body_traits>>, 
+or can pass in an `http::request` by reference.
+
+[source,cpp]
+----
+auto s = requests::default_session().ropen(
+    requests::http::get, 
+    urls::url_view("https://boost.org/index.html"), 
+    requests::empty{});
+----
+
+
+
+## compile time optimization
+
+The library optimizes compile times as much as possible without to much overhead. 
+The most common executor is `asio::any_io_executor`, for which `requests` is provides
+`extern template` declarations. For other executors `extern template` declarations can be added like this:
+
+[source,cpp]
+----
+extern template struct basic_connection_pool<asio::ip::tcp::socket::rebind_executor<my_executor>::other>;
+extern template struct basic_connection_pool<asio::ssl::stream<asio::ip::tcp::socket::rebind_executor<my_executor>::other>>;
+extern template struct basic_connection<asio::ip::tcp::socket::rebind_executor<my_executor>::other>;
+extern template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket::rebind_executor<my_executor>::other>>;
+extern template struct basic_session<my_executor>;
+----

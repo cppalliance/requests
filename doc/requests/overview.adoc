@@ -1,0 +1,23 @@
+////
+Copyright 2022 Klemens Morgenstern
+
+Distributed under the Boost Software License, Version 1.0.
+
+See accompanying file LICENSE_1_0.txt or copy at
+http://www.boost.org/LICENSE_1_0.txt
+////
+:example-dir: ../../example
+:include-dir: ../../include/boost/requests
+
+[#overview]
+# Overview
+
+This library is making http requests easy, yet still maintaining the full power of asio.
+As it's basis, boost.beast, is very low-level, requests brings not only a high level interface
+but also an http library that makes creating your own high-level interfaces easy. 
+
+[source,cpp]
+----
+include::{example-dir}/basic-auth.cpp[tags=motivatingExample]
+----
+

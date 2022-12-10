@@ -1,0 +1,99 @@
+## response.hpp
+[#response]
+[#response_base]
+
+
+[source,cpp]
+----
+namespace boost::requests
+{
+
+
+struct response_base
+{
+  using allocator_type = container::pmr::polymorphic_allocator<char>;
+  using buffer_type    = beast::basic_flat_buffer<allocator_type>;
+  using body_type      = beast::http::basic_dynamic_body<buffer_type>;
+
+  http::response_header headers;
+
+  int          result_code() const {return headers.result_int(); }
+  http::status result()      const {return headers.result(); }
+
+  using string_body_type = typename beast::http::basic_string_body<char, std::char_traits<char>, allocator_type>;
+  using vector_alloc = boost::container::pmr::polymorphic_allocator<typename http::response<body_type>>;
+  using history_type = std::vector<typename http::response<body_type>, vector_alloc>;
+
+  // The history contains all the redirect messages.
+  history_type history;
+
+  response_base(allocator_type alloc,         history_type history);
+  response_base(http::response_header header, history_type history);
+
+  response_base(allocator_type alloc        );
+  response_base(http::response_header header);
+
+  ~response_base() = default;
+
+  response_base(const response_base & ) = default;
+  response_base(response_base && ) noexcept = default;
+
+  response_base& operator=(const response_base & ) = default;
+  response_base& operator=(response_base && ) noexcept = default;
+
+  // Return false if the status is not 2xx
+  bool ok () const;
+  // Return false if the status is not 2xx
+  explicit operator bool() const { return ok(); }
+
+  bool is_redirect() const;
+  bool is_permanent_redirect() const;
+
+  // Return an error if the status is not 2xx
+  system::error_code status_as_error() const;
+
+  // Throw if the status is not 2xx
+  void throw_status_if_error() const;
+
+  // Collect all the entires of the link header(s)
+  system::result<std::vector<struct link>> link() const;
+};
+
+// The response with the body as buffer.
+struct response : response_base
+{
+  // the full response content
+  buffer_type buffer;
+
+  response(allocator_type alloc = {});
+  response(http::response_header header, buffer_type buffer);
+  response(response_base         header, buffer_type buffer);
+
+  response(http::response_header header, history_type history, buffer_type buffer);
+
+  response(const response & ) = default;
+  response(response && ) noexcept = default;
+
+  response& operator=(const response & ) = default;
+  response& operator=(response && ) noexcept = default;
+
+  template<typename Char = char,
+           typename CharTraits = std::char_traits<char>>
+  auto string_view() const -> basic_string_view<Char, CharTraits>;
+
+  template<typename Char = char,
+            typename CharTraits = std::char_traits<char>,
+            typename Allocator_>
+  auto string(Allocator_ && alloc) const -> std::basic_string<Char, CharTraits, std::decay_t<Allocator_>>;
+
+  template<typename Char = char,
+           typename CharTraits = std::char_traits<char>>
+  auto string() const -> std::basic_string<Char, CharTraits, allocator_type>;
+
+  template<typename Byte = unsigned char>
+  auto raw() const -> span<Byte>;
+};
+
+
+}
+----

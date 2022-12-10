@@ -1,0 +1,42 @@
+## request_settings.hpp
+[#reference::request_settings]
+
+
+[source,cpp]
+----
+namespace boost::requests
+{
+
+/// A pair describing a header entry
+struct field_entry
+{
+  variant2::variant<http::field, core::string_view> key;
+  core::string_view value;
+  std::string buffer;
+};
+
+// helper to add basic authorization
+field_entry basic_auth(core::string_view username,
+                       core::string_view password);
+
+// helper to add bearer authorization
+field_entry bearer(core::string_view token);
+
+// helper to create headers from an initializer list.
+auto headers(std::initializer_list<field_entry> fields,
+            boost::container::pmr::memory_resource * res = boost::container::pmr::get_default_resource());
+
+// The full request settings used in the connection.
+struct request_settings
+{
+  using allocator_type = boost::container::pmr::polymorphic_allocator<char>;
+  allocator_type get_allocator() const {return fields.get_allocator();}
+
+  using fields_type = beast::http::basic_fields<allocator_type>;
+  fields_type fields;
+  request_options opts{};
+  cookie_jar * jar = nullptr;
+};
+
+}
+----

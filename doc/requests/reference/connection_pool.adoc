@@ -1,0 +1,145 @@
+[#connection_pool]
+## connection_pool.hpp
+
+A connection pool represents a collection <<connection>> objects pointing to the same host & port.
+
+[source,cpp]
+----
+
+template<typename Stream>
+struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
+{
+    /// The type of the executor associated with the object.
+    typedef typename Stream::executor_type executor_type;
+
+    /// The type of the underlying connection.
+    typedef basic_connection<Stream> connection_type;
+
+    /// Rebinds the socket type to another executor.
+    template<typename Executor1>
+    struct rebind_executor
+    {
+        /// The socket type when rebound to the specified executor.
+        typedef basic_connection_pool<typename Stream::template rebind_executor<Executor1>::other> other;
+    };
+
+    /// Get the executor
+    executor_type get_executor() noexcept;
+
+    /// The protocol-type of the lowest layer.
+    using protocol_type = typename connection_type::protocol_type;
+
+    /// The endpoint of the lowest lowest layer.
+    using endpoint_type = typename connection_type::endpoint_type;
+
+    /// The reolver_type of the lower layer.
+    using resolver_type = typename protocol_type::resolver::template rebind_executor<executor_type>::other;
+
+    /// The 
+    using stream = basic_stream<executor_type>;
+
+    /// Construct a pool from an executor. 
+    template<typename Exec, typename = std::enable_if_t<!detail::has_ssl_v<Stream>, Exec>>
+    explicit basic_connection_pool(Exec && exec,
+                                   std::size_t limit = BOOST_REQUESTS_DEFAULT_POOL_SIZE);
+
+    /// Construct a pool from an executor and sslctx
+    template<typename Exec>
+    explicit basic_connection_pool(Exec && exec,
+                                   asio::ssl::context & ctx,
+                                   std::size_t limit = BOOST_REQUESTS_DEFAULT_POOL_SIZE);
+
+    /// Move constructor
+    basic_connection_pool(basic_connection_pool && ) = default;
+
+    /// rebind constructor.
+    template<typename Exec>
+    basic_connection_pool(basic_connection_pool<Exec> && lhs);
+    
+    /// Lookup the endpoints for an authority and set the host.
+    void lookup(urls::authority_view av);
+    void lookup(urls::authority_view sv, system::error_code & ec);
+    template<completion_handler_for<void (boost::system::error_code)> CompletionToken
+                = asio::default_token_t<executor_type>>
+    auto async_lookup(urls::authority_view av, CompletionToken && token = asio::default_token_t<executor_type>());
+
+    /// Get the maximum amount of active connections.
+    std::size_t limit() const {return limit_;}
+    /// Get the amount of active connections.
+    std::size_t active() const {return conns_.size();}
+
+    /// Used by free functions, such as `get`.
+    using request_type = request_settings;
+
+    /// Get an open connection
+    std::shared_ptr<connection_type> get_connection(error_code & ec);
+    /// Get an open connection
+    std::shared_ptr<connection_type> get_connection();
+
+    /// Get an open connection asynchronously
+    template<completion_handler_for<void (system::error_code, std::shared_ptr<connection_type>>>
+                CompletionToken = default_token_type<CompletionToken>>
+    auto async_get_connection(CompletionToken && completion_token = default_token<executor_type>);
+
+    /// Build a request internally and initiate it on the least used connection, or connect a new one.
+    template<typename RequestBody>
+    auto ropen(beast::http::verb method,
+               urls::url_view path,
+               RequestBody && body,
+               request_settings req,
+               system::error_code & ec) -> stream;
+
+    template<typename RequestBody>
+    auto ropen(beast::http::verb method,
+               urls::url_view path,
+               RequestBody && body,
+               request_settings req) -> stream;
+
+    /// Send a preexisting request on the least used connection, or connect a new one
+    template<typename RequestBody,
+             typename CompletionToken
+                  = asio::default_token_t<executor_type>>
+    auto async_ropen(beast::http::verb method,
+                     urls::url_view path,
+                     RequestBody && body,
+                     request_settings req,
+                     CompletionToken && token = asio::default_token_t<executor_type>());
+
+    template<typename RequestBody>
+    auto ropen(http::request<RequestBody> & req,
+               request_options opt,
+               cookie_jar * jar,
+               system::error_code & ec) -> stream;
+
+    template<typename RequestBody>
+    auto ropen(beast::http::verb method,
+               urls::url_view path,
+               http::request<RequestBody> & req,
+               request_options opt,
+               cookie_jar * jar) -> stream;
+
+    template<typename RequestBody,
+             typename CompletionToken
+                  = asio::default_token_t<executor_type>>
+    auto async_ropen(http::request<RequestBody> & req,
+                     request_options opt,
+                     cookie_jar * jar = nullptr,
+                     CompletionToken && token = asio::default_token_t<executor_type>());
+};
+
+template<typename Executor = asio::any_io_executor>
+using basic_http_connection_pool  = basic_connection_pool<asio::basic_stream_socket<asio::ip::tcp, Executor>>;
+
+template<typename Executor = asio::any_io_executor>
+using basic_https_connection_pool = basic_connection_pool<asio::ssl::stream<asio::basic_stream_socket<asio::ip::tcp, Executor>>>;
+
+
+using http_connection_pool  = basic_http_connection_pool<>;
+using https_connection_pool = basic_https_connection_pool<>;
+----
+
+### async_lookup
+[#connection_pool::async_lookup]
+
+Lookup uses a resolver for the given name and stores the endpoints associated with it.
+The pool will internally use all endpoints evenly when creating new connections.
