@@ -883,8 +883,7 @@ struct basic_connection<Stream>::async_ropen_empty_op : async_ropen_op<http::emp
 };
 
 template<typename Stream>
-template<typename RequestBody,
-          typename CompletionToken>
+template<typename RequestBody, typename CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code,
                                                          typename basic_connection<Stream>::stream))
 basic_connection<Stream>::async_ropen(
@@ -903,8 +902,7 @@ basic_connection<Stream>::async_ropen(
 }
 
 template<typename Stream>
-template<typename RequestBody,
-          typename CompletionToken>
+template<typename RequestBody, typename CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code,
                                         typename basic_connection<Stream>::stream))
@@ -918,8 +916,7 @@ basic_connection<Stream>::async_ropen(http::request<RequestBody> & req,
 }
 
 template<typename Stream>
-template<typename RequestBody,
-         typename CompletionToken>
+template<typename CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, typename basic_connection<Stream>::stream))
 basic_connection<Stream>::async_ropen(http::request<http::empty_body> & req,
@@ -932,8 +929,7 @@ basic_connection<Stream>::async_ropen(http::request<http::empty_body> & req,
 
 
 template<typename Stream>
-template<typename RequestBody,
-         typename CompletionToken>
+template<typename CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, typename basic_connection<Stream>::stream))
 basic_connection<Stream>::async_ropen(http::request<http::file_body> & req,
@@ -946,8 +942,7 @@ basic_connection<Stream>::async_ropen(http::request<http::file_body> & req,
 
 
 template<typename Stream>
-template<typename RequestBody,
-          typename CompletionToken>
+template<typename CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, typename basic_connection<Stream>::stream))
 basic_connection<Stream>::async_ropen(http::request<http::string_body> & req,
@@ -955,7 +950,7 @@ basic_connection<Stream>::async_ropen(http::request<http::string_body> & req,
                                       cookie_jar * jar,
                                       CompletionToken && completion_token)
 {
-  return detail::co_run<async_ropen_empty_op>(std::forward<CompletionToken>(completion_token), this, &req, std::move(opt), jar);
+  return detail::co_run<async_ropen_string_op>(std::forward<CompletionToken>(completion_token), this, &req, std::move(opt), jar);
 }
 
 

@@ -14,7 +14,9 @@
 #include <boost/container/pmr/synchronized_pool_resource.hpp>
 
 
-namespace boost::requests
+namespace boost
+{
+namespace requests
 {
 
 template<typename Executor = asio::any_io_executor>
@@ -96,8 +98,8 @@ struct basic_session
       https_pools_.clear();
     }
     using stream = basic_stream<Executor>;
-    
-    
+
+
     template<typename RequestBody>
     auto ropen(beast::http::verb method,
                urls::url_view path,
@@ -188,6 +190,7 @@ typedef basic_session<> session;
 extern template struct basic_session<asio::any_io_executor>;
 #endif
 
+}
 }
 
 #include <boost/requests/impl/session.hpp>

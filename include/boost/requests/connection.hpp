@@ -236,9 +236,8 @@ struct basic_connection : private detail::stream_base
                 cookie_jar * jar = nullptr,
                 CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
 
-    template<typename RequestBody,
-              typename CompletionToken
-                  BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+    template<typename CompletionToken
+             BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                        void (boost::system::error_code, typename basic_connection<Stream>::stream))
     async_ropen(http::request<http::empty_body> & req,
@@ -246,9 +245,8 @@ struct basic_connection : private detail::stream_base
                 cookie_jar * jar = nullptr,
                 CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
 
-      template<typename RequestBody,
-              typename CompletionToken
-                  BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+    template<typename CompletionToken
+             BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                        void (boost::system::error_code, typename basic_connection<Stream>::stream))
     async_ropen(http::request<http::file_body> & req,
@@ -256,9 +254,8 @@ struct basic_connection : private detail::stream_base
                 cookie_jar * jar = nullptr,
                 CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
 
-      template<typename RequestBody,
-              typename CompletionToken
-                  BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+    template<typename CompletionToken
+             BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                        void (boost::system::error_code, typename basic_connection<Stream>::stream))
     async_ropen(http::request<http::string_body> & req,

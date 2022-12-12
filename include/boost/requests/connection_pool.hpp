@@ -147,7 +147,10 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
                                    std::size_t limit = BOOST_REQUESTS_DEFAULT_POOL_SIZE)
         : detail::ssl_base<true>(ctx), mutex_(std::forward<Exec>(exec)), limit_(limit) {}
 
+    /// Move constructor
     basic_connection_pool(basic_connection_pool && ) = default;
+
+    /// rebind constructor.
     template<typename Exec>
     basic_connection_pool(basic_connection_pool<Exec> && lhs)
         : detail::ssl_base<detail::has_ssl_v<Stream>>(lhs),
