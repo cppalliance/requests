@@ -66,7 +66,7 @@ Methods with an optional request body are overloaded.
 
 [cols="1,1,1,1,1,1"]
 |===
-|Http Method | Name | Async-Name | Response body footnote:[never means the type is <<response_base>>]  | Request Body | Remarks
+|Http Method | Name | Async-Name | Response body footnote:never_base[never means the type is <<response_base>>]  | Request Body | Remarks
 
 | *GET*     | `get`     | `async_get`     | always   | never    |
 | *HEAD*    | `head`    | `async_head`    | never    | never    |

@@ -89,7 +89,7 @@ auto delete_(urls::url_view target,                              http::fields re
 
 Additionally, every method has an asynchronous overload:
 
-[sourem,cpp]
+[source,cpp]
 ----
 
 template< typename CompletionToken>
@@ -102,7 +102,7 @@ auto async_get(Connection & conn,
                 CompletionToken && completion_token);
 ----
 
-Which will have a signature of `void(system::error_code, response)` or `void(system::error_code, respose_base)`, depending on the http method. The version that takes a `Connection` paramter supports https://www.boost.org/doc/libs/master/doc/html/boost_asio/reference/default_completion_token.html[default completion tokens].
+Which will have a signature of `void(system::error_code, response)` or `void(system::error_code, response_base)`, depending on the http method. The version that takes a `Connection` parameter supports https://www.boost.org/doc/libs/master/doc/html/boost_asio/reference/default_completion_token.html[default completion tokens].
 
 Below are all the http methods:
 
@@ -110,7 +110,7 @@ Below are all the http methods:
 
 [cols="1,1,1,1,1,1"]
 |===
-|Http Method | Name | Async-Name | Response body footnote:[never means the type is <<response_base>>]  | Request Body | Remarks
+|Http Method | Name | Async-Name | Response body footnote:never_base[never means the type is <<response_base>>]  | Request Body | Remarks
 
 | *GET*     | `get`     | `async_get`     | always   | never    |
 | *HEAD*    | `head`    | `async_head`    | never    | never    |
@@ -207,7 +207,7 @@ The private domain patterns are available through the <<default_public_suffix_li
 
 Since json is ubiquitous in http requests due to it's usage in `REST APIs`, requests has special treatment for it.
 
-The <<json>> namespace provides http method similar to the ones in the <<requests>> namespace; although it ignores the methods that never have a return body. The resulting type is an instancation of <<json::response>> which will contain a parse json body. If the method's return body is optional, it'll be wrapped in `boost::optional`.
+The <<json>> namespace provides http method similar to the ones in the <<requests>> namespace; although it ignores the methods that never have a return body. The resulting type is an instantiation of <<json::response>> which will contain a parse json body. If the method's return body is optional, it'll be wrapped in `boost::optional`.
 
 This means, by default a function like <<json::get>> will return `json::response<json::value>` and <<json::delete_>> `json::response<optional<json::value>>`.
 
@@ -229,7 +229,8 @@ struct httpbin_res
     json::string url;
 };
 
-inline system::result<httpbin_res> tag_invoke(json::try_value_to_tag<httpbin_res>, const json::value & val);
+// let describe generate the json conversion
+BOOST_DESCRIBE_STRUCT(httpbin_res, (), (args, headers, origin, url));
 
 json::response<httpbin_res>           res = json::get    <httpbin_res>("https://httpbin.org/get");
 json::response<optional<httpbin_res>> oes = json::delete_<httpbin_res>("https://httpbin.org/delete");
@@ -253,7 +254,7 @@ assert(ptr == res.value.storage());
 
 ## Download
 
-For big items, that should be directly transffered into files, `requests` provides the <<download>> function. 
+For big items, that should be directly transferred into files, `requests` provides the <<download>> function. 
 It will perform a `GET` request and directly write it to disk. If the path points to a directory the path
 will be deduced from the url-path.
 

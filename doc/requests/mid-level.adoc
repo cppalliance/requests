@@ -13,7 +13,7 @@ http://www.boost.org/LICENSE_1_0.txt
 
 The basic building block is a <<connection>>, which usually represents a single socket; this can be a tcp socket, a tcp socket or a domain socket. As such, a <<connection>> works on a single endpoint.
 
-The pool is a dynamic collection of connections, working on a hostname & protocol pair, becuse they can provide multiple endpoints. THe pool will manage the amount of connections and distributing them over multiple endpoints.
+The pool is a dynamic collection of connections, working on a hostname & protocol pair, because they can provide multiple endpoints. THe pool will manage the amount of connections and distributing them over multiple endpoints.
 
 A session represents a map of pools & hostname-protocol pairs, exclusively for `http` and `https`. It owns the cookie_jar & request settings, such as the <<redirect_mode>>.
 

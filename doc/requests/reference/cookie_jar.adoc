@@ -22,7 +22,7 @@ struct cookie_jar final
 
     cookie_jar(allocator_type allocator = {}) : content(std::move(allocator)) {}
 
-    /// Set a cookie. Returns true when the cooki was inserted.
+    /// Set a cookie. Returns true when the cookie was inserted.
     bool set(const set_cookie & set,
              core::string_view request_host,
              bool from_non_http_api = false,
