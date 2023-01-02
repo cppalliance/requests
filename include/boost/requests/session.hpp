@@ -56,7 +56,7 @@ struct basic_session
     /// Rebinding construcotr.
     template<typename Executor2>
     explicit basic_session(basic_session<Executor2> && sess)
-        : mutex_(std::move(sess.mutex))
+        : mutex_(std::move(sess.mutex_))
     {
       sslctx_.set_verify_mode(asio::ssl::verify_peer);
       sslctx_.set_default_verify_paths();
