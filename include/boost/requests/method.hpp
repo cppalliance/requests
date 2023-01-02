@@ -426,7 +426,6 @@ async_delete(Connection & conn,
 
 
 template<typename Connection,
-         typename RequestBody,
           BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
                                                response)) CompletionToken
               BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE( typename Connection::executor_type)>
