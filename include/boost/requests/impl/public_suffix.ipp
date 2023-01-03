@@ -19,9 +19,9 @@ namespace requests {
 const public_suffix_list & default_public_suffix_list()
 {
     system::error_code ec;
-    const static public_suffix_list def_list = load_public_suffix_list(
-#include "public_suffix_list.dat"
-        );
+    const static public_suffix_list def_list = {
+#include "public_suffix.inc"
+    };
     return def_list;
 }
 
