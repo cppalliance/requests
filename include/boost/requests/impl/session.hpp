@@ -209,7 +209,7 @@ auto basic_session<Executor>::ropen(
         return visit(
             [&](auto pool) -> stream
             {
-              assert(pool);
+              BOOST_ASSERT(pool);
               return pool->ropen( req, opts, &jar_, ec);
             }, p);
       };
