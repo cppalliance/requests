@@ -27,8 +27,8 @@ auto get(Connection & conn,
          urls::url_view target,
          typename Connection::request_type req = {}) -> response
 {
-  auto s = conn.ropen(http::verb::get, target, empty{}, std::move(req));
   response res{req.get_allocator()};
+  auto s = conn.ropen(http::verb::get, target, empty{}, std::move(req));
   s.read(res.buffer);
   res.headers = std::move(s).headers();
   res.history = std::move(s).history();
@@ -42,8 +42,8 @@ auto get(Connection & conn,
          typename Connection::request_type req,
          system::error_code & ec) -> response
 {
-  auto s = conn.ropen(http::verb::get, target, empty{}, std::move(req), ec);
   response res{req.get_allocator()};
+  auto s = conn.ropen(http::verb::get, target, empty{}, std::move(req), ec);
   if (!ec)
     s.read(res.buffer, ec);
   res.headers = std::move(s).headers();
@@ -77,12 +77,12 @@ auto post(Connection & conn,
           RequestBody && request_body,
           typename Connection::request_type req = {}) -> response
 {
-    auto s = conn.ropen(http::verb::post, target, std::forward<RequestBody>(request_body), std::move(req));
-    response res{req.get_allocator()};
-    s.read(res.buffer);
-    res.headers = std::move(s).headers();
-    res.history = std::move(s).history();
-    return res;
+  response res{req.get_allocator()};
+  auto s = conn.ropen(http::verb::post, target, std::forward<RequestBody>(request_body), std::move(req));
+  s.read(res.buffer);
+  res.headers = std::move(s).headers();
+  res.history = std::move(s).history();
+  return res;
 }
 
 template<typename Connection, typename RequestBody>
@@ -92,8 +92,8 @@ auto post(Connection & conn,
           typename Connection::request_type req,
           system::error_code & ec) -> response
 {
+  response res{req.get_allocator()};
   auto s = conn.ropen(http::verb::post, target, std::forward<RequestBody>(request_body), std::move(req), ec);
-  response res{req.get_allocator()};
   if (!ec)
     s.read(res.buffer, ec);
   res.headers = std::move(s).headers();
@@ -107,8 +107,8 @@ auto patch(Connection & conn,
           urls::url_view target,
           typename Connection::request_type req = {}) -> response
 {
+  response res{req.get_allocator()};
   auto s = conn.ropen(http::verb::patch, target, empty{}, std::move(req));
-  response res{req.get_allocator()};
   s.read(res.buffer);
   res.headers = std::move(s).headers();
   res.history = std::move(s).history();
@@ -121,8 +121,8 @@ auto patch(Connection & conn,
           typename Connection::request_type req,
           system::error_code & ec) -> response
 {
-  auto s = conn.ropen(http::verb::patch, target, empty{}, std::move(req), ec);
   response res{req.get_allocator()};
+  auto s = conn.ropen(http::verb::patch, target, empty{}, std::move(req), ec);
   if (!ec)
     s.read(res.buffer, ec);
   res.headers = std::move(s).headers();
@@ -136,8 +136,8 @@ auto patch(Connection & conn,
            RequestBody && request_body,
            typename Connection::request_type req = {}) -> response
 {
-  auto s = conn.ropen(http::verb::patch, target, std::forward<RequestBody>(request_body), std::move(req));
   response res{req.get_allocator()};
+  auto s = conn.ropen(http::verb::patch, target, std::forward<RequestBody>(request_body), std::move(req));
   s.read(res.buffer);
   res.headers = std::move(s).headers();
   res.history = std::move(s).history();
@@ -151,8 +151,8 @@ auto patch(Connection & conn,
            typename Connection::request_type req,
            system::error_code & ec) -> response
 {
-  auto s = conn.ropen(http::verb::patch, target, std::forward<RequestBody>(request_body), std::move(req), ec);
   response res{req.get_allocator()};
+  auto s = conn.ropen(http::verb::patch, target, std::forward<RequestBody>(request_body), std::move(req), ec);
   if (!ec)
     s.read(res.buffer, ec);
   res.headers = std::move(s).headers();
@@ -167,8 +167,8 @@ auto put(Connection & conn,
           RequestBody && request_body,
           typename Connection::request_type req = {}) -> response
 {
-  auto s = conn.ropen(http::verb::put, target, std::forward<RequestBody>(request_body), std::move(req));
   response res{req.get_allocator()};
+  auto s = conn.ropen(http::verb::put, target, std::forward<RequestBody>(request_body), std::move(req));
   s.read(res.buffer);
   res.headers = std::move(s).headers();
   res.history = std::move(s).history();
@@ -182,8 +182,8 @@ auto put(Connection & conn,
           typename Connection::request_type req,
           system::error_code & ec) -> response
 {
-  auto s = conn.ropen(http::verb::put, target, std::forward<RequestBody>(request_body), std::move(req), ec);
   response res{req.get_allocator()};
+  auto s = conn.ropen(http::verb::put, target, std::forward<RequestBody>(request_body), std::move(req), ec);
   if (!ec)
     s.read(res.buffer, ec);
   res.headers = std::move(s).headers();
@@ -196,8 +196,8 @@ auto delete_(Connection & conn,
            urls::url_view target,
            typename Connection::request_type req = {}) -> response
 {
-  auto s = conn.ropen(http::verb::delete_, target, empty{}, std::move(req));
   response res{req.get_allocator()};
+  auto s = conn.ropen(http::verb::delete_, target, empty{}, std::move(req));
   s.read(res.buffer);
   res.headers = std::move(s).headers();
   res.history = std::move(s).history();
@@ -210,8 +210,8 @@ auto delete_(Connection & conn,
            typename Connection::request_type req,
            system::error_code & ec) -> response
 {
-  auto s = conn.ropen(http::verb::delete_, target, empty{}, std::move(req), ec);
   response res{req.get_allocator()};
+  auto s = conn.ropen(http::verb::delete_, target, empty{}, std::move(req), ec);
   if (!ec)
     s.read(res.buffer, ec);
   res.headers = std::move(s).headers();
@@ -228,8 +228,8 @@ auto delete_(Connection & conn,
     -> typename std::enable_if_t<!std::is_same<std::decay_t<RequestBody>,
                                                typename Connection::request_type>::value, response>
 {
-  auto s = conn.ropen(http::verb::delete_, target, std::forward<RequestBody>(request_body), std::move(req));
   response res{req.get_allocator()};
+  auto s = conn.ropen(http::verb::delete_, target, std::forward<RequestBody>(request_body), std::move(req));
   s.read(res.buffer);
   res.headers = std::move(s).headers();
   res.history = std::move(s).history();
@@ -243,8 +243,8 @@ auto delete_(Connection & conn,
            typename Connection::request_type req,
            system::error_code & ec) -> response
 {
-  auto s = conn.ropen(http::verb::delete_, target, std::forward<RequestBody>(request_body), std::move(req), ec);
   response res{req.get_allocator()};
+  auto s = conn.ropen(http::verb::delete_, target, std::forward<RequestBody>(request_body), std::move(req), ec);
   if (!ec)
     s.read(res.buffer, ec);
   res.headers = std::move(s).headers();
@@ -278,8 +278,8 @@ auto options(Connection & conn,
              urls::url_view target,
              typename Connection::request_type req = {}) -> response
 {
-  auto s = conn.ropen(http::verb::options, target, empty{}, std::move(req));
   response res{req.get_allocator()};
+  auto s = conn.ropen(http::verb::options, target, empty{}, std::move(req));
   s.read(res.buffer);
   res.headers = std::move(s).headers();
   res.history = std::move(s).history();
@@ -292,8 +292,8 @@ auto options(Connection & conn,
              typename Connection::request_type req,
              system::error_code & ec) -> response
 {
-  auto s = conn.ropen(http::verb::options, target, empty{}, std::move(req), ec);
   response res{req.get_allocator()};
+  auto s = conn.ropen(http::verb::options, target, empty{}, std::move(req), ec);
   if (!ec)
     s.read(res.buffer, ec);
   res.headers = std::move(s).headers();
