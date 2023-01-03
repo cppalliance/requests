@@ -210,7 +210,7 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
       if (ec)
         return typename connection_type::stream{get_executor(), nullptr};
 
-      assert(conn != nullptr);
+      BOOST_ASSERT(conn != nullptr);
       return conn->ropen(method, path, std::forward<RequestBody>(body), std::move(req), ec);
     }
 
@@ -239,7 +239,7 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
       if (ec)
         return typename connection_type::stream{get_executor(), nullptr};
 
-      assert(conn != nullptr);
+      BOOST_ASSERT(conn != nullptr);
       return conn->ropen(req, opt, jar, ec);
     }
 

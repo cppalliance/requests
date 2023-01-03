@@ -188,13 +188,13 @@ struct co_runner<Implementation, void(system::error_code, Args...)>
       if (impl.is_complete())
       {
         auto h = std::move(handler);
-        assert(buf.use_count() == 1);
+        BOOST_ASSERT(buf.use_count() == 1);
         auto exec = asio::get_associated_executor(h, impl.get_executor());
         buf = nullptr;
         asio::dispatch(exec, asio::append(std::move(h), ec));
       }
       else
-        assert(buf.use_count() > 1);
+        BOOST_ASSERT(buf.use_count() > 1);
     }
 
     void resume_impl(std::false_type, token_type tk, system::error_code ec, Args ... args)
@@ -205,13 +205,13 @@ struct co_runner<Implementation, void(system::error_code, Args...)>
       {
         auto h = std::move(handler);
         auto tmp = std::move(res);
-        assert(buf.use_count() == 1);
+        BOOST_ASSERT(buf.use_count() == 1);
         auto exec = asio::get_associated_executor(h, impl.get_executor());
         buf = nullptr;
         asio::dispatch(exec, asio::append(std::move(h), ec, std::move(tmp)));
       }
       else
-        assert(buf.use_count() > 1);
+        BOOST_ASSERT(buf.use_count() > 1);
     }
 
     void initiate(token_type tk)
@@ -227,13 +227,13 @@ struct co_runner<Implementation, void(system::error_code, Args...)>
       if (impl.is_complete())
       {
         auto h = std::move(handler);
-        assert(buf.use_count() == 1);
+        BOOST_ASSERT(buf.use_count() == 1);
         auto exec = asio::get_associated_executor(h, impl.get_executor());
         buf = nullptr;
         asio::post(exec, asio::append(std::move(h), ec));
       }
       else
-        assert(buf.use_count() > 1);
+        BOOST_ASSERT(buf.use_count() > 1);
     }
 
     void initiate_impl(std::false_type, token_type tk, system::error_code ec, Args ... args)
@@ -244,13 +244,13 @@ struct co_runner<Implementation, void(system::error_code, Args...)>
       {
         auto h = std::move(handler);
         auto tmp = std::move(res);
-        assert(buf.use_count() == 1);
+        BOOST_ASSERT(buf.use_count() == 1);
         auto exec = asio::get_associated_executor(h, impl.get_executor());
         buf = nullptr;
         asio::post(exec, asio::append(std::move(h), ec, std::move(tmp)));
       }
       else
-        assert(buf.use_count() > 1);
+        BOOST_ASSERT(buf.use_count() > 1);
     }
 
 
