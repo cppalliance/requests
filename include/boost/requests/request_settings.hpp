@@ -17,9 +17,15 @@ namespace requests {
 
 struct field_entry
 {
-  variant2::variant<http::field, core::string_view> key;
+  http::field field = http::field::unknown;
+  core::string_view key;
   core::string_view value;
   std::string buffer;
+
+  field_entry() = default;
+  field_entry(http::field field, core::string_view value) : field(field), value(value) {}
+  field_entry(core::string_view key, core::string_view value) : key(key), value(value) {}
+
 };
 
 inline field_entry basic_auth(core::string_view username,
@@ -34,7 +40,7 @@ inline field_entry basic_auth(core::string_view username,
   beast::detail::base64::encode(&*itr, data.data(), data.size());
 
   field_entry fe;
-  fe.key = http::field::authorization;
+  fe.field = http::field::authorization;
   fe.value = fe.buffer = std::move(res);
   return fe;
 }
@@ -43,7 +49,7 @@ inline field_entry basic_auth(core::string_view username,
 inline field_entry bearer(core::string_view token)
 {
   field_entry fe;
-  fe.key = http::field::authorization;
+  fe.field = http::field::authorization;
   fe.value = fe.buffer = "Bearer " + std::string(token);
   return fe;
 }
@@ -55,11 +61,10 @@ inline auto headers(std::initializer_list<field_entry> fields,
   using allocator_type = boost::container::pmr::polymorphic_allocator<char>;
   beast::http::basic_fields<allocator_type> f{allocator_type{res}};
   for (const auto & init : fields)
-    visit(
-        [&](auto k)
-        {
-          f.set(k, init.value);
-        }, init.key);
+    if (init.field != http::field::unknown)
+      f.set(init.field, init.value);
+    else
+      f.set(init.key, init.value);
   return f;
 }
 
