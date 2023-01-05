@@ -115,10 +115,6 @@ inline auto as_json(const response & res, system::error_code & ec) -> json::valu
   return as_json(res, json::storage_ptr(), ec);
 }
 
-
-
-
-
 namespace json
 {
 
