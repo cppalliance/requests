@@ -20,7 +20,6 @@
 
 #include <boost/asio/ssl/host_name_verification.hpp>
 #include <boost/asio/experimental/awaitable_operators.hpp>
-#include "extern.hpp"
 
 using namespace boost;
 
@@ -33,61 +32,11 @@ inline std::string httpbin()
 }
 
 
-TYPE_TO_STRING(requests::http_connection_pool);
-TYPE_TO_STRING(requests::https_connection_pool);
-
-
-using aw_exec = asio::use_awaitable_t<>::executor_with_default<asio::any_io_executor>;
-using aw_http_connection_pool = requests::basic_http_connection_pool<aw_exec>;
-using aw_https_connection_pool = requests::basic_https_connection_pool<aw_exec>;
-
-
-static_assert(!requests::detail::has_ssl_v<requests::http_connection>);
-static_assert(requests::detail::has_ssl_v<requests::https_connection>);
-TYPE_TO_STRING(aw_http_connection_pool);
-TYPE_TO_STRING(aw_https_connection_pool);
-
-
 TEST_SUITE_BEGIN("connection-pool");
 
-TEST_CASE("ssl-detect")
+void http_request_connection_pool(bool https)
 {
-  asio::io_context ctx;
-  asio::ssl::context sslctx{asio::ssl::context::tlsv11};
-
-
-  requests::http_connection conn{ctx};
-  requests::https_connection sconn{ctx, sslctx};
-
-  CHECK(requests::detail::get_ssl_layer(conn) == nullptr);
-  CHECK(requests::detail::get_ssl_layer(sconn) == &sconn.next_layer());
-}
-
-template<typename Stream, typename Exec>
-auto make_conn_pool_impl(Exec && exec, asio::ssl::context & sslctx, std::false_type)
-{
-  return Stream(exec);
-}
-
-template<typename Stream, typename Exec>
-auto make_conn_pool_impl(Exec && exec, asio::ssl::context & sslctx, std::true_type)
-{
-  return Stream(exec, sslctx);
-}
-
-
-template<typename Pool, typename Exec>
-auto make_conn_pool(Exec && exec, asio::ssl::context & sslctx)
-{
-  return make_conn_pool_impl<Pool>(std::forward<Exec>(exec), sslctx,
-                                   requests::detail::has_ssl<typename Pool::connection_type>{});
-}
-
-TEST_CASE_TEMPLATE("sync-request", Pool,
-                   requests::http_connection_pool,
-                   requests::https_connection_pool)
-{
-  auto url = httpbin();
+  auto url = urls::url((https ? "https://" : "http://") + httpbin());
 
   asio::io_context ctx;
 
@@ -96,9 +45,10 @@ TEST_CASE_TEMPLATE("sync-request", Pool,
   sslctx.set_verify_mode(asio::ssl::verify_peer);
   sslctx.set_default_verify_paths();
 
-  Pool hc = make_conn_pool<Pool>(ctx.get_executor(), sslctx);
-  hc.lookup(urls::parse_authority(url).value());
 
+  requests::connection_pool hc(ctx.get_executor(), sslctx);
+  hc.lookup(url);
+  CHECK(https == hc.uses_ssl());
 
   SUBCASE("headers")
   {
@@ -108,7 +58,7 @@ TEST_CASE_TEMPLATE("sync-request", Pool,
 
     auto hd = as_json(hdr).at("headers");
 
-    CHECK(hd.at("Host")        == json::value(url));
+    CHECK(hd.at("Host")        == json::value(url.authority().buffer()));
     CHECK(hd.at("Test-Header") == json::value("it works"));
   }
 
@@ -131,7 +81,7 @@ TEST_CASE_TEMPLATE("sync-request", Pool,
 
     auto hd = sp.release().at("headers");
 
-    CHECK(hd.at("Host")        == json::value(url));
+    CHECK(hd.at("Host")        == json::value(url.authority().buffer()));
     CHECK(hd.at("Test-Header") == json::value("it works"));
   }
 
@@ -149,7 +99,7 @@ TEST_CASE_TEMPLATE("sync-request", Pool,
 
     auto hd = as_json(hdr).at("headers");
 
-    CHECK(hd.at("Host")        == json::value(url));
+    CHECK(hd.at("Host")        == json::value(url.authority().buffer()));
     CHECK(hd.at("Test-Header") == json::value("it works"));
   }
 
@@ -162,14 +112,14 @@ TEST_CASE_TEMPLATE("sync-request", Pool,
 
     auto hd = as_json(hdr).at("headers");
 
-    CHECK(hd.at("Host")        == json::value(url));
+    CHECK(hd.at("Host")        == json::value(url.authority().buffer()));
     CHECK(hd.at("Test-Header") == json::value("it works"));
   }
 
   SUBCASE("too-many-redirects")
   {
     system::error_code ec;
-    auto res = get(hc,  urls::url_view("/redirect/10"), {{}, {false, requests::private_domain, 5}}, ec);
+    auto res = get(hc,  urls::url_view("/redirect/10"), {{}, {false, requests::redirect_mode::private_domain, 5}}, ec);
     CHECK(res.history.size() == 5);
     CHECK(res.headers.begin() == res.headers.end());
     CHECK(ec == requests::error::too_many_redirects);
@@ -220,7 +170,7 @@ TEST_CASE_TEMPLATE("sync-request", Pool,
     const auto target = std::filesystem::temp_directory_path() / "requests-test.html";
     if (std::filesystem::exists(target))
       std::filesystem::remove(target);
-    auto res = download(hc,  urls::url_view("/redirect/10"), {{}, {false, requests::private_domain, 3}}, target.string(), ec);
+    auto res = download(hc,  urls::url_view("/redirect/10"), {{}, {false, requests::redirect_mode::private_domain, 3}}, target.string(), ec);
     CHECK(res.history.size() == 3);
 
     CHECK(res.headers.begin() == res.headers.end());
@@ -309,19 +259,25 @@ TEST_CASE_TEMPLATE("sync-request", Pool,
 
 }
 
-
-template<typename Pool>
-asio::awaitable<void> async_http_pool_request()
+TEST_CASE("sync-connection-request")
 {
-  auto url = httpbin();
+  SUBCASE("http") { http_request_connection_pool(false);}
+  SUBCASE("https") { http_request_connection_pool(true);}
+}
+
+asio::awaitable<void> async_connection_pool_request(bool https)
+{
+  auto url = urls::url((https ? "https://" : "http://") + httpbin());
+
 
   asio::ssl::context sslctx{asio::ssl::context_base::tls_client};
 
   sslctx.set_verify_mode(asio::ssl::verify_peer);
   sslctx.set_default_verify_paths();
 
-  auto hc = make_conn_pool<Pool>(co_await asio::this_coro::executor, sslctx);
-  co_await hc.async_lookup(urls::parse_authority(url).value());
+  using Pool = requests::connection_pool::defaulted<asio::use_awaitable_t<>>;
+  Pool hc(co_await asio::this_coro::executor, sslctx);
+  co_await hc.async_lookup(url);
 
   auto headers = [](Pool & hc, core::string_view url) -> asio::awaitable<void>
   {
@@ -350,8 +306,10 @@ asio::awaitable<void> async_http_pool_request()
 
   auto stream = [](Pool  & hc, core::string_view url) -> asio::awaitable<void>
   {
-    auto str = co_await hc.async_ropen(beast::http::verb::get,  urls::url_view("/get"), requests::empty{},
-                                       {requests::headers({{"Test-Header", "it works"}}), {false}});
+    auto str =
+        asio::use_awaitable.as_default_on(
+        co_await hc.async_ropen(beast::http::verb::get,  urls::url_view("/get"), requests::empty{},
+                                       {requests::headers({{"Test-Header", "it works"}}), {false}}));
 
     json::stream_parser sp;
     char buf[32];
@@ -373,8 +331,9 @@ asio::awaitable<void> async_http_pool_request()
 
   auto stream_dump = [](Pool  & hc, core::string_view url) -> asio::awaitable<void>
   {
-    auto str = co_await  hc.async_ropen(beast::http::verb::get,  urls::url_view( urls::url_view("/get")), requests::empty{},
-                                       {requests::headers({{"Test-Header", "it works"}}), {false}});
+    auto str = asio::use_awaitable.as_default_on(
+              co_await  hc.async_ropen(beast::http::verb::get,  urls::url_view( urls::url_view("/get")), requests::empty{},
+                                       {requests::headers({{"Test-Header", "it works"}}), {false}}));
     co_await str.async_dump();
 
   };
@@ -396,7 +355,7 @@ asio::awaitable<void> async_http_pool_request()
   auto too_many_redirects = [](Pool & hc, core::string_view url) -> asio::awaitable<void>
   {
     system::error_code ec;
-    requests::request_settings r{{}, {false, requests::private_domain, 5}};
+    requests::request_settings r{{}, {false, requests::redirect_mode::private_domain, 5}};
 
     auto res = co_await async_get(hc,  urls::url_view("/redirect/10"), r,
                                      asio::redirect_error(asio::use_awaitable, ec));
@@ -456,7 +415,7 @@ asio::awaitable<void> async_http_pool_request()
     if (std::filesystem::exists(target))
       std::filesystem::remove(target);
 
-    requests::request_settings r{{}, {false, requests::private_domain, 3}};
+    requests::request_settings r{{}, {false, requests::redirect_mode::private_domain, 3}};
     auto res = co_await async_download(hc,  urls::url_view("/redirect/10"), r, target.string(),
                                           asio::redirect_error(asio::use_awaitable, ec));
     CHECK(res.history.size() == 3);
@@ -558,41 +517,57 @@ asio::awaitable<void> async_http_pool_request()
 
   using namespace asio::experimental::awaitable_operators ;
   co_await (
-         headers(hc, url)
-      && get_(hc, url)
-      && stream(hc, url)
-      && stream_dump(hc, url)
-      && get_redirect(hc, url)
-      && too_many_redirects(hc, url)
-      && download(hc, url)
-      && download_redirect(hc, url)
-      && download_too_many_redirects(hc, url)
-      && delete_(hc, url)
-      && patch_json(hc, url)
-      && patch_form(hc, url)
-      && put_json(hc, url)
-      && put_form(hc, url)
-      && post_json(hc, url)
-      && post_form(hc, url)
+         headers(hc, url.encoded_host())
+      && get_(hc, url.encoded_host())
+      && stream(hc, url.encoded_host())
+      && stream_dump(hc, url.encoded_host())
+      && get_redirect(hc, url.encoded_host())
+      && too_many_redirects(hc, url.encoded_host())
+      && download(hc, url.encoded_host())
+      && download_redirect(hc, url.encoded_host())
+      && download_too_many_redirects(hc, url.encoded_host())
+      && delete_(hc, url.encoded_host())
+      && patch_json(hc, url.encoded_host())
+      && patch_form(hc, url.encoded_host())
+      && put_json(hc, url.encoded_host())
+      && put_form(hc, url.encoded_host())
+      && post_json(hc, url.encoded_host())
+      && post_form(hc, url.encoded_host())
        );
   co_await asio::post(asio::use_awaitable);
 
   CHECK(hc.limit() == hc.active());
 }
 
-TEST_CASE_TEMPLATE("async-request", Pool, aw_http_connection_pool, aw_https_connection_pool)
+
+TEST_CASE("async-connection-pool-request")
 {
-  auto url = httpbin();
+  SUBCASE("http")
+  {
+    asio::io_context ctx;
+    asio::co_spawn(ctx,
+                   async_connection_pool_request(false),
+                   [](std::exception_ptr e)
+                   {
+                     CHECK(e == nullptr);
+                   });
 
-  asio::io_context ctx;
-  asio::co_spawn(ctx,
-                 async_http_pool_request<Pool>(),
-                 [](std::exception_ptr e)
-                 {
-                   CHECK(e == nullptr);
-                 });
+    ctx.run();
+  }
 
-  ctx.run();
+  SUBCASE("https")
+  {
+    asio::io_context ctx;
+    asio::co_spawn(ctx,
+                   async_connection_pool_request(true),
+                   [](std::exception_ptr e)
+                   {
+                     CHECK(e == nullptr);
+                   });
+
+    ctx.run();
+  }
+
 }
 
 TEST_SUITE_END();

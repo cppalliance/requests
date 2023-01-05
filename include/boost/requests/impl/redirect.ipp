@@ -39,7 +39,7 @@ bool should_redirect(redirect_mode mode,
                      urls::url_view target,
                      const public_suffix_list & pse)
 {
-    if (mode == any)
+    if (mode == redirect_mode::any)
         return true;
 
     // TODO: handle encoding/decoding
@@ -47,7 +47,7 @@ bool should_redirect(redirect_mode mode,
     const auto current_domain = current.encoded_host();
     switch (mode)
     {
-        case private_domain:
+        case redirect_mode::private_domain:
         {
             // find the match of the domains
             const auto pp = std::mismatch(
@@ -74,7 +74,7 @@ bool should_redirect(redirect_mode mode,
             const auto common = target_domain.substr(std::distance(target_domain.begin(), target_itr));
             return !is_public_suffix(common, pse);
         }
-        case subdomain:
+        case redirect_mode::subdomain:
             if (target_domain.ends_with(current_domain))
             {
                 if (target_domain.size() == current_domain.size())
@@ -82,9 +82,9 @@ bool should_redirect(redirect_mode mode,
                 else
                     return target_domain[target_domain.size() - current_domain.size() - 1u] == '.';
             }
-        case domain:
+        case redirect_mode::domain:
             return target_domain == current_domain || target_domain.empty();
-        case endpoint:
+        case redirect_mode::endpoint:
         {
             if (target_domain == current_domain || target_domain.empty())
             {
@@ -102,10 +102,33 @@ bool same_endpoint_on_host(const urls::url_view current, const asio::ip::tcp::en
   return get_port(current) == ep.port();
 }
 
+
 bool same_endpoint_on_host(const urls::url_view current,
                const asio::local::stream_protocol::endpoint ep)
 {
   return false; // domain socket can only redirect locally
+}
+
+
+bool same_endpoint_on_host(const urls::url_view current, const asio::generic::stream_protocol::endpoint ep)
+{
+  if (ep.protocol() == asio::local::stream_protocol())
+  {
+    asio::local::stream_protocol::endpoint cmp;
+    cmp.resize(ep.size());
+    std::memcpy(cmp.data(), ep.data(), ep.size());
+    return same_endpoint_on_host(current, cmp);
+  }
+  else if (ep.protocol() == asio::ip::tcp::v4()
+        || ep.protocol() == asio::ip::tcp::v6())
+  {
+    asio::ip::tcp::endpoint cmp;
+    cmp.resize(ep.size());
+    std::memcpy(cmp.data(), ep.data(), ep.size());
+    return same_endpoint_on_host(current, cmp);
+  }
+  else
+    return false;
 }
 
 

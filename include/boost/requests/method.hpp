@@ -324,13 +324,13 @@ auto trace(Connection & conn,
 template<typename Connection,
          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
                                                response)) CompletionToken
-              BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE( typename Connection::executor_type)>
+              = typename Connection::default_token>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, response))
 async_get(Connection & conn,
           urls::url_view target,
           typename Connection::request_type req = {},
-          CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
+          CompletionToken && completion_token = typename Connection::default_token())
 {
   return async_request(conn, http::verb::get, target, empty{}, std::move(req),
                        std::forward<CompletionToken>(completion_token));
@@ -339,13 +339,13 @@ async_get(Connection & conn,
 template<typename Connection,  
          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
                                                response)) CompletionToken
-              BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE( typename Connection::executor_type)>
+              = typename Connection::default_token>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, response))
 async_head(Connection & conn,
            urls::url_view target,
            typename Connection::request_type req  = {},
-           CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
+           CompletionToken && completion_token = typename Connection::default_token())
 {
   return async_request(conn, http::verb::head, target,
                        empty{}, std::move(req),
@@ -356,14 +356,14 @@ template<typename Connection,
          typename RequestBody,
           BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
                                                response)) CompletionToken
-              BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE( typename Connection::executor_type)>
+              = typename Connection::default_token>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, response))
 async_post(Connection & conn,
            urls::url_view target,
            RequestBody && request_body,
            typename Connection::request_type req  = {},
-           CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
+           CompletionToken && completion_token = typename Connection::default_token())
 {
   return async_request(conn, http::verb::post, target,
                        std::forward<RequestBody>(request_body), std::move(req),
@@ -374,14 +374,14 @@ template<typename Connection,
          typename RequestBody,
           BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
                                                response)) CompletionToken
-              BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE( typename Connection::executor_type)>
+              = typename Connection::default_token>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, response))
 async_put(Connection & conn,
           urls::url_view target,
           RequestBody && request_body,
           typename Connection::request_type req  = {},
-          CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
+          CompletionToken && completion_token = typename Connection::default_token())
 {
   return async_request(conn, http::verb::put, target,
                        std::forward<RequestBody>(request_body), std::move(req),
@@ -392,14 +392,14 @@ template<typename Connection,
          typename RequestBody,
           BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
                                                response)) CompletionToken
-              BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE( typename Connection::executor_type)>
+              = typename Connection::default_token>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, response))
 async_patch(Connection & conn,
             urls::url_view target,
             RequestBody && request_body,
             typename Connection::request_type req  = {},
-            CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
+            CompletionToken && completion_token = typename Connection::default_token())
 {
   return async_request(conn, http::verb::patch, target,
                        std::forward<RequestBody>(request_body), std::move(req),
@@ -410,14 +410,14 @@ template<typename Connection,
          typename RequestBody,
           BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
                                                response)) CompletionToken
-              BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE( typename Connection::executor_type)>
+              = typename Connection::default_token>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, response))
 async_delete(Connection & conn,
              urls::url_view target,
              RequestBody && request_body,
              typename Connection::request_type req = {},
-             CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
+             CompletionToken && completion_token = typename Connection::default_token())
 {
   return async_request(conn, http::verb::delete_, target,
                        std::forward<RequestBody>(request_body), std::move(req),
@@ -428,13 +428,13 @@ async_delete(Connection & conn,
 template<typename Connection,
           BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
                                                response)) CompletionToken
-              BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE( typename Connection::executor_type)>
+              = typename Connection::default_token>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, response))
 async_delete(Connection & conn,
              urls::url_view target,
              typename Connection::request_type req  = {},
-             CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
+             CompletionToken && completion_token = typename Connection::default_token())
 {
   return async_request(conn, http::verb::delete_, target,
                        empty{}, std::move(req),
@@ -462,13 +462,13 @@ async_connect(basic_connection<Stream> & conn,
 template<typename Connection,  
          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
                                                response)) CompletionToken
-              BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE( typename Connection::executor_type)>
+              = typename Connection::default_token>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, response))
 async_options(Connection & conn,
               urls::url_view target,
               typename Connection::request_type req  = {},
-              CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
+              CompletionToken && completion_token = typename Connection::default_token())
 {
   return async_request(conn, http::verb::options, target,
                        empty{}, std::move(req),
@@ -479,13 +479,13 @@ async_options(Connection & conn,
 template<typename Connection,  
          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
                                                response)) CompletionToken
-              BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE( typename Connection::executor_type)>
+              = typename Connection::default_token>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, response))
 async_trace(Connection & conn,
             urls::url_view target,
             typename Connection::request_type req  = {},
-            CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
+            CompletionToken && completion_token = typename Connection::default_token())
 {
   return async_request(conn, http::verb::trace, target,
                        empty{}, std::move(req),

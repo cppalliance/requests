@@ -32,162 +32,20 @@
 
 namespace boost {
 namespace requests {
-namespace detail {
 
-namespace {
 
-template <typename Stream>
-void set_verify(Stream *stream, const std::string &host, system::error_code &ec)
+
+struct connection::async_connect_op : asio::coroutine
 {
-  stream->set_verify_callback(asio::ssl::host_name_verification(host));
-}
-
-void set_verify(std::nullptr_t, const std::string &, system::error_code &) {}
-
-template <typename Stream>
-void handshake(Stream *stream, system::error_code &ec)
-{
-  stream->handshake(asio::ssl::stream_base::client, ec);
-}
-void handshake(std::nullptr_t, system::error_code &) {}
-
-
-template <typename Stream>
-void shutdown(Stream *stream, system::error_code &ec)
-{
-  stream->shutdown(ec);
-}
-void shutdown(std::nullptr_t, system::error_code &) {}
-
-
-template<typename Stream, typename Ep >
-void connect_impl(Stream & stream,
-                   Ep ep,
-                   system::error_code & ec)
-{
-  // if it's ssl we assume the host has been set up properly
-  beast::get_lowest_layer(stream).connect(ep, ec);
-  if (ec)
-    return ;
-
-  detail::handshake(detail::get_ssl_layer(stream), ec);
-}
-
-template<typename Stream>
-void close_impl(Stream & stream,
-                system::error_code & ec)
-{
-  detail::shutdown(detail::get_ssl_layer(stream), ec);
-  beast::get_lowest_layer(stream).close(ec);
-}
-
-
-template<typename Stream, typename Ep, typename Token, typename Ssl>
-void async_connect_impl(Stream & stream, Ep && ep, Token && token, Ssl * ssl)
-{
-  using asio::deferred;
-  return beast::get_lowest_layer(stream).
-      async_connect(std::forward<Ep>(ep),
-          deferred(
-              [ssl](system::error_code ec)
-              {
-                return deferred.when(!ec)
-                    .then(ssl->async_handshake(asio::ssl::stream_base::client, asio::deferred_t()))
-                    .otherwise(deferred.values(ec));
-              }))(std::forward<Token>(token));
-}
-
-template<typename Stream, typename Ep, typename Token>
-void async_connect_impl(Stream & stream, Ep && ep, Token && token, std::nullptr_t)
-{
-  return beast::get_lowest_layer(stream).async_connect(std::forward<Ep>(ep), std::forward<Token>(token));
-}
-
-
-template<typename Stream, typename Ep, typename Token>
-void async_connect_impl(Stream & stream, Ep && ep, Token && token)
-{
-  return async_connect_impl(stream, std::forward<Ep>(ep),
-                            std::forward<Token>(token), get_ssl_layer(stream));
-}
-
-template<typename Stream, typename Token, typename Ssl>
-auto async_close_impl(Stream & stream, Token && token, Ssl * ssl)
-{
-  return ssl->async_shutdown(
-      asio::deferred(
-          [&stream](system::error_code ec)
-          {
-            beast::get_lowest_layer(stream).close(ec);
-            return asio::deferred.values(ec);
-          }))
-      (std::forward<Token>(token));
-}
-
-template<typename Stream, typename Token>
-auto async_close_impl(Stream & stream, Token && token, std::nullptr_t)
-{
-  system::error_code ec;
-  beast::get_lowest_layer(stream).close(ec);
-  return asio::post(asio::append(std::forward<Token>(token), ec));
-}
-
-
-template<typename Stream, typename Token>
-auto async_close_impl(Stream & stream, Token && token)
-{
-  return async_close_impl(stream, std::forward<Token>(token), get_ssl_layer(stream));
-}
-
-}
-}
-
-template<typename Stream>
-void basic_connection<Stream>::set_host(core::string_view sv, system::error_code & ec)
-{
-  detail::set_verify(detail::get_ssl_layer(next_layer_), host_ = sv, ec);
-}
-
-template<typename Stream>
-void basic_connection<Stream>::connect(endpoint_type ep, system::error_code & ec)
-{
-  auto wlock = asem::lock(write_mtx_, ec);
-  if (ec)
-    return;
-
-  auto rlock = asem::lock(read_mtx_, ec);
-  if (ec)
-    return;
-  detail::connect_impl(next_layer_, endpoint_ = ep, ec);
-}
-
-
-template<typename Stream>
-void basic_connection<Stream>::close(system::error_code & ec)
-{
-  auto wlock = asem::lock(write_mtx_, ec);
-  if (ec)
-    return;
-
-  auto rlock = asem::lock(read_mtx_, ec);
-  if (ec)
-    return;
-
-  detail::close_impl(next_layer_, ec);
-}
-
-template<typename Stream>
-struct basic_connection<Stream>::async_connect_op : asio::coroutine
-{
-  using executor_type = typename std::decay_t<Stream>::executor_type;
+  using executor_type = asio::any_io_executor;
   executor_type get_executor() {return this_->get_executor(); }
 
-  basic_connection<Stream> * this_;
+  connection * this_;
   endpoint_type ep;
 
   asio::coroutine inner_coro;
 
-  async_connect_op(basic_connection<Stream> * this_, endpoint_type ep) : this_(this_), ep(ep) {}
+  async_connect_op(connection * this_, endpoint_type ep) : this_(this_), ep(ep) {}
 
   using mutex_type = detail::basic_mutex<executor_type>;
   using lock_type = asem::lock_guard<detail::basic_mutex<executor_type>>;
@@ -197,98 +55,48 @@ struct basic_connection<Stream>::async_connect_op : asio::coroutine
   using completion_signature_type = void(system::error_code);
   using step_signature_type       = void(system::error_code);
 
+  BOOST_REQUESTS_DECL
   void resume(requests::detail::co_token_t<step_signature_type> self,
-              system::error_code & ec)
-  {
-    reenter(this)
-    {
-      await_lock(this_->write_mtx_, write_lock);
-      await_lock(this_->read_mtx_,  read_lock);
-      yield detail::async_connect_impl(this_->next_layer_, this_->endpoint_ = ep, std::move(self));
-    }
-  }
+              system::error_code & ec);
 };
 
-template<typename Stream>
 template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (system::error_code)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (system::error_code))
-basic_connection<Stream>::async_connect(endpoint_type ep, CompletionToken && completion_token)
+connection::async_connect(endpoint_type ep, CompletionToken && completion_token)
 {
 
   return detail::co_run<async_connect_op>(
       std::forward<CompletionToken>(completion_token), this, ep);
 }
 
-template<typename Stream>
-struct basic_connection<Stream>::async_close_op
+struct connection::async_close_op : asio::coroutine
 {
-  basic_connection<Stream> * this_;
+  connection * this_;
   detail::tracker t{this_->ongoing_requests_};
-  using mutex_type = detail::basic_mutex<executor_type>;
-  using lock_type = asem::lock_guard<mutex_type>;
 
-  template<typename Self>
-  void operator()(Self && self)
-  {
-    using namespace asio::experimental;
+  using executor_type = asio::any_io_executor;
+  executor_type get_executor() const {return this_->get_executor();}
 
-    make_parallel_group(
-        asem::async_lock(this_->write_mtx_, asio::deferred),
-        asem::async_lock(this_->read_mtx_, asio::deferred))
-        .async_wait(wait_for_all(), asio::append(std::move(self), detail::get_ssl_layer(this_->next_layer_)));
-  }
-
-  template<typename Self, typename Stream_>
-  void operator()(Self && self,
-                  std::array<std::size_t, 2u>,
-                  system::error_code ec1,
-                  asem::lock_guard<mutex_type> lock1,
-                  system::error_code ec2,
-                  asem::lock_guard<mutex_type> lock2,
-                  Stream_ * stream)
-  {
-    if (ec1 || ec2)
-      self.complete(ec1 ? ec1 : ec2);
-    else
-      stream->async_shutdown(
-          asio::append(std::move(self), std::move(lock1), std::move(lock2)));
-  }
-  template<typename Self>
-  void operator()(Self && self,
-                  std::array<std::size_t, 2u>,
-                  system::error_code ec1,
-                  asem::lock_guard<mutex_type> lock1,
-                  system::error_code ec2,
-                  asem::lock_guard<mutex_type> lock2,
-                  std::nullptr_t)
-  {
-    (*this)(std::move(self), ec1 ? ec1 : ec2, std::move(lock1), std::move(lock2));
-  }
+  using lock_type = asem::lock_guard<asem::mt::mutex>;
+  lock_type read_lock, write_lock;
 
 
-  template<typename Self>
-  void operator()(Self && self,
-                  system::error_code ec,
-                  asem::lock_guard<mutex_type> lock1,
-                  asem::lock_guard<mutex_type> lock2)
-  {
-    if (!ec)
-      this_->next_layer_.close(ec);
-    self.complete(ec);
-  }
+  async_close_op(connection * this_) : this_(this_) {}
 
+  using completion_signature_type = void(system::error_code);
+  using step_signature_type       = void(system::error_code);
+
+  BOOST_REQUESTS_DECL
+  void resume(requests::detail::co_token_t<step_signature_type> self,
+              system::error_code & ec);
 };
 
-template<typename Stream>
 template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code))
-basic_connection<Stream>::async_close(CompletionToken && completion_token)
+connection::async_close(CompletionToken && completion_token)
 {
-  return asio::async_compose<CompletionToken, void(system::error_code)>(
-      async_close_op{this},
-      completion_token,
-      next_layer_
-  );
+  return detail::co_run<async_close_op>(
+      std::forward<CompletionToken>(completion_token), this);
 }
 
 namespace detail
@@ -308,12 +116,10 @@ static asio::deferred_function<drop_size_t> drop_size()
 
 }
 
-
-template<typename Stream>
 template<typename Body>
-void basic_connection<Stream>::write_impl(
+void connection::write_impl(
     http::request<Body> & req,
-    asem::lock_guard<detail::basic_mutex<executor_type>> & read_lock,
+    asem::lock_guard<asem::mt::mutex> & read_lock,
     system::error_code & ec)
 {
   using lock_type = asem::lock_guard<detail::basic_mutex<executor_type>>;
@@ -332,7 +138,10 @@ void basic_connection<Stream>::write_impl(
       return;
     alock.emplace(read_mtx_, std::adopt_lock);
     // if the close goes wrong - so what, unless it's still open
-    detail::close_impl(next_layer_, ec);
+    if (use_ssl_)
+      next_layer_.shutdown(ec);
+    if (!ec)
+      next_layer_.next_layer().close(ec);
     ec.clear();
   }
 
@@ -346,13 +155,20 @@ void basic_connection<Stream>::write_impl(
         return ;
       alock.emplace(read_mtx_, std::adopt_lock);
     }
-    detail::connect_impl(next_layer_, endpoint_, ec);
+
+    next_layer_.next_layer().connect(endpoint_, ec);
+    if (use_ssl_ && !ec)
+      next_layer_.handshake(asio::ssl::stream_base::client, ec);
     if (ec)
       return ;
   }
 
   alock.reset();
-  beast::http::write(next_layer_, req, ec);
+  if (use_ssl_)
+    beast::http::write(next_layer_, req, ec);
+  else
+    beast::http::write(next_layer_.next_layer(), req, ec);
+
 
   if (ec == asio::error::broken_pipe || ec == asio::error::connection_reset)
     goto retry ;
@@ -369,14 +185,14 @@ void basic_connection<Stream>::write_impl(
   lock = {};
 }
 
-template<typename Stream>
+
 template<typename Body>
-auto basic_connection<Stream>::ropen(http::request<Body> & req,
-                                     request_options opt,
-                                     cookie_jar * jar,
-                                     system::error_code & ec) -> stream
+auto connection::ropen(http::request<Body> & req,
+                       request_options opt,
+                       cookie_jar * jar,
+                       system::error_code & ec) -> stream
 {
-  constexpr auto is_secure = detail::has_ssl_v<Stream>;
+  const auto is_secure = use_ssl_;
   using body_type = Body;
   using lock_type = asem::lock_guard<detail::basic_mutex<executor_type>>;
   detail::tracker t{this->ongoing_requests_};
@@ -405,7 +221,12 @@ auto basic_connection<Stream>::ropen(http::request<Body> & req,
     stream str{get_executor(), this};
     str.parser_ = detail::make_pmr<http::response_parser<http::buffer_body>>(req.get_allocator().resource(),
                                                                             http::response_header{http::fields(req.get_allocator())});
-    beast::http::read_header(next_layer_, buffer_, *str.parser_, ec);
+
+    if (use_ssl_)
+      beast::http::read_header(next_layer_, buffer_, *str.parser_, ec);
+    else
+      beast::http::read_header(next_layer_.next_layer(), buffer_, *str.parser_, ec);
+
     if (ec)
       break;
 
@@ -501,23 +322,6 @@ auto basic_connection<Stream>::ropen(http::request<Body> & req,
   return str;
 }
 
-template<typename Stream>
-auto basic_connection<Stream>::ropen(http::request<http::empty_body> & req,  request_options opt, cookie_jar * jar, system::error_code & ec) -> stream
-{
-  return ropen<http::empty_body>(req, std::move(opt), jar, ec);
-}
-template<typename Stream>
-auto basic_connection<Stream>::ropen(http::request<http::file_body> & req,   request_options opt, cookie_jar * jar, system::error_code & ec) -> stream
-{
-  return ropen<http::file_body>(req, std::move(opt), jar, ec);
-}
-template<typename Stream>
-auto basic_connection<Stream>::ropen(http::request<http::string_body> & req, request_options opt, cookie_jar * jar, system::error_code & ec) -> stream
-{
-  return ropen<http::string_body>(req, std::move(opt), jar, ec);
-}
-
-
 namespace detail
 {
 
@@ -552,11 +356,70 @@ inline bool check_endpoint(
   return !ec;
 }
 
+inline bool check_endpoint(
+    urls::url_view path,
+    const asio::generic::stream_protocol::endpoint  & ep,
+    core::string_view host,
+    bool has_ssl,
+    system::error_code & ec)
+{
+  if (ep.protocol() == asio::local::stream_protocol())
+  {
+    asio::local::stream_protocol::endpoint cmp;
+    cmp.resize(ep.size());
+    std::memcpy(cmp.data(),
+                ep.data(),
+                ep.size());
+    return check_endpoint(path, cmp, host, has_ssl, ec);
+  }
+  else if (ep.protocol() == asio::ip::tcp::v4()
+        || ep.protocol() == asio::ip::tcp::v6())
+  {
+    asio::ip::tcp::endpoint cmp;
+    cmp.resize(ep.size());
+    std::memcpy(cmp.data(),
+                ep.data(),
+                ep.size());
+    return check_endpoint(path, cmp, host, has_ssl, ec);
+  }
+  else
+  {
+    BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::no_protocol_option);
+    return false;
+  }
 }
 
-template<typename Stream>
+}
+
 template<typename RequestBody>
-auto basic_connection<Stream>::ropen(
+auto connection::ropen(beast::http::verb method,
+           urls::url_view path,
+           RequestBody && body,
+           request_settings req) -> stream
+{
+  system::error_code ec;
+  auto res = ropen(method, path, std::forward<RequestBody>(body), std::move(req), ec);
+  if (ec)
+    throw_exception(system::system_error(ec));
+  return res;
+}
+template<typename RequestBody>
+auto connection::ropen(beast::http::verb method,
+           urls::url_view path,
+           http::request<RequestBody> & req,
+           request_options opt,
+           cookie_jar * jar) -> stream
+{
+  system::error_code ec;
+  auto res = ropen(method, path, req, std::move(opt), jar, ec);
+  if (ec)
+    throw_exception(system::system_error(ec));
+  return res;
+}
+
+
+template<typename RequestBody>
+auto connection::ropen(
     beast::http::verb method,
     urls::url_view path,
     RequestBody && body,
@@ -565,13 +428,14 @@ auto basic_connection<Stream>::ropen(
 {
   using body_traits = request_body_traits<std::decay_t<RequestBody>>;
   using body_type = typename body_traits::body_type;
-  constexpr auto is_secure = detail::has_ssl_v<Stream>;
+  const auto is_secure = use_ssl_;
 
-  if (!detail::check_endpoint(path, endpoint_, host_, detail::has_ssl_v<Stream>, ec))
+  if (!detail::check_endpoint(path, endpoint_, host_, use_ssl_, ec))
     return stream{get_executor(), this};
 
-
-  if (std::is_same<protocol_type, asio::ip::tcp>::value && !is_secure && req.opts.enforce_tls)
+  if (((endpoint_.protocol() == asio::ip::tcp::v4())
+    || (endpoint_.protocol() == asio::ip::tcp::v6()))
+      && !is_secure && req.opts.enforce_tls)
   {
     BOOST_REQUESTS_ASSIGN_EC(ec, error::insecure);
     return stream{get_executor(), this};
@@ -600,17 +464,16 @@ auto basic_connection<Stream>::ropen(
 }
 
 
-template<typename Stream>
 template<typename RequestBody>
-struct basic_connection<Stream>::async_ropen_op
+struct connection::async_ropen_op
     : boost::asio::coroutine
 {
-  using executor_type = typename std::decay_t<Stream>::executor_type;
+  using executor_type = asio::any_io_executor;
   executor_type get_executor() {return this_->get_executor(); }
 
-  using lock_type = asem::lock_guard<detail::basic_mutex<typename Stream::executor_type>>;
+  using lock_type = asem::lock_guard<asem::mt::mutex>;
 
-  basic_connection<Stream> * this_;
+  connection * this_;
   optional<stream> str;
 
   detail::tracker t{this_->ongoing_requests_};
@@ -640,9 +503,11 @@ struct basic_connection<Stream>::async_ropen_op
                        request_settings req,
                        error_code &ec)
   {
-    constexpr auto is_secure = detail::has_ssl_v<Stream>;
+    const auto is_secure = this_->use_ssl_;
     using body_traits = request_body_traits<std::decay_t<RequestBody_>>;
-    if (std::is_same<protocol_type, asio::ip::tcp>::value && !is_secure && req.opts.enforce_tls)
+    if (((this_->endpoint().protocol() == asio::ip::tcp::v4())
+      || (this_->endpoint().protocol() == asio::ip::tcp::v6()))
+      && !is_secure && req.opts.enforce_tls)
     {
       BOOST_REQUESTS_ASSIGN_EC(ec, error::insecure);
       return {};
@@ -674,14 +539,14 @@ struct basic_connection<Stream>::async_ropen_op
     return hreq;
   }
 
-  async_ropen_op(basic_connection<Stream> * this_,
+  async_ropen_op(connection * this_,
                  http::request<RequestBody> * req,
                  request_options opt, cookie_jar * jar) : this_(this_), opts(opt), jar(jar), req(*req)
   {
   }
 
   template<typename RequestBody_>
-  async_ropen_op(basic_connection<Stream> * this_,
+  async_ropen_op(connection * this_,
                  beast::http::verb method,
                  urls::url_view path,
                  RequestBody_ && body,
@@ -690,7 +555,7 @@ struct basic_connection<Stream>::async_ropen_op
         hreq(prepare_request(method, path.encoded_target(), this_->host(), std::forward<RequestBody_>(body), std::move(req), ec_)),
         req(*hreq)
   {
-    detail::check_endpoint(path, this_->endpoint(), this_->host(), detail::has_ssl_v<Stream>, ec_);
+    detail::check_endpoint(path, this_->endpoint(), this_->host(), this_->use_ssl_, ec_);
   }
 
   using completion_signature_type = void(system::error_code, stream);
@@ -716,23 +581,40 @@ struct basic_connection<Stream>::async_ropen_op
         {
           await_lock(this_->read_mtx_, alock);
           // if the close goes wrong - so what, unless it's still open
-          yield detail::async_close_impl(this_->next_layer_, std::move(self));
+          if (!ec && this_->use_ssl_)
+          {
+            yield this_->next_layer_.async_shutdown(std::move(self));
+          }
+          if (!ec)
+            this_->next_layer_.next_layer().close(ec);
           ec.clear();
         }
-
 
         if (!this_->is_open())
         {
         retry:
           if (!alock)
+          {
             await_lock(this_->read_mtx_, alock);
-          yield detail::async_connect_impl(this_->next_layer_, this_->endpoint_, std::move(self));
+          }
+          yield this_->next_layer_.next_layer().async_connect(this_->endpoint_, std::move(self));
+          if (!ec && this_->use_ssl_)
+          {
+            yield this_->next_layer_.async_handshake(asio::ssl::stream_base::client, std::move(self));
+          }
           if (ec)
             break;
         }
 
         alock.reset();
-        yield beast::http::async_write(this_->next_layer_, req, std::move(self));
+        if (this_->use_ssl_)
+        {
+          yield beast::http::async_write(this_->next_layer_, req, std::move(self));
+        }
+        else
+        {
+          yield beast::http::async_write(this_->next_layer_.next_layer(), req, std::move(self));
+        }
 
         if (ec == asio::error::broken_pipe || ec == asio::error::connection_reset)
           goto retry ;
@@ -742,11 +624,20 @@ struct basic_connection<Stream>::async_ropen_op
         // release after acquire!
         await_lock(this_->read_mtx_, lock);
         // END OF write impl
-        using base = detail::stream_base;
-        str.emplace(this_->get_executor(), static_cast<base*>(this_)); // , req.get_allocator().resource()
+
+        str.emplace(this_->get_executor(), this_); // , req.get_allocator().resource()
         str->parser_ = detail::make_pmr<http::response_parser<http::buffer_body>>(req.get_allocator().resource(),
                                                                                   http::response_header{http::fields(req.get_allocator())});
-        yield beast::http::async_read_header(this_->next_layer_, this_->buffer_, *str->parser_, std::move(self));
+
+        if (this_->use_ssl_)
+        {
+          yield beast::http::async_read_header(this_->next_layer_, this_->buffer_, *str->parser_, std::move(self));
+        }
+        else
+        {
+          yield beast::http::async_read_header(this_->next_layer_.next_layer(), this_->buffer_, *str->parser_, std::move(self));
+        }
+
         if (ec)
           break;
 
@@ -825,7 +716,7 @@ struct basic_connection<Stream>::async_ropen_op
         if (jar)
         {
           detail::monotonic_token mv;
-          auto cc = jar->get(this_->host(), detail::has_ssl_v<Stream>, url->encoded_path(), mv);
+          auto cc = jar->get(this_->host(), this_->use_ssl_, url->encoded_path(), mv);
           if (!cc.empty())
             req.base().set(http::field::cookie, cc);
         }
@@ -844,49 +735,42 @@ struct basic_connection<Stream>::async_ropen_op
   }
 };
 
-
-
-template<typename Stream>
-struct basic_connection<Stream>::async_ropen_file_op : async_ropen_op<http::file_body>
+struct connection::async_ropen_file_op : async_ropen_op<http::file_body>
 {
   using async_ropen_op<http::file_body>::async_ropen_op;
   using step_signature_type       = void(system::error_code, std::size_t);
+
+  BOOST_REQUESTS_DECL
   auto resume(requests::detail::co_token_t<step_signature_type> self,
-              system::error_code & ec, std::size_t res = 0u) -> stream
-  {
-    return async_ropen_op<http::file_body>::resume(std::move(self), ec, res);
-  }
+              system::error_code & ec, std::size_t res = 0u) -> stream;
 };
 
-template<typename Stream>
-struct basic_connection<Stream>::async_ropen_string_op : async_ropen_op<http::string_body>
+
+struct connection::async_ropen_string_op : async_ropen_op<http::string_body>
 {
   using async_ropen_op<http::string_body>::async_ropen_op;
   using step_signature_type       = void(system::error_code, std::size_t);
-    auto resume(requests::detail::co_token_t<step_signature_type> self,
-                system::error_code & ec, std::size_t res = 0u) -> stream
-  {
-    return async_ropen_op<http::string_body>::resume(std::move(self), ec, res);
-  }
+
+  BOOST_REQUESTS_DECL
+  auto resume(requests::detail::co_token_t<step_signature_type> self,
+                system::error_code & ec, std::size_t res = 0u) -> stream;
 };
 
-template<typename Stream>
-struct basic_connection<Stream>::async_ropen_empty_op : async_ropen_op<http::empty_body>
+struct connection::async_ropen_empty_op : async_ropen_op<http::empty_body>
 {
   using async_ropen_op<http::empty_body>::async_ropen_op;
   using step_signature_type       = void(system::error_code, std::size_t);
+
+  BOOST_REQUESTS_DECL
   auto resume(requests::detail::co_token_t<step_signature_type> self,
-              system::error_code & ec, std::size_t res = 0u) -> stream
-  {
-    return async_ropen_op<http::empty_body>::resume(std::move(self), ec, res);
-  }
+              system::error_code & ec, std::size_t res = 0u) -> stream;
 };
 
-template<typename Stream>
+
 template<typename RequestBody, typename CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code,
-                                                         typename basic_connection<Stream>::stream))
-basic_connection<Stream>::async_ropen(
+                                                         stream))
+connection::async_ropen(
     beast::http::verb method,
     urls::url_view path,
     RequestBody && body,
@@ -901,94 +785,65 @@ basic_connection<Stream>::async_ropen(
       std::move(req));
 }
 
-template<typename Stream>
 template<typename RequestBody, typename CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code,
-                                        typename basic_connection<Stream>::stream))
-basic_connection<Stream>::async_ropen(http::request<RequestBody> & req,
-                                      request_options opt,
-                                      cookie_jar * jar,
-                                      CompletionToken && completion_token)
+                                        stream))
+connection::async_ropen(http::request<RequestBody> & req,
+                        request_options opt,
+                        cookie_jar * jar,
+                        CompletionToken && completion_token)
 {
   using rp = async_ropen_op<RequestBody>;
   return detail::co_run<rp>(std::forward<CompletionToken>(completion_token), this, &req, std::move(opt), jar);
 }
 
-template<typename Stream>
 template<typename CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                   void (boost::system::error_code, typename basic_connection<Stream>::stream))
-basic_connection<Stream>::async_ropen(http::request<http::empty_body> & req,
-                                      request_options opt,
-                                      cookie_jar * jar,
-                                      CompletionToken && completion_token)
+                                   void (boost::system::error_code, stream))
+connection::async_ropen(http::request<http::empty_body> & req,
+                        request_options opt,
+                        cookie_jar * jar,
+                        CompletionToken && completion_token)
 {
   return detail::co_run<async_ropen_empty_op>(std::forward<CompletionToken>(completion_token), this, &req, std::move(opt), jar);
 }
 
 
-template<typename Stream>
 template<typename CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                   void (boost::system::error_code, typename basic_connection<Stream>::stream))
-basic_connection<Stream>::async_ropen(http::request<http::file_body> & req,
-                                      request_options opt,
-                                      cookie_jar * jar,
-                                      CompletionToken && completion_token)
+                                   void (boost::system::error_code, stream))
+connection::async_ropen(http::request<http::file_body> & req,
+                        request_options opt,
+                        cookie_jar * jar,
+                        CompletionToken && completion_token)
 {
   return detail::co_run<async_ropen_file_op>(std::forward<CompletionToken>(completion_token), this, &req, std::move(opt), jar);
 }
 
 
-template<typename Stream>
 template<typename CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                   void (boost::system::error_code, typename basic_connection<Stream>::stream))
-basic_connection<Stream>::async_ropen(http::request<http::string_body> & req,
-                                      request_options opt,
-                                      cookie_jar * jar,
-                                      CompletionToken && completion_token)
+                                   void (boost::system::error_code, stream))
+connection::async_ropen(http::request<http::string_body> & req,
+                        request_options opt,
+                        cookie_jar * jar,
+                        CompletionToken && completion_token)
 {
   return detail::co_run<async_ropen_string_op>(std::forward<CompletionToken>(completion_token), this, &req, std::move(opt), jar);
 }
 
 
 
-
-template<typename Stream>
-std::size_t basic_connection<Stream>::do_read_some_(beast::http::basic_parser<false> & parser)
-{
-  return beast::http::read_some(next_layer_, buffer_, parser);
-}
-template<typename Stream>
-std::size_t basic_connection<Stream>::do_read_some_(beast::http::basic_parser<false> & parser, system::error_code & ec) 
-{
-  return beast::http::read_some(next_layer_, buffer_, parser, ec);
-}
-
-template<typename Stream>
-void basic_connection<Stream>::do_async_read_some_(beast::http::basic_parser<false> & parser, detail::co_token_t<void(system::error_code, std::size_t)> tk)
-{
-  return beast::http::async_read_some(next_layer_, buffer_, parser, std::move(tk));
-}
-
-template<typename Stream>
-void basic_connection<Stream>::do_close_(system::error_code & ec)
-{
-  return detail::close_impl(next_layer_, ec);
-}
-template<typename Stream>
-void basic_connection<Stream>::do_async_close_(detail::co_token_t<void(system::error_code)> tk)
-{
-  return detail::async_close_impl(next_layer_, std::move(tk));
-}
-
 }
 }
 
 #include <boost/asio/unyield.hpp>
 #include <boost/requests/detail/undefine.hpp>
+
+#if defined(BOOST_REQUESTS_HEADER_ONLY)
+#include <boost/requests/impl/connection.ipp>
+#endif
 
 #endif // BOOST_REQUESTS_IMPL_CONNECTION_HPP
 

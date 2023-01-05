@@ -10,6 +10,7 @@
 
 #include <boost/requests/detail/config.hpp>
 #include <boost/requests/detail/tracker.hpp>
+#include <boost/requests/connection.hpp>
 #include <boost/requests/fields/keep_alive.hpp>
 #include <boost/requests/http.hpp>
 #include <boost/requests/detail/async_coroutine.hpp>
@@ -24,19 +25,6 @@ namespace requests
 {
 namespace detail
 {
-
-struct stream_base
-{
-  virtual std::size_t do_read_some_(beast::http::basic_parser<false> & parser) = 0;
-  virtual std::size_t do_read_some_(beast::http::basic_parser<false> & parser, system::error_code & ec) = 0;
-  virtual void  do_async_read_some_(beast::http::basic_parser<false> & parser, detail::co_token_t<void(system::error_code, std::size_t)>) = 0;
-
-  virtual void do_close_(system::error_code & ec) = 0;
-  virtual void do_async_close_(detail::co_token_t<void(system::error_code)>) = 0;
-
-  virtual keep_alive & get_keep_alive_set_() = 0;
-  virtual bool is_open() const = 0;
-};
 
 struct pmr_deleter
 {
@@ -69,17 +57,29 @@ std::unique_ptr<T, pmr_deleter> make_pmr(container::pmr::memory_resource * res, 
 
 }
 
-template<typename Executor = asio::any_io_executor>
-struct basic_stream
+struct stream
 {
   /// The type of the executor associated with the object.
-  typedef Executor executor_type;
+  typedef asio::any_io_executor executor_type;
 
   /// Get the executor
   executor_type get_executor() noexcept
   {
     return executor_;
   }
+
+  /// This type with a defaulted completion token.
+  template<typename Token>
+  struct defaulted;
+
+  /// Rebinds the socket type to another executor.
+  template<typename Executor1, typename = void>
+  struct rebind_executor
+  {
+    /// The socket type when rebound to the specified executor.
+    using other = connection;
+  };
+
 
   /// Check if the underlying connection is open.
   bool is_open() const
@@ -105,12 +105,11 @@ struct basic_stream
   /// Read some data from the request body.
   template<
       typename MutableBufferSequence,
-      BOOST_ASIO_COMPLETION_TOKEN_FOR(void (system::error_code, std::size_t)) CompletionToken
-          BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+      BOOST_ASIO_COMPLETION_TOKEN_FOR(void (system::error_code, std::size_t)) CompletionToken>
   BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (system::error_code, std::size_t))
   async_read_some(
       const MutableBufferSequence & buffers,
-      CompletionToken && token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
+      CompletionToken && token);
 
   /// Read all the data from the request body.
   template<typename DynamicBuffer>
@@ -131,12 +130,11 @@ struct basic_stream
   /// Read all the data from the request body.
   template<
       typename DynamicBuffer,
-      BOOST_ASIO_COMPLETION_TOKEN_FOR(void (system::error_code, std::size_t)) CompletionToken
-          BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+      BOOST_ASIO_COMPLETION_TOKEN_FOR(void (system::error_code, std::size_t)) CompletionToken>
   BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (system::error_code, std::size_t))
   async_read(
       DynamicBuffer & buffers,
-      CompletionToken && token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
+      CompletionToken && token);
 
 
   /// dump the rest of the data.
@@ -147,21 +145,21 @@ struct basic_stream
     if (ec)
       throw_exception(system::system_error(ec, "dump"));
   }
-  void dump(system::error_code & ec);
+  BOOST_REQUESTS_DECL void dump(system::error_code & ec);
 
   /// Read some data from the request body.
   template<
       BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code))
-          CompletionToken BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+          CompletionToken >
   BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code))
-  async_dump(CompletionToken && token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
+  async_dump(CompletionToken && token);
 
-  basic_stream(basic_stream && lhs) = default;
-  basic_stream& operator=(basic_stream && lhs) = default;
+  stream(stream && lhs) = default;
+  stream& operator=(stream && lhs) = default;
 
-  basic_stream           (const basic_stream &) = delete;
-  basic_stream& operator=(const basic_stream &) = delete;
-  ~basic_stream();
+  stream           (const stream &) = delete;
+  stream& operator=(const stream &) = delete;
+  BOOST_REQUESTS_DECL ~stream();
 
   using history_type = response_base::history_type;
 
@@ -178,9 +176,9 @@ struct basic_stream
 
 
   bool done() const {return !parser_ ||  parser_->is_done();}
-  explicit basic_stream(executor_type executor, std::nullptr_t ) : executor_{executor}, impl_(nullptr) {}
-  explicit basic_stream(executor_type executor,
-                        detail::stream_base * impl,
+  explicit stream(executor_type executor, std::nullptr_t ) : executor_{executor}, impl_(nullptr) {}
+  explicit stream(executor_type executor,
+                        connection * impl,
                         detail::tracker t = {})
       : executor_{executor},
         impl_(impl),
@@ -207,7 +205,7 @@ struct basic_stream
   }
  private:
   executor_type executor_;
-  detail::stream_base* impl_;
+  connection* impl_;
   asem::lock_guard<detail::basic_mutex<executor_type>> lock_;
 
   std::unique_ptr<http::response_parser<http::buffer_body>,
@@ -220,14 +218,43 @@ struct basic_stream
   struct async_dump_op;
   struct async_read_some_op;
 
-  template<typename>
-  friend struct basic_connection;
+  friend struct connection;
 };
 
-using stream = basic_stream<>;
+template <typename Executor1>
+struct stream::rebind_executor<Executor1, void_t<typename Executor1::default_completion_token_type>>
+{
+  using other = defaulted<typename Executor1::default_completion_token_type>;
+};
+
+template<typename Token>
+struct stream::defaulted : stream
+{
+  using stream::stream;
+  using default_token = Token;
+  defaulted(stream && lhs) :  stream(std::move(lhs)) {}
+
+  template<typename MutableBufferSequence>
+  auto async_read_some(const MutableBufferSequence & buffers)
+  {
+    return stream::async_read_some(buffers, default_token());
+  }
+
+  template<typename DynamicBuffer>
+  auto async_read(DynamicBuffer & buffers)
+  {
+    return stream::async_read(buffers, default_token());
+  }
+
+  auto async_dump()
+  {
+    return stream::async_dump(default_token());
+  }
+};
 
 }
 }
+#include <boost/requests/connection.hpp>
 
 #include <boost/requests/impl/stream.hpp>
 

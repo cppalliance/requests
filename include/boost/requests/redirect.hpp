@@ -7,6 +7,7 @@
 
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/local/stream_protocol.hpp>
+#include <boost/asio/generic/stream_protocol.hpp>
 #include <boost/requests/public_suffix.hpp>
 #include <boost/requests/detail/config.hpp>
 #include <boost/url/scheme.hpp>
@@ -17,7 +18,7 @@ namespace boost
 namespace requests
 {
 
-enum redirect_mode
+enum class redirect_mode
 {
     /// Follow no redirect  at all.
     none,
@@ -48,6 +49,9 @@ BOOST_REQUESTS_DECL bool same_endpoint_on_host(const urls::url_view current, con
 
 /// Check if the endpoint is the same as the endpoint
 BOOST_REQUESTS_DECL bool same_endpoint_on_host(const urls::url_view current, const asio::local::stream_protocol::endpoint);
+
+/// Check if the endpoint is the same as the endpoint
+BOOST_REQUESTS_DECL bool same_endpoint_on_host(const urls::url_view current, const asio::generic::stream_protocol::endpoint);
 
 
 }

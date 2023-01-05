@@ -9,8 +9,7 @@
 #include <boost/asem/st.hpp>
 #include <boost/asio/any_io_executor.hpp>
 #include <boost/asio/experimental/parallel_group.hpp>
-#include <boost/asio/ip/basic_resolver.hpp>
-#include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/generic/stream_protocol.hpp>
 #include <boost/asio/prepend.hpp>
 #include <boost/asio/ssl/stream.hpp>
 #include <boost/asio/strand.hpp>
@@ -21,6 +20,7 @@
 #include <boost/beast/http/write.hpp>
 #include <boost/beast/websocket/stream.hpp>
 #include <boost/requests/body_traits.hpp>
+#include <boost/requests/detail/async_coroutine.hpp>
 #include <boost/requests/detail/ssl.hpp>
 #include <boost/requests/detail/tracker.hpp>
 #include <boost/requests/fields/keep_alive.hpp>
@@ -28,18 +28,17 @@
 #include <boost/requests/request_options.hpp>
 #include <boost/requests/request_settings.hpp>
 #include <boost/requests/response.hpp>
-#include <boost/requests/stream.hpp>
 #include <boost/smart_ptr/allocate_unique.hpp>
 #include <boost/url/url_view.hpp>
 
 namespace boost {
 namespace requests {
+struct stream;
 
-template<typename Stream>
-struct basic_connection : private detail::stream_base
+struct connection
 {
     /// The type of the next layer.
-    typedef typename std::remove_reference<Stream>::type next_layer_type;
+    typedef asio::ssl::stream<asio::generic::stream_protocol::socket> next_layer_type;
 
     /// The type of the executor associated with the object.
     typedef typename next_layer_type::executor_type executor_type;
@@ -47,12 +46,16 @@ struct basic_connection : private detail::stream_base
     /// The type of the executor associated with the object.
     typedef typename next_layer_type::lowest_layer_type lowest_layer_type;
 
+    /// This type with a defaulted completion token.
+    template<typename Token>
+    struct defaulted;
+
     /// Rebinds the socket type to another executor.
-    template<typename Executor1>
+    template<typename Executor1, typename = void>
     struct rebind_executor
     {
         /// The socket type when rebound to the specified executor.
-        typedef basic_connection<typename next_layer_type::template rebind_executor<Executor1>::other> other;
+        using other = connection;
     };
 
     /// Get the executor
@@ -73,33 +76,45 @@ struct basic_connection : private detail::stream_base
     }
 
     /// The protocol-type of the lowest layer.
-    using protocol_type = typename beast::lowest_layer_type<next_layer_type>::protocol_type;
+    using protocol_type = asio::generic::stream_protocol;
 
     /// The endpoint of the lowest lowest layer.
     using endpoint_type = typename protocol_type::endpoint;
 
-    /// Construct a stream.
-    /**
-     * @param args The arguments to be passed to initialise the underlying stream.
-     *
-     * Everything else will be default constructed
-     */
-    template<typename ... Args>
-    explicit basic_connection(Args && ... args) : next_layer_(std::forward<Args>(args)...) {}
 
-    basic_connection(basic_connection && ) noexcept = default;
-
-    template<typename Other>
-    basic_connection(basic_connection<Other> && lhs)
-          : next_layer_(std::move(lhs.next_layer_))
-          , read_mtx_(std::move(lhs.read_mtx_))
-          , write_mtx_(std::move(lhs.write_mtx_))
-          , host_(std::move(lhs.host_))
-          , buffer_(std::move(lhs.buffer_))
-          , ongoing_requests_(std::move(lhs.ongoing_requests_.load()))
-          , keep_alive_set_(std::move(lhs.keep_alive_set_))
-          , endpoint_(std::move(lhs.endpoint_))
+    connection(connection && lhs)
+    : next_layer_(std::move(lhs.next_layer_))
+    , use_ssl_(lhs.use_ssl_)
+    , read_mtx_(std::move(lhs.read_mtx_))
+    , write_mtx_(std::move(lhs.write_mtx_))
+    , host_(std::move(lhs.host_))
+    , buffer_(std::move(lhs.buffer_))
+    , ongoing_requests_(std::move(lhs.ongoing_requests_.load()))
+    , keep_alive_set_(std::move(lhs.keep_alive_set_))
+    , endpoint_(std::move(lhs.endpoint_))
     {}
+
+    /// Construct a stream.
+    template<typename ExecutorOrContext>
+    explicit connection(ExecutorOrContext && exec_or_ctx, asio::ssl::context & ctx)
+        : next_layer_(std::forward<ExecutorOrContext>(exec_or_ctx), ctx), use_ssl_{true} {}
+
+    template<typename ExecutionContext>
+    explicit connection(ExecutionContext &context,
+                        typename asio::constraint<
+                            asio::is_convertible<ExecutionContext &, asio::execution_context &>::value
+                        >::type = 0)
+        : next_layer_(
+            context,
+            asio::use_service<detail::ssl_context_service>(context).get()),
+          use_ssl_{false} {}
+
+    explicit connection(asio::any_io_executor exec)
+      : next_layer_(
+      exec,
+      asio::use_service<detail::ssl_context_service>(
+          asio::query(exec, asio::execution::context)
+          ).get()), use_ssl_{false} {}
 
     void connect(endpoint_type ep)
     {
@@ -109,15 +124,14 @@ struct basic_connection : private detail::stream_base
         urls::detail::throw_system_error(ec);
     }
 
-    void connect(endpoint_type ep,
-                 system::error_code & ec);
+    BOOST_REQUESTS_DECL void connect(endpoint_type ep,
+                                     system::error_code & ec);
 
-    template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code)) CompletionToken
-                  BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+    template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code)) CompletionToken>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                        void (boost::system::error_code))
     async_connect(endpoint_type ep,
-                  CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
+                  CompletionToken && completion_token);
 
     void close()
     {
@@ -127,15 +141,14 @@ struct basic_connection : private detail::stream_base
         urls::detail::throw_system_error(ec);
     }
 
-    void close(system::error_code & ec);
+    BOOST_REQUESTS_DECL void close(system::error_code & ec);
 
-    template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code)) CompletionToken
-                 BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+    template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code)) CompletionToken>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                        void (boost::system::error_code))
-    async_close(CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
+    async_close(CompletionToken && completion_token);
 
-    bool is_open() const final
+    bool is_open() const
     {
       return beast::get_lowest_layer(next_layer_).is_open();
     }
@@ -165,13 +178,11 @@ struct basic_connection : private detail::stream_base
         urls::detail::throw_system_error(ec);
     }
 
-    void set_host(core::string_view sv, system::error_code & ec);
+    BOOST_REQUESTS_DECL void set_host(core::string_view sv, system::error_code & ec);
     core::string_view host() const {return host_;}
     constexpr static redirect_mode supported_redirect_mode() {return redirect_mode::endpoint;}
 
     using request_type = request_settings;
-
-    using stream = basic_stream<executor_type>;
 
     template<typename RequestBody>
     auto ropen(beast::http::verb method,
@@ -184,15 +195,7 @@ struct basic_connection : private detail::stream_base
     auto ropen(beast::http::verb method,
                urls::url_view path,
                RequestBody && body,
-               request_settings req) -> stream
-    {
-      boost::system::error_code ec;
-      auto res = ropen(method, path, std::move(body), std::move(req), ec);
-      if (ec)
-        throw_exception(system::system_error(ec, "open"));
-      return res;
-    }
-
+               request_settings req) -> stream;
     template<typename RequestBody>
     auto ropen(http::request<RequestBody> & req,
                request_options opt,
@@ -204,82 +207,69 @@ struct basic_connection : private detail::stream_base
                urls::url_view path,
                http::request<RequestBody> & req,
                request_options opt,
-               cookie_jar * jar) -> stream
-    {
-      boost::system::error_code ec;
-      auto res = ropen(method, path, req, opt, jar, ec);
-      if (ec)
-        throw_exception(system::system_error(ec, "open"));
-      return res;
-    }
+               cookie_jar * jar) -> stream;
 
     template<typename RequestBody,
-             typename CompletionToken
-                  BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+             typename CompletionToken>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                       void (boost::system::error_code,
-                                             typename basic_connection<Stream>::stream))
+                                       void (boost::system::error_code, stream))
     async_ropen(beast::http::verb method,
                 urls::url_view path,
                 RequestBody && body,
                 request_settings req,
-                CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
+                CompletionToken && completion_token);
 
     template<typename RequestBody,
-              typename CompletionToken
-                  BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+              typename CompletionToken>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                        void (boost::system::error_code,
-                                            typename basic_connection<Stream>::stream))
+                                            stream))
     async_ropen(http::request<RequestBody> & req,
                 request_options opt,
-                cookie_jar * jar = nullptr,
-                CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
+                cookie_jar * jar,
+                CompletionToken && completion_token);
 
-    template<typename CompletionToken
-             BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+    template<typename CompletionToken>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                       void (boost::system::error_code, typename basic_connection<Stream>::stream))
+                                       void (boost::system::error_code, stream))
     async_ropen(http::request<http::empty_body> & req,
                 request_options opt,
-                cookie_jar * jar = nullptr,
-                CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
+                cookie_jar * jar,
+                CompletionToken && completion_token);
 
-    template<typename CompletionToken
-             BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+    template<typename CompletionToken>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                       void (boost::system::error_code, typename basic_connection<Stream>::stream))
+                                       void (boost::system::error_code, stream))
     async_ropen(http::request<http::file_body> & req,
                 request_options opt,
-                cookie_jar * jar = nullptr,
-                CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
+                cookie_jar * jar,
+                CompletionToken && completion_token );
 
-    template<typename CompletionToken
-             BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+    template<typename CompletionToken>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                       void (boost::system::error_code, typename basic_connection<Stream>::stream))
+                                       void (boost::system::error_code, stream))
     async_ropen(http::request<http::string_body> & req,
                 request_options opt,
-                cookie_jar * jar = nullptr,
-                CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
+                cookie_jar * jar,
+                CompletionToken && completion_token );
 
-    auto ropen(http::request<http::empty_body>  & req, request_options opt, cookie_jar * jar, system::error_code & ec) -> stream;
-    auto ropen(http::request<http::file_body>   & req, request_options opt, cookie_jar * jar, system::error_code & ec) -> stream;
-    auto ropen(http::request<http::string_body> & req, request_options opt, cookie_jar * jar, system::error_code & ec) -> stream;
+    BOOST_REQUESTS_DECL auto ropen(http::request<http::empty_body>  & req, request_options opt, cookie_jar * jar, system::error_code & ec) -> stream;
+    BOOST_REQUESTS_DECL auto ropen(http::request<http::file_body>   & req, request_options opt, cookie_jar * jar, system::error_code & ec) -> stream;
+    BOOST_REQUESTS_DECL auto ropen(http::request<http::string_body> & req, request_options opt, cookie_jar * jar, system::error_code & ec) -> stream;
+
+    bool uses_ssl() const {return use_ssl_;}
 
   private:
-    template<typename >
-    friend struct basic_connection;
 
     template<typename Body>
     void write_impl(http::request<Body> & req,
                     asem::lock_guard<detail::basic_mutex<executor_type>> & read_lock,
                     system::error_code & ec);
 
-    Stream next_layer_;
-    detail::basic_mutex<executor_type>
-            read_mtx_{next_layer_.get_executor()},
-            write_mtx_{next_layer_.get_executor()};
+    next_layer_type next_layer_;
+    bool use_ssl_{false};
+    asem::mt::mutex read_mtx_{next_layer_.get_executor()},
+                    write_mtx_{next_layer_.get_executor()};
 
     std::string host_;
     beast::flat_buffer buffer_;
@@ -302,36 +292,65 @@ struct basic_connection : private detail::stream_base
     async_ropen_string_op pick_ropen_op(http::string_body *);
     async_ropen_empty_op  pick_ropen_op(http::empty_body  *);
 
-    std::size_t do_read_some_(beast::http::basic_parser<false> & parser) final;
-    std::size_t do_read_some_(beast::http::basic_parser<false> & parser, system::error_code & ec) final;
-    void do_async_read_some_(beast::http::basic_parser<false> & parser, detail::co_token_t<void(system::error_code, std::size_t)>) final;
+    BOOST_REQUESTS_DECL std::size_t do_read_some_(beast::http::basic_parser<false> & parser);
+    BOOST_REQUESTS_DECL std::size_t do_read_some_(beast::http::basic_parser<false> & parser, system::error_code & ec) ;
+    BOOST_REQUESTS_DECL void do_async_read_some_(beast::http::basic_parser<false> & parser, detail::co_token_t<void(system::error_code, std::size_t)>) ;
+    BOOST_REQUESTS_DECL void do_async_close_(detail::co_token_t<void(system::error_code)>);
 
-    void do_close_(system::error_code & ec) final;
-    void do_async_close_(detail::co_token_t<void(system::error_code)>) final;
 
-    keep_alive & get_keep_alive_set_() final
-    {
-      return keep_alive_set_;
-    };
+    friend struct stream;
 };
 
-template<typename Executor = asio::any_io_executor>
-using basic_http_connection  = basic_connection<asio::basic_stream_socket<asio::ip::tcp, Executor>>;
 
-template<typename Executor = asio::any_io_executor>
-using basic_https_connection = basic_connection<asio::ssl::stream<asio::basic_stream_socket<asio::ip::tcp, Executor>>>;
+template <typename Executor1>
+struct connection::rebind_executor<Executor1, void_t<typename Executor1::default_completion_token_type>>
+{
+  using other = defaulted<typename Executor1::default_completion_token_type>;
+};
 
 
-using http_connection  = basic_http_connection<>;
-using https_connection = basic_https_connection<>;
+template<typename Token>
+struct connection::defaulted : connection
+{
+  using default_token = Token;
+  using connection::connection;
+  defaulted(connection && lhs) :  connection(std::move(lhs)) {}
+  using connection::async_connect;
+  using connection::async_close;
+  using connection::async_ropen;
 
-#if !defined(BOOST_REQUESTS_HEADER_ONLY)
-extern template struct basic_connection<asio::ip::tcp::socket>;
-extern template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket>>;
-#endif
+  auto async_connect(endpoint_type ep)
+  {
+    return connection::async_connect(std::move(ep), default_token());
+  }
+  auto async_close()
+  {
+    return connection::async_close(default_token());
+  }
+
+  template<typename RequestBody>
+  auto async_ropen(beast::http::verb method,
+                   urls::url_view path,
+                   RequestBody && body,
+                   request_settings req)
+  {
+    return connection::async_ropen(method, path, std::forward<RequestBody>(body), std::move(req), default_token());
+  }
+
+  template<typename RequestBody>
+  auto async_ropen(http::request<RequestBody> & req,
+                   request_options opt,
+                   cookie_jar * jar = nullptr)
+  {
+    return connection::async_ropen(req, std::move(opt), jar, default_token());
+  }
+
+};
 
 }
 }
+
+#include <boost/requests/stream.hpp>
 
 #include <boost/requests/impl/connection.hpp>
 

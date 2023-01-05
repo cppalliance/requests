@@ -19,7 +19,6 @@
 #include "string_maker.hpp"
 
 #include <boost/asio/experimental/awaitable_operators.hpp>
-#include "extern.hpp"
 
 using namespace boost;
 
@@ -30,18 +29,6 @@ inline std::string httpbin()
     url = p;
   return url;
 }
-
-
-
-TYPE_TO_STRING(requests::http_connection_pool);
-TYPE_TO_STRING(requests::https_connection_pool);
-
-
-using aw_exec = asio::use_awaitable_t<>::executor_with_default<asio::any_io_executor>;
-using aw_http_connection_pool = requests::basic_http_connection_pool<aw_exec>;
-using aw_https_connection_pool = requests::basic_https_connection_pool<aw_exec>;
-
-
 
 
 TEST_SUITE_BEGIN("session");
@@ -284,11 +271,11 @@ asio::awaitable<void> async_http_pool_request()
 {
   auto url = httpbin();
   using exec_t = typename asio::use_awaitable_t<>::executor_with_default<asio::any_io_executor>;
-  requests::basic_session<exec_t> hc{co_await asio::this_coro::executor};
+  requests::session::defaulted<asio::use_awaitable_t<>> hc{co_await asio::this_coro::executor};
   hc.options().enforce_tls = false;
   hc.options().max_redirects = 3;
 
-  auto headers = [](requests::basic_session<exec_t> & hc, core::string_view url) -> asio::awaitable<void>
+  auto headers = [](requests::session::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     auto hdr = co_await async_request(hc,
         beast::http::verb::get, u("/headers"),
@@ -300,7 +287,7 @@ asio::awaitable<void> async_http_pool_request()
     CHECK(hd.at("Test-Header") == json::value("it works"));
   };
 
-  auto get_ = [](requests::basic_session<exec_t> & hc, core::string_view url) -> asio::awaitable<void>
+  auto get_ = [](requests::session::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     auto h = requests::headers({{"Test-Header", "it works"}});
     auto hdr = co_await async_get(hc, u("/get"), h);
@@ -312,7 +299,7 @@ asio::awaitable<void> async_http_pool_request()
   };
 
 
-  auto get_redirect = [](requests::basic_session<exec_t> & hc, core::string_view url) -> asio::awaitable<void>
+  auto get_redirect = [](requests::session::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     auto h = requests::headers({{"Test-Header", "it works"}});
     auto hdr = co_await async_get(hc, u("/redirect-to?url=%2Fget"), h);
@@ -326,7 +313,7 @@ asio::awaitable<void> async_http_pool_request()
     CHECK(hd.at("Test-Header") == json::value("it works"));
   };
 
-  auto too_many_redirects = [](requests::basic_session<exec_t> & hc, core::string_view url) -> asio::awaitable<void>
+  auto too_many_redirects = [](requests::session::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     system::error_code ec;
 
@@ -338,7 +325,7 @@ asio::awaitable<void> async_http_pool_request()
   };
 
 
-  auto download = [](requests::basic_session<exec_t> & hc, core::string_view url) -> asio::awaitable<void>
+  auto download = [](requests::session::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     auto pt = std::filesystem::temp_directory_path();
 
@@ -358,7 +345,7 @@ asio::awaitable<void> async_http_pool_request()
   };
 
 
-  auto download_redirect = [](requests::basic_session<exec_t> & hc, core::string_view url) -> asio::awaitable<void>
+  auto download_redirect = [](requests::session::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     const auto target = std::filesystem::temp_directory_path() / "requests-test-2.png";
     if (std::filesystem::exists(target))
@@ -379,7 +366,7 @@ asio::awaitable<void> async_http_pool_request()
   };
 
 
-  auto download_too_many_redirects = [](requests::basic_session<exec_t> & hc, core::string_view url) -> asio::awaitable<void>
+  auto download_too_many_redirects = [](requests::session::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     system::error_code ec;
     const auto target = std::filesystem::temp_directory_path() / "requests-test.html";
@@ -397,7 +384,7 @@ asio::awaitable<void> async_http_pool_request()
   };
 
 
-  auto delete_ = [](requests::basic_session<exec_t> & hc, core::string_view url) -> asio::awaitable<void>
+  auto delete_ = [](requests::session::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     json::value v{{"test-key", "test-value"}};
     auto hdr = co_await async_delete(hc, u("/delete"), v, {});
@@ -407,7 +394,7 @@ asio::awaitable<void> async_http_pool_request()
     CHECK(js.at("headers").at("Content-Type") == "application/json");
   };
 
-  auto patch_json = [](requests::basic_session<exec_t> & hc, core::string_view url) -> asio::awaitable<void>
+  auto patch_json = [](requests::session::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     json::value msg {{"test-key", "test-value"}};
     auto hdr = co_await async_patch(hc, u("/patch"), msg, {});
@@ -418,7 +405,7 @@ asio::awaitable<void> async_http_pool_request()
     CHECK(js.at("json") == msg);
   };
 
-  auto patch_form = [](requests::basic_session<exec_t> & hc, core::string_view url) -> asio::awaitable<void>
+  auto patch_form = [](requests::session::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     requests::form f{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}};
     auto hdr = co_await async_patch(hc, u("/patch"), f, {});
@@ -429,7 +416,7 @@ asio::awaitable<void> async_http_pool_request()
     CHECK(js.at("form") == json::value{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}});
   };
 
-  auto put_json = [](requests::basic_session<exec_t> & hc, core::string_view url) -> asio::awaitable<void>
+  auto put_json = [](requests::session::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     json::value msg {{"test-key", "test-value"}};
     auto hdr = co_await async_put(hc, u("/put"), msg, {});
@@ -440,7 +427,7 @@ asio::awaitable<void> async_http_pool_request()
     CHECK(js.at("json") == msg);
   };
 
-  auto put_form = [](requests::basic_session<exec_t> & hc, core::string_view url) -> asio::awaitable<void>
+  auto put_form = [](requests::session::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     requests::form f{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}};
     auto hdr = co_await async_put(hc, u("/put"), f, {});
@@ -451,7 +438,7 @@ asio::awaitable<void> async_http_pool_request()
     CHECK(js.at("form") == json::value{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}});
   };
 
-  auto post_json = [](requests::basic_session<exec_t> & hc, core::string_view url) -> asio::awaitable<void>
+  auto post_json = [](requests::session::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     json::value msg {{"test-key", "test-value"}};
 
@@ -463,7 +450,7 @@ asio::awaitable<void> async_http_pool_request()
     CHECK(js.at("json") == msg);
   };
 
-  auto post_form = [](requests::basic_session<exec_t> & hc, core::string_view url) -> asio::awaitable<void>
+  auto post_form = [](requests::session::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     requests::form f = {{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}};
     auto hdr = co_await async_post(hc, u("/post"), f, {});

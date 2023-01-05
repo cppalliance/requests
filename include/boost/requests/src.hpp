@@ -33,6 +33,7 @@
 #include <boost/requests/impl/request_settings.ipp>
 #include <boost/requests/impl/response.ipp>
 #include <boost/requests/impl/session.ipp>
+#include <boost/requests/impl/stream.ipp>
 #include <boost/requests/rfc/impl/dates.ipp>
 #include <boost/requests/rfc/impl/link.ipp>
 #include <boost/requests/rfc/impl/quoted_string.ipp>

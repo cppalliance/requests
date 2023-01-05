@@ -20,7 +20,6 @@
 
 #include <boost/asio/ssl/host_name_verification.hpp>
 #include <boost/asio/experimental/awaitable_operators.hpp>
-#include "extern.hpp"
 
 using namespace boost;
 

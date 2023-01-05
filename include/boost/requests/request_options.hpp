@@ -15,7 +15,7 @@ struct request_options {
   /// Only allow SSL requests
   bool enforce_tls{true};
   /// The allowed redirect mode.
-  redirect_mode redirect{private_domain};
+  redirect_mode redirect{redirect_mode::private_domain};
   /// The maximum of allowed redirectse
   std::size_t max_redirects{12};
 };

@@ -16,97 +16,33 @@ namespace requests {
 
 namespace detail {
 
-template<typename T>
-struct endpoint_hash;
-
-template<typename Protocol>
-struct endpoint_hash<asio::ip::basic_endpoint<Protocol>>
+struct endpoint_hash
 {
-  std::size_t operator()(const asio::ip::basic_endpoint<Protocol> & be) const
+  std::size_t operator()(const asio::generic::stream_protocol::endpoint & be) const
   {
-    const auto a = be.address();
-    std::size_t res{be.port()};
-    hash_combine(res,
-                 a.is_v6()
-                  ? hash_value(a.to_v6().to_bytes())
-                  : hash_value(a.to_v4().to_bytes()));
-    return res;
+    return hash_range(reinterpret_cast<const char*>(be.data()), // yuk
+                      reinterpret_cast<const char*>(be.data()) + be.size());
   }
 };
 
-
-template<typename Protocol>
-struct endpoint_hash<asio::local::basic_endpoint<Protocol>>
-{
-  std::size_t operator()(const asio::local::basic_endpoint<Protocol> & be) const
-  {
-    return hash_range(be.data(), be.data() + be.size());
-  }
-};
-
-
-template<bool>
-struct ssl_base
-{
-protected:
-  ssl_base () = default;
-
-  template<typename Connection, typename Executor>
-  std::shared_ptr<Connection> make_connection_(Executor exec)
-  {
-    return std::make_shared<Connection>(std::move(exec));
-  }
-
-  template<typename Connection, typename Allocator, typename Executor>
-  std::shared_ptr<Connection> allocate_connection_(Allocator alloc, Executor exec)
-  {
-    return std::allocate_shared<Connection>(std::move(alloc), std::move(exec));
-  }
-
-};
-
-template<>
-struct ssl_base<true>
-{
-  asio::ssl::context & ssl_context() const
-  {
-    return context_;
-  }
-protected:
-  ssl_base(asio::ssl::context & context) : context_(context) {}
-
-  template<typename Connection, typename Executor>
-  std::shared_ptr<Connection> make_connection_(Executor exec)
-  {
-    return std::make_shared<Connection>(std::move(exec), context_);
-  }
-
-  template<typename Connection, typename Allocator, typename Executor>
-  std::shared_ptr<Connection> allocate_connection_(Allocator alloc, Executor exec)
-  {
-    return std::allocate_shared<Connection>(std::move(alloc), std::move(exec), context_);
-  }
-private:
-  asio::ssl::context & context_;
-};
 
 }
 
-template<typename Stream>
-struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
+struct connection_pool
 {
     /// The type of the executor associated with the object.
-    typedef typename Stream::executor_type executor_type;
+    typedef asio::any_io_executor executor_type;
 
-    /// The type of the underlying connection.
-    typedef basic_connection<Stream> connection_type;
+    /// This type with a defaulted completion token.
+    template<typename Token>
+    struct defaulted;
 
     /// Rebinds the socket type to another executor.
     template<typename Executor1>
     struct rebind_executor
     {
         /// The socket type when rebound to the specified executor.
-        typedef basic_connection_pool<typename Stream::template rebind_executor<Executor1>::other> other;
+        using other = connection_pool;
     };
 
     /// Get the executor
@@ -116,13 +52,10 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
     }
 
     /// The protocol-type of the lowest layer.
-    using protocol_type = typename connection_type::protocol_type;
+    using protocol_type = asio::generic::stream_protocol;
 
     /// The endpoint of the lowest lowest layer.
-    using endpoint_type = typename connection_type::endpoint_type;
-
-    /// The reolver_type of the lower layer.
-    using resolver_type = typename protocol_type::resolver::template rebind_executor<executor_type>::other;
+    using endpoint_type = typename protocol_type::endpoint;
 
     /// Construct a stream.
     /**
@@ -130,10 +63,24 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
      *
      * Everything else will be default constructed
      */
-    template<typename Exec, typename = std::enable_if_t<!detail::has_ssl_v<Stream>, Exec>>
-    explicit basic_connection_pool(Exec && exec,
-                                   std::size_t limit = BOOST_REQUESTS_DEFAULT_POOL_SIZE)
-        : mutex_(std::forward<Exec>(exec)), limit_(limit) {}
+    explicit connection_pool(asio::any_io_executor exec,
+                             std::size_t limit = BOOST_REQUESTS_DEFAULT_POOL_SIZE)
+        : use_ssl_(false),
+          context_(
+              asio::use_service<detail::ssl_context_service>(
+                  asio::query(exec, asio::execution::context)
+              ).get()), mutex_(exec), limit_(limit) {}
+
+    template<typename ExecutionContext>
+    explicit connection_pool(ExecutionContext &context,
+                             typename asio::constraint<
+                                 asio::is_convertible<ExecutionContext &, asio::execution_context &>::value,
+                                 std::size_t
+                             >::type limit = BOOST_REQUESTS_DEFAULT_POOL_SIZE)
+        : use_ssl_(false),
+          context_(
+              asio::use_service<detail::ssl_context_service>(context).get()),
+              mutex_(context), limit_(limit) {}
 
     /// Construct a stream.
     /**
@@ -141,41 +88,29 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
      *
      * Everything else will be default constructed
      */
-    template<typename Exec, typename = std::enable_if_t<detail::has_ssl_v<Stream>, Exec>>
-    explicit basic_connection_pool(Exec && exec,
-                                   asio::ssl::context & ctx,
-                                   std::size_t limit = BOOST_REQUESTS_DEFAULT_POOL_SIZE)
-        : detail::ssl_base<true>(ctx), mutex_(std::forward<Exec>(exec)), limit_(limit) {}
+    template<typename Exec>
+    explicit connection_pool(Exec && exec,
+                             asio::ssl::context & ctx,
+                             std::size_t limit = BOOST_REQUESTS_DEFAULT_POOL_SIZE)
+        : use_ssl_(true), context_(ctx), mutex_(std::forward<Exec>(exec)), limit_(limit) {}
 
     /// Move constructor
-    basic_connection_pool(basic_connection_pool && ) = default;
+    connection_pool(connection_pool && ) = default;
 
-    /// rebind constructor.
-    template<typename Exec>
-    basic_connection_pool(basic_connection_pool<Exec> && lhs)
-        : detail::ssl_base<detail::has_ssl_v<Stream>>(lhs),
-          mutex_(std::move(lhs.mutex_)),
-          host_(std::move(lhs.host_)),
-          endpoints_(std::move(lhs.endpoints_)),
-          limit_(lhs.limit_),
-          conns_(std::move(lhs.conns_))
-    {}
-
-    void lookup(urls::authority_view av)
+    void lookup(urls::url_view av)
     {
       boost::system::error_code ec;
       lookup(av, ec);
       if (ec)
         urls::detail::throw_system_error(ec);
     }
-    void lookup(urls::authority_view sv, system::error_code & ec);
+    BOOST_REQUESTS_DECL void lookup(urls::url_view sv, system::error_code & ec);
 
-    template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code)) CompletionToken
-                  BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+    template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code)) CompletionToken>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                        void (boost::system::error_code))
-    async_lookup(urls::authority_view av,
-                 CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
+    async_lookup(urls::url_view av,
+                 CompletionToken && completion_token );
 
 
     std::size_t limit() const {return limit_;}
@@ -183,8 +118,8 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
 
     using request_type = request_settings;
 
-    std::shared_ptr<connection_type> get_connection(error_code & ec);
-    std::shared_ptr<connection_type> get_connection()
+    BOOST_REQUESTS_DECL std::shared_ptr<connection> get_connection(error_code & ec);
+    std::shared_ptr<connection> get_connection()
     {
       boost::system::error_code ec;
       auto res = get_connection(ec);
@@ -193,22 +128,22 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
       return res;
     }
 
-    template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (system::error_code, std::shared_ptr<connection_type>)) CompletionToken>
+    template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (system::error_code, std::shared_ptr<connection>)) CompletionToken>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (system::error_code, std::shared_ptr<connection_type>))
-      async_get_connection(CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
+      async_get_connection(CompletionToken && completion_token);
 
     template<typename RequestBody>
     auto ropen(beast::http::verb method,
                urls::url_view path,
                RequestBody && body,
                request_settings req,
-               system::error_code & ec) -> typename connection_type::stream
+               system::error_code & ec) -> stream
     {
       auto conn = get_connection(ec);
       if (!ec && conn == nullptr)
         BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::not_found);
       if (ec)
-        return typename connection_type::stream{get_executor(), nullptr};
+        return stream{get_executor(), nullptr};
 
       BOOST_ASSERT(conn != nullptr);
       return conn->ropen(method, path, std::forward<RequestBody>(body), std::move(req), ec);
@@ -218,7 +153,7 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
     auto ropen(beast::http::verb method,
                urls::url_view path,
                RequestBody && body,
-               request_settings req) -> typename connection_type::stream
+               request_settings req) -> stream
     {
       boost::system::error_code ec;
       auto res = ropen(method, path, std::move(body), std::move(req), ec);
@@ -237,7 +172,7 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
       if (!ec && conn == nullptr)
         BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::not_found);
       if (ec)
-        return typename connection_type::stream{get_executor(), nullptr};
+        return stream{get_executor(), nullptr};
 
       BOOST_ASSERT(conn != nullptr);
       return conn->ropen(req, opt, jar, ec);
@@ -259,39 +194,38 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
 
 
     template<typename RequestBody,
-             typename CompletionToken
-                  BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+             typename CompletionToken>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                       void (boost::system::error_code,
-                                            typename connection_type::stream))
+                                       void (boost::system::error_code, stream))
     async_ropen(beast::http::verb method,
                 urls::url_view path,
                 RequestBody && body,
                 request_settings req,
-                CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
+                CompletionToken && completion_token);
 
     template<typename RequestBody,
-              typename CompletionToken
-                  BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+              typename CompletionToken>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                       void (boost::system::error_code,
-                                            typename basic_connection<Stream>::stream))
+                                       void (boost::system::error_code, stream))
     async_ropen(http::request<RequestBody> & req,
                 request_options opt,
-                cookie_jar * jar = nullptr,
-                CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type));
+                cookie_jar * jar,
+                CompletionToken && completion_token);
 
-    using stream = typename connection_type::stream;
+    bool uses_ssl() const {return use_ssl_;}
+
   private:
-    detail::basic_mutex<executor_type> mutex_;
+    asio::ssl::context & context_;
+    bool use_ssl_{false};
+    asem::mt::mutex mutex_;
     std::string host_;
     std::vector<endpoint_type> endpoints_;
     std::size_t limit_;
     std::size_t connecting_{0u};
 
     boost::unordered_multimap<endpoint_type,
-                              std::shared_ptr<connection_type>,
-                              detail::endpoint_hash<endpoint_type>> conns_;
+                              std::shared_ptr<connection>,
+                              detail::endpoint_hash> conns_;
 
     struct async_lookup_op;
     struct async_get_connection_op;
@@ -303,21 +237,46 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
     struct async_ropen_op_1;
 };
 
-template<typename Executor = asio::any_io_executor>
-using basic_http_connection_pool  = basic_connection_pool<asio::basic_stream_socket<asio::ip::tcp, Executor>>;
+template<typename Token>
+struct connection_pool::defaulted : connection_pool
+{
+  using default_token = Token;
+  using connection_pool::connection_pool;
 
-template<typename Executor = asio::any_io_executor>
-using basic_https_connection_pool = basic_connection_pool<asio::ssl::stream<asio::basic_stream_socket<asio::ip::tcp, Executor>>>;
+  auto async_lookup(urls::url_view av)
+  {
+    return connection_pool::async_lookup(av, default_token());
+  }
+
+  auto
+  async_get_connection()
+  {
+    return connection_pool::async_get_connection(default_token());
+  }
+  using connection_pool::async_lookup;
+  using connection_pool::async_get_connection;
+  using connection_pool::async_ropen;
 
 
-using http_connection_pool  = basic_http_connection_pool<>;
-using https_connection_pool = basic_https_connection_pool<>;
+  template<typename RequestBody>
+  auto async_ropen(beast::http::verb method,
+                   urls::url_view path,
+                   RequestBody && body,
+                   request_settings req)
+  {
+    return connection_pool::async_ropen(method, path, std::forward<RequestBody>(body), std::move(req), default_token());
+  }
 
+  template<typename RequestBody>
+  auto async_ropen(http::request<RequestBody> & req,
+                   request_options opt,
+                   cookie_jar * jar = nullptr)
+  {
+    return connection_pool::async_ropen(req, std::move(opt), jar, default_token());
+  }
 
-#if !defined(BOOST_REQUESTS_HEADER_ONLY)
-extern template struct basic_connection_pool<asio::ip::tcp::socket>;
-extern template struct basic_connection_pool<asio::ssl::stream<asio::ip::tcp::socket>>;
-#endif
+};
+
 
 }
 }

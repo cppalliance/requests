@@ -19,7 +19,7 @@ namespace requests
 struct session_service : asio::detail::execution_context_service_base<session_service>
 {
   using executor_type = asio::any_io_executor;
-  using session_type = basic_session<executor_type>;
+  using session_type = session;
 
   session_service(asio::execution_context & ctx)
       : asio::detail::execution_context_service_base<session_service>(ctx)

@@ -16,7 +16,70 @@
 namespace boost {
 namespace requests {
 
-template struct basic_session<asio::any_io_executor>;
+auto session::make_request_(http::fields fields) -> requests::request_settings
+{
+  return requests::request_settings{
+      std::move(fields),
+      options_,
+      &jar_
+  };
+}
+
+urls::url session::normalize_(urls::url_view in)
+{
+  urls::url res;
+  if (!in.has_scheme() || in.scheme() == "https")
+  {
+    res.set_scheme("https");
+    res.set_encoded_host(in.encoded_host());
+    if (in.has_port())
+      res.set_port(in.port());
+    return res;
+  }
+  else if (in.scheme() == "http")
+  {
+    res.set_scheme("http");
+    res.set_encoded_host(in.encoded_host());
+    if (in.has_port())
+      res.set_port(in.port());
+    return res;
+  }
+  else
+    return in; // just do some invalid shit
+}
+
+
+auto
+session::get_pool(urls::url_view url, error_code & ec) -> std::shared_ptr<connection_pool>
+{
+  // can be optimized to ellide the string allocation, blabla (pmr?)
+  char buf[1024];
+  container::pmr::monotonic_buffer_resource res{buf, sizeof(buf)};
+  using alloc = container::pmr::polymorphic_allocator<char>;
+  using str = std::basic_string<char, std::char_traits<char>, alloc>;
+  auto host_key = normalize_(url);
+
+  const auto is_https = (url.scheme_id() == urls::scheme::https)
+                        || (url.scheme_id() == urls::scheme::wss);
+  auto lock = asem::lock(mutex_, ec);
+  if (ec)
+    return std::shared_ptr<connection_pool>();
+
+  auto itr = pools_.find(host_key);
+  if (itr != pools_.end())
+    return itr->second;
+  else
+  {
+    auto p = std::make_shared<connection_pool>(get_executor(), sslctx_);
+    p->lookup(host_key, ec);
+    if (!ec)
+    {
+      pools_.emplace(host_key, p);
+      return p;
+    }
+  }
+  return nullptr;
+}
 
 }
 }

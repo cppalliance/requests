@@ -823,7 +823,7 @@ struct async_request_json_op : asio::coroutine
 
   using completion_signature_type = void(system::error_code, response<Value>);
   using step_signature_type       = void(system::error_code, variant2::variant<variant2::monostate,
-                                                                               typename Connection::stream, value>);
+                                                                               stream, value>);
 
   Connection & conn;
   http::verb method;
@@ -831,7 +831,7 @@ struct async_request_json_op : asio::coroutine
   RequestBody && request_body;
   typename Connection::request_type req;
   json::storage_ptr ptr{req.get_allocator().resource()};
-  optional<typename Connection::stream> str_;
+  optional<stream> str_;
 
   response<Value> rb{req.get_allocator()};
 
@@ -855,7 +855,7 @@ struct async_request_json_op : asio::coroutine
 
   response<Value> & resume(requests::detail::co_token_t<step_signature_type> self,
                          system::error_code & ec,
-                         variant2::variant<variant2::monostate, typename Connection::stream, value> s)
+                         variant2::variant<variant2::monostate, stream, value> s)
   {
     reenter(this)
     {
@@ -892,7 +892,7 @@ struct async_request_optional_json_op : asio::coroutine
   executor_type get_executor() {return conn.get_executor(); }
 
   using completion_signature_type = void(system::error_code, response<optional<Value>>);
-  using step_signature_type       = void(system::error_code, variant2::variant<variant2::monostate, typename Connection::stream, optional<value>>);
+  using step_signature_type       = void(system::error_code, variant2::variant<variant2::monostate, stream, optional<value>>);
 
   Connection & conn;
   http::verb method;
@@ -900,7 +900,7 @@ struct async_request_optional_json_op : asio::coroutine
   RequestBody && request_body;
   typename Connection::request_type req;
   json::storage_ptr ptr{req.get_allocator().resource()};
-  optional<typename Connection::stream> str_;
+  optional<stream> str_;
 
   response<optional<Value>> rb{req.get_allocator()};
 
@@ -915,7 +915,7 @@ struct async_request_optional_json_op : asio::coroutine
 
   response<optional<Value>> & resume(requests::detail::co_token_t<step_signature_type> self,
                           system::error_code & ec,
-                          variant2::variant<variant2::monostate, typename Connection::stream, optional<value>> s)
+                          variant2::variant<variant2::monostate, stream, optional<value>> s)
   {
     reenter(this)
     {
@@ -956,7 +956,7 @@ BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_c
 async_get(Connection & conn,
           urls::url_view target,
           typename Connection::request_type req = {},
-          CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
+          CompletionToken && completion_token = typename Connection::default_token())
 {
   return requests::detail::co_run<detail::async_request_json_op<
       Connection, Value>>(std::forward<CompletionToken>(completion_token),
@@ -973,7 +973,7 @@ async_post(Connection & conn,
            urls::url_view target,
            RequestBody && request_body,
            typename Connection::request_type req = {},
-           CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
+           CompletionToken && completion_token = typename Connection::default_token())
 {
   return requests::detail::co_run<detail::async_request_json_op<
       Connection, Value, std::decay_t<RequestBody>>>(std::forward<CompletionToken>(completion_token),
@@ -991,7 +991,7 @@ async_patch(Connection & conn,
            urls::url_view target,
            RequestBody && request_body,
            typename Connection::request_type req = {},
-           CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
+           CompletionToken && completion_token = typename Connection::default_token())
 {
   return requests::detail::co_run<detail::async_request_json_op<
        Connection, Value, std::decay_t<RequestBody>>>(std::forward<CompletionToken>(completion_token),
@@ -1008,7 +1008,7 @@ async_put(Connection & conn,
           urls::url_view target,
           RequestBody && request_body,
           typename Connection::request_type req = {},
-          CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
+          CompletionToken && completion_token = typename Connection::default_token())
 {
   return requests::detail::co_run<detail::async_request_optional_json_op<
       Connection, Value, std::decay_t<RequestBody>>>(std::forward<CompletionToken>(completion_token),
@@ -1026,7 +1026,7 @@ async_delete(Connection & conn,
             urls::url_view target,
             RequestBody && request_body,
             typename Connection::request_type req = {},
-            CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
+            CompletionToken && completion_token = typename Connection::default_token())
 {
   return requests::detail::co_run<detail::async_request_json_op<
       Connection, Value, std::decay_t<RequestBody>>>(std::forward<CompletionToken>(completion_token),
@@ -1043,7 +1043,7 @@ BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_c
 async_delete(Connection & conn,
              urls::url_view target,
              typename Connection::request_type req = {},
-             CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
+             CompletionToken && completion_token = typename Connection::default_token())
 {
   return requests::detail::co_run<detail::async_request_json_op<
       Connection, Value>>(std::forward<CompletionToken>(completion_token),
@@ -1059,7 +1059,7 @@ BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_c
 async_options(Connection & conn,
               urls::url_view target,
               typename Connection::request_type req = {},
-              CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Connection::executor_type))
+              CompletionToken && completion_token = typename Connection::default_token())
 {
   return requests::detail::co_run<detail::async_request_json_op<
       Connection, Value>>(std::forward<CompletionToken>(completion_token),

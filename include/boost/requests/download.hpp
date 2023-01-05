@@ -325,14 +325,14 @@ struct async_download_op : asio::coroutine
       : conn(*conn), target(target), req(std::move(req)), download_path(std::move(download_path)) {}
 
   download_response rb{req.get_allocator()};
-  optional<typename Connection::stream> str_;
+  optional<stream> str_;
 
   using completion_signature_type = void(system::error_code, download_response);
-  using step_signature_type       = void(system::error_code, optional<typename Connection::stream>);
+  using step_signature_type       = void(system::error_code, optional<stream>);
 
   download_response & resume(requests::detail::co_token_t<step_signature_type> self,
                           system::error_code & ec,
-                          optional<typename Connection::stream> s = none)
+                          optional<stream> s = none)
   {
     reenter(this)
     {
@@ -368,13 +368,13 @@ struct async_download_op : asio::coroutine
 
 template<typename Connection,
          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, download_response)) CompletionToken
-              BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(typename Connection::executor_type)>
+              = typename Connection::default_token>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, download_response))
 async_download(Connection & conn,
                urls::url_view target,
                typename Connection::request_type req,
                filesystem::path download_path,
-               CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(typename Connection::executor_type))
+               CompletionToken && completion_token = typename Connection::default_token())
 {
   return detail::co_run<detail::async_download_op<Connection>>(
           std::forward<CompletionToken>(completion_token),

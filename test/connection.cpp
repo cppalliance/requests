@@ -18,7 +18,6 @@
 
 #include "doctest.h"
 #include "string_maker.hpp"
-#include "extern.hpp"
 
 using namespace boost;
 
@@ -31,53 +30,10 @@ inline std::string httpbin()
 }
 
 
-TYPE_TO_STRING(requests::http_connection);
-TYPE_TO_STRING(requests::https_connection);
-
-
-using aw_exec = asio::use_awaitable_t<>::executor_with_default<asio::any_io_executor>;
-using aw_http_connection = requests::basic_http_connection<aw_exec>;
-using aw_https_connection = requests::basic_https_connection<aw_exec>;
-
-TYPE_TO_STRING(aw_http_connection);
-TYPE_TO_STRING(aw_https_connection);
-
 
 TEST_SUITE_BEGIN("connection");
 
-TEST_CASE("ssl-detect")
-{
-  asio::io_context ctx;
-  asio::ssl::context sslctx{asio::ssl::context::tlsv11};
-
-
-  requests::http_connection conn{ctx};
-  requests::https_connection sconn{ctx, sslctx};
-
-  CHECK(requests::detail::get_ssl_layer(conn) == nullptr);
-  CHECK(requests::detail::get_ssl_layer(sconn) == &sconn.next_layer());
-}
-
-template<typename Stream, typename Exec>
-auto make_conn_impl(Exec && exec, asio::ssl::context & sslctx, std::false_type)
-{
-  return Stream(exec);
-}
-
-template<typename Stream, typename Exec>
-auto make_conn_impl(Exec && exec, asio::ssl::context & sslctx, std::true_type)
-{
-  return Stream(exec, sslctx);
-}
-
-
-template<typename Stream, typename Exec>
-auto make_conn(Exec && exec, asio::ssl::context & sslctx)
-{
-  return make_conn_impl<Stream>(std::forward<Exec>(exec), sslctx, requests::detail::has_ssl<Stream>{});
-}
-
-TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, requests::https_connection)
+void http_request_connection(bool https)
 {
   auto url = httpbin();
 
@@ -88,10 +44,10 @@ TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, reques
   sslctx.set_verify_mode(asio::ssl::verify_peer);
   sslctx.set_default_verify_paths();
 
-  Conn hc = make_conn<Conn>(ctx.get_executor(), sslctx);
+  auto hc = https ? requests::connection(ctx.get_executor(), sslctx) : requests::connection(ctx.get_executor());
   hc.set_host(url);
   asio::ip::tcp::resolver rslvr{ctx};
-  auto ep = *rslvr.resolve(url, requests::detail::has_ssl_v<Conn> ? "https" : "http").begin();
+  asio::ip::tcp::endpoint ep = *rslvr.resolve(url, https ? "https" : "http").begin();
 
   hc.connect(ep);
 
@@ -187,7 +143,7 @@ TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, reques
   SUBCASE("too-many-redirects")
   {
     system::error_code ec;
-    auto res = get(hc, urls::url_view("/redirect/10"), {{}, {false, requests::private_domain, 5}}, ec);
+    auto res = get(hc, urls::url_view("/redirect/10"), {{}, {false, requests::redirect_mode::private_domain, 5}}, ec);
     CHECK(res.history.size() == 5);
     CHECK(res.headers.begin() == res.headers.end());
     CHECK(ec == requests::error::too_many_redirects);
@@ -238,7 +194,7 @@ TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, reques
     const auto target = std::filesystem::temp_directory_path() / "requests-test.html";
     if (std::filesystem::exists(target))
       std::filesystem::remove(target);
-    auto res = download(hc,  urls::url_view("/redirect/10"), {{}, {false, requests::private_domain, 3}}, target.string(), ec);
+    auto res = download(hc,  urls::url_view("/redirect/10"), {{}, {false, requests::redirect_mode::private_domain, 3}}, target.string(), ec);
     CHECK(res.history.size() == 3);
 
     CHECK(res.headers.begin() == res.headers.end());
@@ -327,38 +283,44 @@ TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, reques
   }
 }
 
+TEST_CASE("sync-connection-request")
+{
+  SUBCASE("http") { http_request_connection(false);}
+  SUBCASE("https") { http_request_connection(true);}
+}
 
-
-template<typename Conn>
-asio::awaitable<void> async_https_request()
+asio::awaitable<void> async_connection_request(bool https)
 {
   auto url = httpbin();
-
   asio::ssl::context sslctx{asio::ssl::context_base::tls_client};
 
   sslctx.set_verify_mode(asio::ssl::verify_peer);
   sslctx.set_default_verify_paths();
 
-  auto hc = make_conn<Conn>(co_await asio::this_coro::executor, sslctx);
+  requests::connection::defaulted<asio::use_awaitable_t<>> hc =
+            https ? requests::connection(co_await asio::this_coro::executor, sslctx) :
+                    requests::connection(co_await asio::this_coro::executor);
+  CHECK(hc.uses_ssl() == https);
   hc.set_host(url);
   asio::ip::tcp::resolver rslvr{co_await asio::this_coro::executor};
-  auto ep = *rslvr.resolve(url, requests::detail::has_ssl_v<Conn> ? "https" : "http").begin();
+  asio::ip::tcp::endpoint ep = *rslvr.resolve(url, https ? "https" : "http").begin();
+
   co_await hc.async_connect(ep);
 
-  auto headers = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
+  auto headers = [](requests::connection::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     requests::request_settings r{requests::headers({{"Test-Header", "it works"}}), {false}};
+
     auto hdr = co_await async_request(hc,
         beast::http::verb::get, urls::url_view("/headers"),
         requests::empty{}, r);
-
     auto hd = as_json(hdr).at("headers");
 
     CHECK(hd.at("Host")        == json::value(url));
     CHECK(hd.at("Test-Header") == json::value("it works"));
   };
 
-  auto get_ = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
+  auto get_ = [](requests::connection::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     requests::request_settings r{requests::headers({{"Test-Header", "it works"}}), {false}};
     auto hdr = co_await async_get(hc, urls::url_view("/get"), r);
@@ -369,9 +331,10 @@ asio::awaitable<void> async_https_request()
     CHECK(hd.at("Test-Header") == json::value("it works"));
   };
 
-  auto stream = [](Conn  & hc, core::string_view url) -> asio::awaitable<void>
+  auto stream = [](requests::connection::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
-    auto str = co_await hc.async_ropen(beast::http::verb::get, urls::url_view("/get"), requests::empty{},
+    requests::stream::defaulted<asio::use_awaitable_t<>> str =
+                co_await hc.async_ropen(beast::http::verb::get, urls::url_view("/get"), requests::empty{},
                                        {requests::headers({{"Test-Header", "it works"}}), {false}});
 
     json::stream_parser sp;
@@ -393,9 +356,10 @@ asio::awaitable<void> async_https_request()
   };
 
 
-  auto stream_full = [](Conn  & hc, core::string_view url) -> asio::awaitable<void>
+  auto stream_full = [](requests::connection::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
-    auto str = co_await hc.async_ropen(beast::http::verb::get, urls::url_view("/get"), requests::empty{},
+    requests::stream::defaulted<asio::use_awaitable_t<>> str =
+          co_await hc.async_ropen(beast::http::verb::get, urls::url_view("/get"), requests::empty{},
                                        {requests::headers({{"Test-Header", "it works"}}), {false}});
 
     std::string ss;
@@ -411,15 +375,16 @@ asio::awaitable<void> async_https_request()
     CHECK(hd.at("Test-Header") == json::value("it works"));
   };
 
-  auto stream_dump = [](Conn  & hc, core::string_view url) -> asio::awaitable<void>
+  auto stream_dump = [](requests::connection::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
-    auto str = co_await  hc.async_ropen(beast::http::verb::get, urls::url_view("/get"), requests::empty{},
+    requests::stream::defaulted<asio::use_awaitable_t<>> str =
+              co_await hc.async_ropen(beast::http::verb::get, urls::url_view("/get"), requests::empty{},
                                        {requests::headers({{"Test-Header", "it works"}}), {false}});
     co_await str.async_dump();
 
   };
 
-  auto get_redirect = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
+  auto get_redirect = [](requests::connection::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     requests::request_settings r{requests::headers({{"Test-Header", "it works"}}), {false}};
     auto hdr = co_await async_get(hc, urls::url_view("/redirect-to?url=%2Fget"), r);
@@ -433,10 +398,10 @@ asio::awaitable<void> async_https_request()
     CHECK(hd.at("Test-Header") == json::value("it works"));
   };
 
-  auto too_many_redirects = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
+  auto too_many_redirects = [](requests::connection::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     system::error_code ec;
-    requests::request_settings r{{}, {false, requests::private_domain, 5}};
+    requests::request_settings r{{}, {false, requests::redirect_mode::private_domain, 5}};
 
     auto res = co_await async_get(hc, urls::url_view("/redirect/10"), r,
                                   asio::redirect_error(asio::use_awaitable, ec));
@@ -446,7 +411,7 @@ asio::awaitable<void> async_https_request()
   };
 
 
-  auto download = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
+  auto download = [](requests::connection::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     auto pt = std::filesystem::temp_directory_path();
 
@@ -467,7 +432,7 @@ asio::awaitable<void> async_https_request()
   };
 
 
-  auto download_redirect = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
+  auto download_redirect = [](requests::connection::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     const auto target = std::filesystem::temp_directory_path() / "requests-test-2.png";
     if (std::filesystem::exists(target))
@@ -489,14 +454,14 @@ asio::awaitable<void> async_https_request()
   };
 
 
-  auto download_too_many_redirects = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
+  auto download_too_many_redirects = [](requests::connection::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     system::error_code ec;
     const auto target = std::filesystem::temp_directory_path() / "requests-test.html";
     if (std::filesystem::exists(target))
       std::filesystem::remove(target);
 
-    requests::request_settings r{{}, {false, requests::private_domain, 3}};
+    requests::request_settings r{{}, {false, requests::redirect_mode::private_domain, 3}};
     auto res = co_await async_download(hc,  urls::url_view("/redirect/10"), r, target.string(),
                                        asio::redirect_error(asio::use_awaitable, ec));
     CHECK(res.history.size() == 3);
@@ -504,7 +469,7 @@ asio::awaitable<void> async_https_request()
     CHECK(!std::filesystem::exists(target));
   };
 
-  auto delete_ = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
+  auto delete_ = [](requests::connection::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     requests::request_settings r{{}, {false}};
     json::value v{{"test-key", "test-value"}};
@@ -515,7 +480,7 @@ asio::awaitable<void> async_https_request()
     CHECK(js.at("headers").at("Content-Type") == "application/json");
   };
 
-  auto patch_json = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
+  auto patch_json = [](requests::connection::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     json::value msg {{"test-key", "test-value"}};
     requests::request_settings r{{}, {false}};
@@ -527,7 +492,7 @@ asio::awaitable<void> async_https_request()
     CHECK(js.at("json") == msg);
   };
 
-  auto patch_form = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
+  auto patch_form = [](requests::connection::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     requests::request_settings r{{}, {false}};
     requests::form f{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}};
@@ -539,7 +504,7 @@ asio::awaitable<void> async_https_request()
     CHECK(js.at("form") == json::value{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}});
   };
 
-  auto put_json = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
+  auto put_json = [](requests::connection::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     json::value msg {{"test-key", "test-value"}};
     requests::request_settings r{{}, {false}};
@@ -551,7 +516,7 @@ asio::awaitable<void> async_https_request()
     CHECK(js.at("json") == msg);
   };
 
-  auto put_form = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
+  auto put_form = [](requests::connection::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     requests::request_settings r{{}, {false}};
     requests::form f{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}};
@@ -563,7 +528,7 @@ asio::awaitable<void> async_https_request()
     CHECK(js.at("form") == json::value{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}});
   };
 
-  auto post_json = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
+  auto post_json = [](requests::connection::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     json::value msg {{"test-key", "test-value"}};
 
@@ -576,7 +541,7 @@ asio::awaitable<void> async_https_request()
     CHECK(js.at("json") == msg);
   };
 
-  auto post_form = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
+  auto post_form = [](requests::connection::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
     requests::request_settings r{{}, {false}};
     requests::form f = {{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}};
@@ -611,20 +576,34 @@ asio::awaitable<void> async_https_request()
 }
 
 
-
-TEST_CASE_TEMPLATE("async-https-request", Conn, aw_http_connection, aw_https_connection)
+TEST_CASE("async-connection-request")
 {
-  auto url = httpbin();
+  SUBCASE("http")
+  {
+    asio::io_context ctx;
+    asio::co_spawn(ctx,
+                   async_connection_request(false),
+                   [](std::exception_ptr e)
+                   {
+                     CHECK(e == nullptr);
+                   });
 
-  asio::io_context ctx;
-  asio::co_spawn(ctx,
-                 async_https_request<Conn>(),
-                 [](std::exception_ptr e)
-                 {
-                   CHECK(e == nullptr);
-                 });
+    ctx.run();
+  }
 
-  ctx.run();
+  SUBCASE("https")
+  {
+    asio::io_context ctx;
+    asio::co_spawn(ctx,
+                   async_connection_request(true),
+                   [](std::exception_ptr e)
+                   {
+                     CHECK(e == nullptr);
+                   });
+
+    ctx.run();
+  }
+
 }
 
 TEST_SUITE_END();

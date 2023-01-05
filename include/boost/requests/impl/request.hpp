@@ -48,14 +48,14 @@ struct async_request_op : asio::coroutine
   executor_type get_executor() {return conn.get_executor(); }
 
   using completion_signature_type = void(system::error_code, response);
-  using step_signature_type       = void(system::error_code, variant2::variant<std::size_t, typename Connection::stream>);
+  using step_signature_type       = void(system::error_code, variant2::variant<std::size_t, stream>);
 
   Connection & conn;
   http::verb method;
   urls::url_view target;
   RequestBody && request_body;
   typename Connection::request_type req;
-  optional<typename Connection::stream> str_;
+  optional<stream> str_;
 
   response rb{req.get_allocator()};
 
@@ -70,7 +70,7 @@ struct async_request_op : asio::coroutine
 
   response & resume(requests::detail::co_token_t<step_signature_type> self,
                    system::error_code & ec,
-                   variant2::variant<std::size_t, typename Connection::stream> s)
+                   variant2::variant<std::size_t, stream> s)
   {
     reenter(this)
     {

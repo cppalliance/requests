@@ -18,7 +18,6 @@
 
 #include "doctest.h"
 #include "string_maker.hpp"
-#include "extern.hpp"
 
 #include <iostream>
 
@@ -32,40 +31,9 @@ inline std::string httpbin()
   return url;
 }
 
-
-TYPE_TO_STRING(requests::http_connection);
-TYPE_TO_STRING(requests::https_connection);
-
-
-using aw_exec = asio::use_awaitable_t<>::executor_with_default<asio::any_io_executor>;
-using aw_http_connection = requests::basic_http_connection<aw_exec>;
-using aw_https_connection = requests::basic_https_connection<aw_exec>;
-
-TYPE_TO_STRING(aw_http_connection);
-TYPE_TO_STRING(aw_https_connection);
-
-
 TEST_SUITE_BEGIN("cookie");
 
-template<typename Stream, typename Exec>
-auto make_conn_impl(Exec && exec, asio::ssl::context & sslctx, std::false_type)
-{
-  return Stream(exec);
-}
-
-template<typename Stream, typename Exec>
-auto make_conn_impl(Exec && exec, asio::ssl::context & sslctx, std::true_type)
-{
-  return Stream(exec, sslctx);
-}
-
-
-template<typename Stream, typename Exec>
-auto make_conn(Exec && exec, asio::ssl::context & sslctx)
-{
-  return make_conn_impl<Stream>(std::forward<Exec>(exec), sslctx, requests::detail::has_ssl<Stream>{});
-}
-
+/*
 TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, requests::https_connection)
 {
   auto url = httpbin();
@@ -249,7 +217,7 @@ asio::awaitable<void> async_https_request()
   auto too_many_redirects = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
   {
     system::error_code ec;
-    requests::request_settings r{{}, {false, requests::private_domain, 5}};
+    requests::request_settings r{{}, {false, requests::redirect_mode::private_domain, 5}};
 
     auto res = co_await async_get(hc, urls::url_view("/redirect/10"), r,
                                   asio::redirect_error(asio::use_awaitable, ec));
@@ -309,7 +277,7 @@ asio::awaitable<void> async_https_request()
     if (std::filesystem::exists(target))
       std::filesystem::remove(target);
 
-    requests::request_settings r{{}, {false, requests::private_domain, 3}};
+    requests::request_settings r{{}, {false, requests::redirect_mode::private_domain, 3}};
     auto res = co_await async_download(hc,  urls::url_view("/redirect/10"), r, target.string(),
                                        asio::redirect_error(asio::use_awaitable, ec));
     CHECK(res.history.size() == 3);

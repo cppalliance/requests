@@ -103,15 +103,14 @@ async_request(beast::http::verb method,
 template<typename Connection,
           typename RequestBody,
           BOOST_ASIO_COMPLETION_TOKEN_FOR( void (system::error_code, response)) CompletionToken
-              BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(typename Connection::executor_type)>
+           = typename Connection::default_token>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (system::error_code, response))
 async_request(Connection & conn,
               beast::http::verb method,
               urls::url_view target,
               RequestBody && body,
               typename Connection::request_type req,
-              CompletionToken && completion_token
-                  BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(typename Connection::executor_type));
+              CompletionToken && completion_token = typename Connection::default_token());
 }
 }
 

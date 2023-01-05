@@ -10,16 +10,3 @@
 #include <boost/url/src.hpp>
 #include <boost/requests/src.hpp>
 
-#include "extern.hpp"
-
-
-namespace boost::requests
-{
-
-template struct basic_session<aw_exec>;
-template struct basic_connection<asio::ip::tcp::socket::rebind_executor<aw_exec>::other>;
-template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket::rebind_executor<aw_exec>::other>>;
-template struct basic_connection_pool<asio::ip::tcp::socket::rebind_executor<aw_exec>::other>;
-template struct basic_connection_pool<asio::ssl::stream<asio::ip::tcp::socket::rebind_executor<aw_exec>::other>>;
-
-}

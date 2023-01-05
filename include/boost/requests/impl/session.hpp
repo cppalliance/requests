@@ -16,94 +16,25 @@ namespace boost {
 namespace requests {
 
 
-template<typename Executor>
-auto basic_session<Executor>::make_request_(http::fields fields) -> requests::request_settings
+struct session::async_get_pool_op : asio::coroutine
 {
-  return requests::request_settings{
-    std::move(fields),
-    options_,
-    &jar_
-  };
-}
-
-
-template<typename Executor>
-auto
-basic_session<Executor>::get_pool(urls::url_view url, error_code & ec) -> pool_ptr
-{
-  // can be optimized to ellide the string allocation, blabla (pmr?)
-  char buf[1024];
-  container::pmr::monotonic_buffer_resource res{buf, sizeof(buf)};
-  using alloc = container::pmr::polymorphic_allocator<char>;
-  using str = std::basic_string<char, std::char_traits<char>, alloc>;
-  std::pair<str, unsigned short> host_key{alloc(&res), get_port(url)};
-  url.host(urls::string_token::assign_to(host_key.first));
-
-  const auto is_https = (url.scheme_id() == urls::scheme::https)
-                     || (url.scheme_id() == urls::scheme::wss);
-  auto lock = asem::lock(mutex_, ec);
-  if (ec)
-    return std::shared_ptr<basic_http_connection_pool<Executor>>();
-
-  if (is_https)
-  {
-    auto itr = https_pools_.find(host_key);
-    if (itr != https_pools_.end())
-      return itr->second;
-    else
-    {
-      auto p = std::make_shared<basic_https_connection_pool<Executor>>(get_executor(), sslctx_);
-      p->lookup(url.authority(), ec);
-      if (!ec)
-      {
-        https_pools_.emplace(host_key, p);
-        return p;
-      }
-    }
-  }
-  else
-  {
-    auto itr = http_pools_.find(host_key);
-    if (itr != http_pools_.end())
-      return itr->second;
-    else
-    {
-      auto p = std::make_shared<basic_http_connection_pool<Executor>>(get_executor());
-      p->lookup(url.authority(), ec);
-      if (!ec)
-      {
-        http_pools_.emplace(host_key, p);
-        return p;
-      }
-    }
-  }
-  return std::shared_ptr<basic_http_connection_pool<Executor>>(nullptr);
-}
-
-
-
-template<typename Executor>
-struct basic_session<Executor>::async_get_pool_op : asio::coroutine
-{
-  using executor_type = Executor;
+  using executor_type = asio::any_io_executor;
   executor_type get_executor() {return this_->get_executor(); }
 
-  basic_session<Executor> *this_;
+  session *this_;
   struct impl_t
   {
     char buf[1024];
     container::pmr::monotonic_buffer_resource res{buf, sizeof(buf)};
     using alloc = container::pmr::polymorphic_allocator<char>;
     using str = std::basic_string<char, std::char_traits<char>, alloc>;
-    std::pair<str, unsigned short> host_key;
+    urls::url host_key;
     const bool is_https;
 
     impl_t(urls::url_view url)
-        : host_key{alloc(&res), get_port(url)}
+        : host_key{normalize_(url)}
         , is_https((url.scheme_id() == urls::scheme::https) || (url.scheme_id() == urls::scheme::wss))
-
     {
-      url.host(urls::string_token::assign_to(host_key.first));
     }
   };
 
@@ -113,7 +44,7 @@ struct basic_session<Executor>::async_get_pool_op : asio::coroutine
   template<typename Self>
   void complete(Self && self,
                 error_code ec,
-                pool_ptr pp,
+                std::shared_ptr<connection_pool> pp,
                 asem::lock_guard<detail::basic_mutex<executor_type>> &lock)
   {
     impl = {};
@@ -121,8 +52,7 @@ struct basic_session<Executor>::async_get_pool_op : asio::coroutine
     self.complete(ec, std::move(pp));
   }
 
-  std::shared_ptr<basic_http_connection_pool <Executor>> p;
-  std::shared_ptr<basic_https_connection_pool<Executor>> ps;
+  std::shared_ptr<connection_pool> p;
 
   template<typename Self>
   void operator()(Self && self, error_code ec = {},
@@ -135,59 +65,37 @@ struct basic_session<Executor>::async_get_pool_op : asio::coroutine
       if (ec)
         return complete(std::move(self), ec, {}, lock);
 
-      if (impl->is_https)
       {
-        {
-          auto itr = this_->https_pools_.find(impl->host_key);
-          if (itr != this_->https_pools_.end())
-            return complete(std::move(self), {}, itr->second, lock);
-        }
-        ps = std::make_shared<basic_https_connection_pool<Executor>>(this_->get_executor(), this_->sslctx_);
-        yield ps->async_lookup(url.authority(), asio::append(std::move(self), std::move(lock)));
-        if (!ec)
-        {
-          this_->https_pools_.emplace(impl->host_key, ps);
-          return complete(std::move(self), {}, std::move(ps), lock);
-        }
+        auto itr = this_->pools_.find(impl->host_key);
+        if (itr != this_->pools_.end())
+          return complete(std::move(self), {}, itr->second, lock);
       }
-      else
+      p = std::make_shared<connection_pool>(this_->get_executor(), this_->sslctx_);
+      yield p->async_lookup(url, asio::append(std::move(self), std::move(lock)));
+      if (!ec)
       {
-        {
-          auto itr = this_->http_pools_.find(impl->host_key);
-          if (itr != this_->http_pools_.end())
-            return complete(std::move(self), {}, itr->second, lock);
-        }
-        p = std::make_shared<basic_http_connection_pool<Executor>>(this_->get_executor());
-        yield p->async_lookup(url.authority(), asio::append(std::move(self), std::move(lock)));
-        if (!ec)
-        {
-          this_->http_pools_.emplace(impl->host_key, p);
-          return complete(std::move(self), {}, std::move(p), lock);
-        }
+        this_->pools_.emplace(impl->host_key, p);
+        return complete(std::move(self), {}, std::move(p), lock);
       }
+
       return complete(std::move(self), ec, {}, lock);
     }
   }
 };
 
-template<typename Executor>
-template< BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-                                               variant2::variant<std::shared_ptr<basic_http_connection_pool<Executor>>,
-                                                                 std::shared_ptr<basic_https_connection_pool<Executor>>>)) CompletionToken>
+template< BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, std::shared_ptr<connection_pool>)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, pool_ptr))
-basic_session<Executor>::async_get_pool(urls::url_view url,
-                                        CompletionToken && completion_token)
+session::async_get_pool(urls::url_view url, CompletionToken && completion_token)
 {
-  return asio::async_compose<CompletionToken, void(system::error_code, pool_ptr)>(
+  return asio::async_compose<CompletionToken, void(system::error_code, std::shared_ptr<connection_pool>)>(
       async_get_pool_op{{}, this, url},
       completion_token,
       mutex_
   );
 }
 
-template<typename Executor>
 template<typename Body>
-auto basic_session<Executor>::ropen(
+auto session::ropen(
            urls::url_view url,
            http::request<Body>& req,
            system::error_code & ec) -> stream
@@ -206,12 +114,7 @@ auto basic_session<Executor>::ropen(
         if (ec)
           return stream{get_executor(), nullptr};
 
-        return visit(
-            [&](auto pool) -> stream
-            {
-              BOOST_ASSERT(pool);
-              return pool->ropen( req, opts, &jar_, ec);
-            }, p);
+        return p->ropen( req, opts, &jar_, ec);
       };
 
   const auto is_secure = (url.scheme_id() == urls::scheme::https)
@@ -312,9 +215,8 @@ auto basic_session<Executor>::ropen(
   return str;
 }
 
-template<typename Executor>
 template<typename RequestBody>
-auto basic_session<Executor>::ropen(
+auto session::ropen(
     beast::http::verb method,
     urls::url_view url,
     RequestBody && body,
@@ -356,14 +258,13 @@ auto basic_session<Executor>::ropen(
   return ropen(url, hreq, ec);
 }
 
-template<typename Executor>
 template<typename RequestBody>
-struct basic_session<Executor>::async_ropen_op : asio::coroutine
+struct session::async_ropen_op : asio::coroutine
 {
-  using executor_type = Executor;
+  using executor_type = asio::any_io_executor;
   executor_type get_executor() {return this_->get_executor(); }
 
-  basic_session<Executor> * this_;
+  session * this_;
 
   struct request_options opts;
   urls::url_view url;
@@ -384,7 +285,7 @@ struct basic_session<Executor>::async_ropen_op : asio::coroutine
 
   urls::url url_cache;
 
-  async_ropen_op(basic_session<Executor> * this_,
+  async_ropen_op(session * this_,
                  http::request<RequestBody> * req,
                  request_options opt, cookie_jar * jar) : this_(this_), opts(opts), req(*req)
   {
@@ -435,7 +336,7 @@ struct basic_session<Executor>::async_ropen_op : asio::coroutine
 
 
   template<typename RequestBody_>
-  async_ropen_op(basic_session<Executor> * this_,
+  async_ropen_op(session * this_,
                  beast::http::verb method,
                  urls::url_view path,
                  RequestBody_ && body,
@@ -448,10 +349,10 @@ struct basic_session<Executor>::async_ropen_op : asio::coroutine
   }
 
   using completion_signature_type = void(system::error_code, stream);
-  using step_signature_type       = void(system::error_code, variant2::variant<variant2::monostate, pool_ptr, stream>);
+  using step_signature_type       = void(system::error_code, variant2::variant<variant2::monostate, std::shared_ptr<connection_pool>, stream>);
 
   auto resume(requests::detail::co_token_t<step_signature_type> self,
-              system::error_code & ec, variant2::variant<variant2::monostate, pool_ptr, stream> s) -> stream
+              system::error_code & ec, variant2::variant<variant2::monostate, std::shared_ptr<connection_pool>, stream> s) -> stream
   {
     reenter(this)
     {
@@ -474,12 +375,8 @@ struct basic_session<Executor>::async_ropen_op : asio::coroutine
       req.prepare_payload();
       yield this_->async_get_pool(url, std::move(self));
       if (ec)
-        return basic_stream<Executor>{get_executor(), nullptr};
-      yield visit(
-          [&](auto pool)
-          {
-            pool->async_ropen(req, opts, &this_->jar_, std::move(self));
-          }, variant2::get<1>(s));
+        return stream{get_executor(), nullptr};
+      yield variant2::get<1>(s)->async_ropen(req, opts, &this_->jar_, std::move(self));
 
       if (!ec || opts.max_redirects == variant2::get<2>(s).history().size())
         return std::move(variant2::get<2>(s));
@@ -549,11 +446,7 @@ struct basic_session<Executor>::async_ropen_op : asio::coroutine
         yield this_->async_get_pool(url, std::move(self));
         if (ec)
           return stream{get_executor(), nullptr};
-        yield visit(
-            [&](auto pool)
-            {
-              pool->async_ropen(req, opts, &this_->jar_, std::move(self));
-            }, variant2::get<1>(s));
+        yield variant2::get<1>(s)->async_ropen(req, opts, &this_->jar_, std::move(self));
       }
       variant2::get<2>(s).prepend_history(std::move(history));
       return std::move(variant2::get<2>(s));
@@ -563,11 +456,10 @@ struct basic_session<Executor>::async_ropen_op : asio::coroutine
   }
 };
 
-template<typename Executor>
 template<typename RequestBody,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, basic_stream<Executor>)) CompletionToken>
+          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, stream)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, basic_stream<Executor>))
-basic_session<Executor>::async_ropen(beast::http::verb method,
+session::async_ropen(beast::http::verb method,
                                      urls::url_view path,
                                      RequestBody && body,
                                      http::fields req,
@@ -578,12 +470,11 @@ basic_session<Executor>::async_ropen(beast::http::verb method,
                               this, method, path, std::forward<RequestBody>(body), std::move(req));
 }
 
-template<typename Executor>
 template<typename RequestBody,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, basic_stream<Executor>)) CompletionToken>
+          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, stream)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, basic_stream<Executor>))
-basic_session<Executor>::async_ropen(urls::url_view url,
+session::async_ropen(urls::url_view url,
                                      http::request<RequestBody> & req,
                                      CompletionToken && completion_token)
 {
@@ -596,5 +487,9 @@ basic_session<Executor>::async_ropen(urls::url_view url,
 }
 
 #include <boost/asio/unyield.hpp>
+
+#if defined(BOOST_REQUESTS_HEADER_ONLY)
+#include <boost/requests/impl/session.ipp>
+#endif
 
 #endif // BOOST_REQUESTS_IMPL_SESSION_HPP
