@@ -33,8 +33,8 @@ inline std::string httpbin()
 
 TEST_SUITE_BEGIN("cookie");
 
-/*
-TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, requests::https_connection)
+
+void http_request_cookie_connection(bool https)
 {
   auto url = httpbin();
 
@@ -44,11 +44,10 @@ TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, reques
 
   sslctx.set_verify_mode(asio::ssl::verify_peer);
   sslctx.set_default_verify_paths();
-
-  Conn hc = make_conn<Conn>(ctx.get_executor(), sslctx);
+  auto hc = https ? requests::connection(ctx.get_executor(), sslctx) : requests::connection(ctx.get_executor());
   hc.set_host(url);
   asio::ip::tcp::resolver rslvr{ctx};
-  auto ep = *rslvr.resolve(url, requests::detail::has_ssl_v<Conn> ? "https" : "http").begin();
+  asio::ip::tcp::endpoint ep = *rslvr.resolve(url, https ? "https" : "http").begin();
 
   hc.connect(ep);
 
@@ -108,10 +107,13 @@ TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, reques
   CHECK(jar.content.empty());
 }
 
-/*
+TEST_CASE("sync-connection-cookie-request")
+{
+  SUBCASE("http") { http_request_cookie_connection(false);}
+  SUBCASE("https") { http_request_cookie_connection(true);}
+}
 
-template<typename Conn>
-asio::awaitable<void> async_https_request()
+asio::awaitable<void> async_cookie_request(bool https)
 {
   auto url = httpbin();
 
@@ -120,10 +122,16 @@ asio::awaitable<void> async_https_request()
   sslctx.set_verify_mode(asio::ssl::verify_peer);
   sslctx.set_default_verify_paths();
 
-  auto hc = make_conn<Conn>(co_await asio::this_coro::executor, sslctx);
+  requests::connection::defaulted<asio::use_awaitable_t<>> hc =
+      https ? requests::connection(co_await asio::this_coro::executor, sslctx) :
+      requests::connection(co_await asio::this_coro::executor);
+  CHECK(hc.uses_ssl() == https);
   hc.set_host(url);
   asio::ip::tcp::resolver rslvr{co_await asio::this_coro::executor};
-  auto ep = *rslvr.resolve(url, requests::detail::has_ssl_v<Conn> ? "https" : "http").begin();
+  asio::ip::tcp::endpoint ep = *rslvr.resolve(url, https ? "https" : "http").begin();
+
+  using Conn = requests::connection::defaulted<asio::use_awaitable_t<>>;
+
   co_await hc.async_connect(ep);
 
   auto headers = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
@@ -152,8 +160,10 @@ asio::awaitable<void> async_https_request()
 
   auto stream = [](Conn  & hc, core::string_view url) -> asio::awaitable<void>
   {
-    auto str = co_await hc.async_ropen(beast::http::verb::get, urls::url_view("/get"), requests::empty{},
-                                       {requests::headers({{"Test-Header", "it works"}}), {false}});
+    auto str =
+        asio::use_awaitable.as_default_on(
+        co_await hc.async_ropen(beast::http::verb::get, urls::url_view("/get"), requests::empty{},
+                                       {requests::headers({{"Test-Header", "it works"}}), {false}}));
 
     json::stream_parser sp;
     char buf[32];
@@ -176,8 +186,9 @@ asio::awaitable<void> async_https_request()
 
   auto stream_full = [](Conn  & hc, core::string_view url) -> asio::awaitable<void>
   {
-    auto str = co_await hc.async_ropen(beast::http::verb::get, urls::url_view("/get"), requests::empty{},
-                                       {requests::headers({{"Test-Header", "it works"}}), {false}});
+    auto str = asio::use_awaitable.as_default_on(
+        co_await hc.async_ropen(beast::http::verb::get, urls::url_view("/get"), requests::empty{},
+                                       {requests::headers({{"Test-Header", "it works"}}), {false}}));
 
     std::string ss;
     auto buf = asio::dynamic_buffer(ss);
@@ -194,8 +205,8 @@ asio::awaitable<void> async_https_request()
 
   auto stream_dump = [](Conn  & hc, core::string_view url) -> asio::awaitable<void>
   {
-    auto str = co_await  hc.async_ropen(beast::http::verb::get, urls::url_view("/get"), requests::empty{},
-                                       {requests::headers({{"Test-Header", "it works"}}), {false}});
+    auto str = asio::use_awaitable.as_default_on(co_await  hc.async_ropen(beast::http::verb::get, urls::url_view("/get"), requests::empty{},
+                                       {requests::headers({{"Test-Header", "it works"}}), {false}}));
     co_await str.async_dump();
 
   };
@@ -391,22 +402,34 @@ asio::awaitable<void> async_https_request()
   );
 }
 
-
-
-TEST_CASE_TEMPLATE("async-https-request", Conn, aw_http_connection, aw_https_connection)
+TEST_CASE("async-connection-cookie-request")
 {
-  auto url = httpbin();
+  SUBCASE("http")
+  {
+    asio::io_context ctx;
+    asio::co_spawn(ctx,
+                   async_cookie_request(false),
+                   [](std::exception_ptr e)
+                   {
+                     CHECK(e == nullptr);
+                   });
 
-  asio::io_context ctx;
-  asio::co_spawn(ctx,
-                 async_https_request<Conn>(),
-                 [](std::exception_ptr e)
-                 {
-                   CHECK(e == nullptr);
-                 });
+    ctx.run();
+  }
 
-  ctx.run();
+  SUBCASE("https")
+  {
+    asio::io_context ctx;
+    asio::co_spawn(ctx,
+                   async_cookie_request(true),
+                   [](std::exception_ptr e)
+                   {
+                     CHECK(e == nullptr);
+                   });
+
+    ctx.run();
+  }
+
 }
-*/
 
 TEST_SUITE_END();

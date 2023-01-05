@@ -17,9 +17,6 @@ namespace boost
 namespace requests
 {
 
-template<typename Stream>
-struct basic_connection;
-
 using empty = beast::http::empty_body::value_type;
 
 template<typename Connection>
@@ -253,19 +250,17 @@ auto delete_(Connection & conn,
 }
 
 
-template<typename Stream>
-auto connect(basic_connection<Stream> & conn,
+inline auto connect(connection & conn,
              urls::url_view target,
-             typename basic_connection<Stream>::request_type req = {}) -> response_base
+             typename connection::request_type req = {}) -> response_base
 {
   auto s = conn.ropen(http::verb::connect, target, empty{}, std::move(req));
   return {std::move(s).headers(), std::move(s).history()};
 }
 
-template<typename Stream>
-auto connect(basic_connection<Stream> & conn,
+inline auto connect(connection & conn,
              urls::url_view target,
-             typename basic_connection<Stream>::request_type req,
+             typename connection::request_type req,
              system::error_code & ec) -> response_base
 {
   auto s = conn.ropen(http::verb::connect, target, empty{}, std::move(req), ec);
@@ -442,22 +437,30 @@ async_delete(Connection & conn,
 }
 
 
-template<typename Stream,
-         BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-                                               response)) CompletionToken
-              BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE( typename basic_connection<Stream>::executor_type)>
+template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+                                               response)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, response))
-async_connect(basic_connection<Stream> & conn,
+async_connect(connection & conn,
               urls::url_view target,
-              typename basic_connection<Stream>::request_type req  = {},
-              CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename basic_connection<Stream>::executor_type))
+              typename connection::request_type req,
+              CompletionToken && completion_token)
 {
   return async_request(conn, http::verb::connect, target,
                        empty{}, std::move(req),
                        std::forward<CompletionToken>(completion_token));
 }
 
+
+template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+                                             response)) CompletionToken>
+auto async_connect(connection::defaulted<CompletionToken> & conn,
+                  urls::url_view target,
+                  typename connection::request_type req  = {})
+{
+  return async_request(conn, http::verb::connect, target,
+                       empty{}, std::move(req), CompletionToken());
+}
 
 template<typename Connection,  
          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
