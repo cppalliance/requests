@@ -510,7 +510,7 @@ struct issue_client
   {
     conn_.set_host(host_name);
     boost::asio::ip::tcp::resolver res{ctx};
-    conn_.connect(*res.resolve(host_name, "https"));
+    conn_.connect(boost::asio::ip::tcp::endpoint(*res.resolve(host_name, "https")));
     settings_.fields = boost::requests::headers({
         {boost::requests::http::field::content_type, "application/vnd.github+json"},
         boost::requests::bearer(auth_token)
@@ -761,7 +761,7 @@ private:
 
 
   boost::asio::ssl::context sslctx_{boost::asio::ssl::context_base::tls_client};
-  boost::requests::https_connection conn_;
+  boost::requests::connection conn_;
 };
 
 

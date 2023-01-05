@@ -19,7 +19,7 @@ int main(int argc, char * argv[])
 {
   urls::url_view url{"unix:///var/run/docker.sock"};
 
-  using my_conn = requests::basic_connection<asio::local::stream_protocol::socket>;
+  using my_conn = requests::connection;
   asio::io_context ctx;
   my_conn sock{ctx};
 
