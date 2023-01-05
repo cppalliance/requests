@@ -24,7 +24,7 @@ struct buffer_source : source
   }
 
   ~buffer_source() = default;
-  optional<std::size_t> size(system::error_code & ) const override {return buffer.size();};
+  optional<std::size_t> size() const override {return buffer.size();};
   void reset() override
   {
     current = buffer;

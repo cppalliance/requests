@@ -53,10 +53,21 @@ source_ptr tag_invoke(const make_source_tag &tag, const std::filesystem::path & 
 }
 #endif
 
-source_ptr tag_invoke(const make_source_tag &tag, const boost::json::value & f)
+source_ptr tag_invoke(const make_source_tag &tag, boost::json::value f)
 {
-  return std::allocate_shared<json_source>(tag.get_allocator(), f);
+  return std::allocate_shared<json_source>(tag.get_allocator(), std::move(f));
 }
+
+source_ptr tag_invoke(const make_source_tag &tag, boost::json::array f)
+{
+  return std::allocate_shared<json_source>(tag.get_allocator(), std::move(f));
+}
+
+source_ptr tag_invoke(const make_source_tag &tag, boost::json::object f)
+{
+  return std::allocate_shared<json_source>(tag.get_allocator(), std::move(f));
+}
+
 
 
 }

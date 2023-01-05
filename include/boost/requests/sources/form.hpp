@@ -36,7 +36,7 @@ struct form_source : source
   }
 
   ~form_source() = default;
-  optional<std::size_t> size(system::error_code & ec) const override
+  optional<std::size_t> size( ) const override
   {
     return param_view.size() - 1u;
   };

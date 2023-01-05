@@ -34,9 +34,14 @@ struct file_source : source
   }
 
   ~file_source() = default;
-  optional<std::size_t> size(system::error_code & ec) const override
+  optional<std::size_t> size() const override
   {
-    return file.size(ec);
+    boost::system::error_code ec;
+    auto n = file.size(ec);
+    if (ec)
+      return none;
+    else
+      return n;
   };
   void reset() override
   {

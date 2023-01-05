@@ -9,6 +9,7 @@
 #define BOOST_REQUESTS_STREAM_HPP
 
 #include <boost/requests/detail/config.hpp>
+#include <boost/requests/detail/pmr.hpp>
 #include <boost/requests/detail/tracker.hpp>
 #include <boost/requests/connection.hpp>
 #include <boost/requests/fields/keep_alive.hpp>
@@ -23,39 +24,6 @@ namespace boost
 {
 namespace requests
 {
-namespace detail
-{
-
-struct pmr_deleter
-{
-  container::pmr::memory_resource * res;
-  constexpr pmr_deleter(container::pmr::memory_resource * res = container::pmr::get_default_resource()) noexcept : res(res) {}
-
-  template<typename T>
-  void operator()(T * ptr)
-  {
-    ptr->~T();
-    res->deallocate(ptr, sizeof(T), alignof(T));
-  }
-};
-
-template<typename T, typename ... Args>
-std::unique_ptr<T, pmr_deleter> make_pmr(container::pmr::memory_resource * res, Args && ... args)
-{
-  void * raw = res->allocate(sizeof(T), alignof(T));
-  try
-  {
-    return {new (raw) T(std::forward<Args>(args)...), res};
-
-  }
-  catch (...)
-  {
-    res->deallocate(raw, sizeof(T), alignof(T));
-    throw;
-  }
-}
-
-}
 
 struct stream
 {

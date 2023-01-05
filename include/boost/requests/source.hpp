@@ -7,6 +7,8 @@
 
 #include <boost/requests/detail/config.hpp>
 #include <boost/requests/form.hpp>
+#include <boost/requests/http.hpp>
+#include <boost/container/pmr/polymorphic_allocator.hpp>
 #include <boost/core/detail/string_view.hpp>
 #include <boost/asio/buffer.hpp>
 #include <boost/optional.hpp>
@@ -28,6 +30,8 @@ namespace json
 {
 
 class value;
+class object;
+class array;
 
 }
 
@@ -37,7 +41,7 @@ namespace requests
 struct source
 {
   virtual ~source() = default;
-  virtual optional<std::size_t> size(system::error_code & ) const = 0;
+  virtual optional<std::size_t> size() const = 0;
   virtual void reset() = 0;
   virtual std::pair<std::size_t, bool> read_some(asio::mutable_buffer buffer, system::error_code & ) = 0;
   virtual core::string_view default_content_type() {return "";}
@@ -52,8 +56,8 @@ struct make_source_tag
   allocator_type get_allocator() const {return allocator;}
 };
 
-BOOST_REQUESTS_DECL source_ptr tag_invoke(make_source_tag, source_ptr);
-BOOST_REQUESTS_DECL source_ptr tag_invoke(make_source_tag, source &);
+BOOST_REQUESTS_DECL source_ptr tag_invoke(const make_source_tag&, source_ptr);
+BOOST_REQUESTS_DECL source_ptr tag_invoke(const make_source_tag&, source &);
 
 
 template<typename Char, typename Traits, typename Allocator>
@@ -64,7 +68,7 @@ struct basic_string_source final : source
 
   basic_string_source(std::basic_string<Char, Traits, Allocator> data) : data(std::move(data)) {}
 
-  optional<std::size_t> size(system::error_code &) const final
+  optional<std::size_t> size() const final
   {
     return data.size();
   }
@@ -106,7 +110,7 @@ struct basic_string_view_source final : source
 
   basic_string_view_source(std::basic_string_view<Char> data) : data(data) {}
 
-  optional<std::size_t> size(system::error_code & ) const final
+  optional<std::size_t> size() const final
   {
     return data.size();
   }
@@ -158,19 +162,41 @@ auto tag_invoke(make_source_tag, const View & data)
   return std::make_shared<basic_string_view_source<typename View::value_type>>(std::move(data));
 }
 
-BOOST_REQUESTS_DECL source_ptr tag_invoke(make_source_tag, asio::const_buffer cb);
-BOOST_REQUESTS_DECL source_ptr tag_invoke(make_source_tag, urls::params_encoded_view);
-BOOST_REQUESTS_DECL source_ptr tag_invoke(make_source_tag, form f);
+BOOST_REQUESTS_DECL source_ptr tag_invoke(const make_source_tag&, asio::const_buffer cb);
+BOOST_REQUESTS_DECL source_ptr tag_invoke(const make_source_tag&, urls::params_encoded_view);
+BOOST_REQUESTS_DECL source_ptr tag_invoke(const make_source_tag&, form f);
 
-BOOST_REQUESTS_DECL source_ptr tag_invoke(make_source_tag, const boost::filesystem::path & path);
+BOOST_REQUESTS_DECL source_ptr tag_invoke(const make_source_tag&, const boost::filesystem::path & path);
 #if defined(__cpp_lib_filesystem)
-BOOST_REQUESTS_DECL source_ptr tag_invoke(make_source_tag, const std::filesystem::path & path);
+BOOST_REQUESTS_DECL source_ptr tag_invoke(const make_source_tag&, const std::filesystem::path & path);
 #endif
 
-BOOST_REQUESTS_DECL source_ptr tag_invoke(make_source_tag, boost::json::value f);
+BOOST_REQUESTS_DECL source_ptr tag_invoke(const make_source_tag&, boost::json::value f);
+BOOST_REQUESTS_DECL source_ptr tag_invoke(const make_source_tag&, boost::json::array f);
+BOOST_REQUESTS_DECL source_ptr tag_invoke(const make_source_tag&, boost::json::object f);
+
+template<typename Stream>
+std::size_t write_request(
+    Stream & stream,
+    http::request_header hd,
+    source_ptr src,
+    system::error_code & ec);
+
+
+template<typename Stream,
+         BOOST_ASIO_COMPLETION_TOKEN_FOR(void(system::error_code, std::size_t)) CompletionToken
+          BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(typename Stream::executor_type)>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void(system::error_code, std::size_t))
+   async_write_request(
+      Stream & stream,
+      http::request_header hd,
+      source_ptr src,
+      CompletionToken && token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(typename Stream::executor_type));
 
 
 }
 }
+
+#include <boost/requests/impl/source.hpp>
 
 #endif //BOOST_REQUESTS_SOURCE_HPP

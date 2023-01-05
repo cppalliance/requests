@@ -25,7 +25,7 @@ struct json_source : source
   }
 
   ~json_source() = default;
-  optional<std::size_t> size(system::error_code & ) const override {return none;};
+  optional<std::size_t> size() const override {return none;};
   void reset() override
   {
     ser.reset(&data);
