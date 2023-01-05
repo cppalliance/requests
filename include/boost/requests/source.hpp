@@ -182,6 +182,19 @@ std::size_t write_request(
     source_ptr src,
     system::error_code & ec);
 
+template<typename Stream>
+std::size_t write_request(
+    Stream & stream,
+    http::request_header hd,
+    source_ptr src)
+{
+  boost::system::error_code ec;
+  auto res = write_request(stream, std::move(hd), std::move(src), ec);
+  if (ec)
+    throw_exception(system::system_error(ec, "write_request"));
+  return res;
+}
+
 
 template<typename Stream,
          BOOST_ASIO_COMPLETION_TOKEN_FOR(void(system::error_code, std::size_t)) CompletionToken
