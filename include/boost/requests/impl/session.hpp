@@ -22,76 +22,30 @@ struct session::async_get_pool_op : asio::coroutine
   executor_type get_executor() {return this_->get_executor(); }
 
   session *this_;
-  struct impl_t
-  {
-    char buf[1024];
-    container::pmr::monotonic_buffer_resource res{buf, sizeof(buf)};
-    using alloc = container::pmr::polymorphic_allocator<char>;
-    using str = std::basic_string<char, std::char_traits<char>, alloc>;
-    urls::url host_key;
-    const bool is_https;
+  urls::url url;
+  const bool is_https;
 
-    impl_t(urls::url_view url)
-        : host_key{normalize_(url)}
-        , is_https((url.scheme_id() == urls::scheme::https) || (url.scheme_id() == urls::scheme::wss))
-    {
-    }
-  };
+  asem::lock_guard<asem::mt::mutex> lock;
 
-  urls::url_view url;
-  std::shared_ptr<impl_t> impl;
-
-  template<typename Self>
-  void complete(Self && self,
-                error_code ec,
-                std::shared_ptr<connection_pool> pp,
-                asem::lock_guard<detail::basic_mutex<executor_type>> &lock)
-  {
-    impl = {};
-    lock = {};
-    self.complete(ec, std::move(pp));
-  }
+  async_get_pool_op(session *this_, urls::url_view url)
+      : this_(this_), url(url),
+        is_https((url.scheme_id() == urls::scheme::https) || (url.scheme_id() == urls::scheme::wss))
+  {}
 
   std::shared_ptr<connection_pool> p;
 
-  template<typename Self>
-  void operator()(Self && self, error_code ec = {},
-                  asem::lock_guard<detail::basic_mutex<executor_type>> lock = {})
-  {
-    reenter(this)
-    {
-      impl = std::allocate_shared<impl_t>(self.get_allocator(), url);
-      yield asem::async_lock(this_->mutex_, std::move(self));
-      if (ec)
-        return complete(std::move(self), ec, {}, lock);
+  using completion_signature_type = void(system::error_code, std::shared_ptr<connection_pool>);
+  using step_signature_type       = void(system::error_code);
 
-      {
-        auto itr = this_->pools_.find(impl->host_key);
-        if (itr != this_->pools_.end())
-          return complete(std::move(self), {}, itr->second, lock);
-      }
-      p = std::make_shared<connection_pool>(this_->get_executor(), this_->sslctx_);
-      yield p->async_lookup(url, asio::append(std::move(self), std::move(lock)));
-      if (!ec)
-      {
-        this_->pools_.emplace(impl->host_key, p);
-        return complete(std::move(self), {}, std::move(p), lock);
-      }
-
-      return complete(std::move(self), ec, {}, lock);
-    }
-  }
+  BOOST_REQUESTS_DECL
+  std::shared_ptr<connection_pool> resume(requests::detail::co_token_t<step_signature_type>  self, error_code ec);
 };
 
 template< BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, std::shared_ptr<connection_pool>)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, pool_ptr))
 session::async_get_pool(urls::url_view url, CompletionToken && completion_token)
 {
-  return asio::async_compose<CompletionToken, void(system::error_code, std::shared_ptr<connection_pool>)>(
-      async_get_pool_op{{}, this, url},
-      completion_token,
-      mutex_
-  );
+  return detail::co_run<async_get_pool_op>(std::forward<CompletionToken>(completion_token), this, url);
 }
 
 template<typename Body>

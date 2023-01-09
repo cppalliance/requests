@@ -238,7 +238,6 @@ struct async_write_request_op : asio::coroutine
           variant2::get<3>(freq).set(beast::http::field::content_length, std::to_string(init.first));
         else
           variant2::get<3>(freq).prepare_payload();
-
         BOOST_ASIO_CORO_YIELD beast::http::async_write(stream, variant2::get<3>(freq), std::move(self));
       }
     }
