@@ -5,8 +5,8 @@
 #ifndef BOOST_REQUESTS_CONNECTION_HPP
 #define BOOST_REQUESTS_CONNECTION_HPP
 
-#include <boost/asem/guarded.hpp>
-#include <boost/asem/st.hpp>
+#include <boost/asem/lock_guard.hpp>
+#include <boost/asem/mt.hpp>
 #include <boost/asio/any_io_executor.hpp>
 #include <boost/asio/experimental/parallel_group.hpp>
 #include <boost/asio/generic/stream_protocol.hpp>

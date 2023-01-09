@@ -35,15 +35,16 @@ TEST_CASE("sync")
       [&]{
         system::error_code ec;
         auto sp = tag_invoke(requests::make_source_tag{}, json::value{"foobaria"});
+        requests::http::fields hd;
         write_request(wp,
-                      requests::http::verb::post, "/test", {},
+                      requests::http::verb::post, "/test", hd,
                       sp,
                       ec);
         CHECK(ec == system::error_code{});
-
+        hd.clear();
         auto ep = requests::make_source(requests::empty());
         write_request(wp,
-                      requests::http::verb::get, "/test2", {},
+                      requests::http::verb::get, "/test2", hd,
                       ep,
                       ec);
         CHECK(ec == system::error_code{});
@@ -83,8 +84,11 @@ asio::awaitable<void> async_impl()
     co_await asio::this_coro::executor,
     [&]() -> asio::awaitable<void>
     {
-      co_await async_write_request(wp, requests::http::verb::post, "/test", {}, sp, asio::use_awaitable);
-      co_await async_write_request(wp, requests::http::verb::get, "/test2", {}, ep, asio::use_awaitable);
+      requests::http::fields hd;
+
+      co_await async_write_request(wp, requests::http::verb::post, "/test", hd, sp, asio::use_awaitable);
+      hd.clear();
+      co_await async_write_request(wp, requests::http::verb::get, "/test2", hd, ep, asio::use_awaitable);
     },
     asio::use_awaitable);
 

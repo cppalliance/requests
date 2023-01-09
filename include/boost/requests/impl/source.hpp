@@ -113,7 +113,7 @@ std::size_t write_request(
     Stream & stream,
     http::verb method,
     core::string_view target,
-    http::fields header,
+    http::fields & header,
     source &src,
     system::error_code & ec)
 {
@@ -130,13 +130,19 @@ std::size_t write_request(
     {
       http::request<http::empty_body> req(method, target, 11, http::empty_body::value_type(), std::move(header));
       req.prepare_payload();
-      return beast::http::write(stream, req, ec);
+
+      auto n =  beast::http::write(stream, req, ec);
+      header = std::move(req.base());
+      return n;
     }
     else
     {
       http::request<detail::fixed_source_body> req(method, target, 11, src, std::move(header));
       req.prepare_payload();
-      return beast::http::write(stream, req, ec);
+
+      auto n =  beast::http::write(stream, req, ec);
+      header = std::move(req.base());
+      return n;
     }
   }
   else
@@ -153,7 +159,9 @@ std::size_t write_request(
     else
       req.prepare_payload();
 
-    return beast::http::write(stream, req);
+    auto n =  beast::http::write(stream, req, ec);
+    header = std::move(req.base());
+    return n;
   }
 }
 
@@ -174,7 +182,7 @@ struct async_write_request_op : asio::coroutine
 
   http::verb method;
   core::string_view target;
-  http::fields header;
+  http::fields &header;
 
   source &src;
 
@@ -190,9 +198,9 @@ struct async_write_request_op : asio::coroutine
   async_write_request_op(Stream & stream,
                          http::verb method,
                          core::string_view target,
-                         http::fields header,
+                         http::fields &header,
                          source &src)
-    : stream(stream), method(method), target(target), header(std::move(header)), src(src)
+    : stream(stream), method(method), target(target), header(header), src(src)
   {}
 
   std::size_t resume(requests::detail::co_token_t<step_signature_type> self,
@@ -215,11 +223,13 @@ struct async_write_request_op : asio::coroutine
         {
           freq.emplace<1>(method, target, 11, http::empty_body::value_type(), std::move(header)).prepare_payload();
           BOOST_ASIO_CORO_YIELD beast::http::async_write(stream, variant2::get<1>(freq), std::move(self));
+          header = std::move(variant2::get<1>(freq).base());
         }
         else
         {
           freq.emplace<2>(method, target, 11, src, std::move(header)).prepare_payload();
           BOOST_ASIO_CORO_YIELD beast::http::async_write(stream, variant2::get<2>(freq), std::move(self));
+          header = std::move(variant2::get<2>(freq).base());
         }
 
       }
@@ -239,6 +249,7 @@ struct async_write_request_op : asio::coroutine
         else
           variant2::get<3>(freq).prepare_payload();
         BOOST_ASIO_CORO_YIELD beast::http::async_write(stream, variant2::get<3>(freq), std::move(self));
+        header = std::move(variant2::get<3>(freq).base());
       }
     }
     return n;
@@ -255,13 +266,13 @@ async_write_request(
     Stream & stream,
     http::verb method,
     core::string_view target,
-    http::fields header,
+    http::fields &header,
     source &src,
     CompletionToken && token)
 {
   return detail::co_run<detail::async_write_request_op<Stream>>(
       std::forward<CompletionToken>(token), std::ref(stream),
-      method, target, std::move(header), std::ref(src));
+      method, target, std::ref(header), std::ref(src));
 }
 
 

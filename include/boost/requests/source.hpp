@@ -40,16 +40,17 @@ std::size_t write_request(
     Stream & stream,
     http::verb method,
     core::string_view target,
-    http::fields header,
+    http::fields& header,
     source& src,
     system::error_code & ec);
+
 
 template<typename Stream>
 std::size_t write_request(
     Stream & stream,
     http::verb method,
     core::string_view target,
-    http::fields header,
+    http::fields &header,
     source &src)
 {
   boost::system::error_code ec;
@@ -68,9 +69,10 @@ BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void(system::error_code, std
     Stream & stream,
     http::verb method,
     core::string_view target,
-    http::fields header,
+    http::fields & header,
     source &src,
     CompletionToken && token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(typename Stream::executor_type));
+
 
 }
 }
