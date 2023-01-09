@@ -40,4 +40,6 @@ struct form
 }
 }
 
+#include <boost/requests/sources/form.hpp>
+
 #endif // BOOST_REQUESTS_FORM_HPP

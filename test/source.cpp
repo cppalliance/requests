@@ -3,6 +3,7 @@
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
+#include <boost/requests/json.hpp>
 #include <boost/requests/source.hpp>
 #include <boost/requests/request_settings.hpp>
 
@@ -34,9 +35,10 @@ TEST_CASE("sync")
       [&]{
         system::error_code ec;
         requests::http::request<beast::http::empty_body> req{requests::http::verb::get, "/test", 11};
+        auto sp = tag_invoke(requests::make_source_tag{}, json::value{"foobaria"});
         write_request(wp,
                       std::move(req),
-                      tag_invoke(requests::make_source_tag{}, json::value{"foobaria"}),
+                      sp,
                       ec);
         CHECK(ec == system::error_code{});
       }};
@@ -58,12 +60,13 @@ asio::awaitable<void> async_impl()
 {
   asio::readable_pipe rp{co_await asio::this_coro::executor};
   asio::writable_pipe wp{co_await asio::this_coro::executor};
+  auto sp = tag_invoke(requests::make_source_tag{}, json::string("foobaria"));
   asio::connect_pipe(rp, wp);
   {
     requests::http::request<beast::http::empty_body> req{requests::http::verb::get, "/test", 11};
     async_write_request(wp,
                         std::move(req),
-                        tag_invoke(requests::make_source_tag{}, json::value{"foobaria"}),
+                        sp,
                         asio::detached);
   }
 
@@ -74,7 +77,7 @@ asio::awaitable<void> async_impl()
   CHECK(req.method() == beast::http::verb::get);
   CHECK(req.target() == "/test");
   CHECK(req.at(boost::beast::http::field::content_type) == "application/json");
-  CHECK(json::parse(req.body()) == json::value{"foobaria"});
+  CHECK(json::parse(req.body()) == "foobaria");
 
   co_return ;
 }

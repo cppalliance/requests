@@ -17,6 +17,7 @@
 #include <boost/requests/http.hpp>
 #include <boost/requests/method.hpp>
 #include <boost/requests/request_settings.hpp>
+#include <boost/requests/sources/json.hpp>
 #include <boost/system/result.hpp>
 #include <boost/json/parser.hpp>
 #include <boost/json/value.hpp>

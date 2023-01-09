@@ -28,17 +28,17 @@ struct fixed_source_body
   {
     return *src.size();
   }
-  using value_type = source_ptr;
+  using value_type = source&;
   struct writer
   {
-    source_ptr src;
+    source & src;
     char buf_[BOOST_REQUESTS_CHUNK_SIZE];
     using const_buffers_type = asio::const_buffer;
 
     template<bool isRequest, class Fields>
     explicit
     writer(beast::http::header<isRequest, Fields> const&,
-           source_ptr src) : src(std::move(src))
+           source & src) : src(src)
     {
     }
 
@@ -53,7 +53,7 @@ struct fixed_source_body
     get(system::error_code& ec)
     {
       const_buffers_type res;
-      auto read_some = src->read_some(asio::buffer(buf_), ec);
+      auto read_some = src.read_some(asio::buffer(buf_), ec);
       if (ec)
         return boost::none;
 
@@ -67,7 +67,7 @@ struct source_body
 {
   struct value_type
   {
-    source_ptr source;
+    source &source;
     asio::const_buffer prefetched;
     bool more;
   };
@@ -97,7 +97,7 @@ struct source_body
     {
       if (v.prefetched.size() > 0)
         return std::pair<const_buffers_type, bool>{exchange(v.prefetched, asio::const_buffer("", 0u)), v.more};
-      auto read_some = v.source->read_some(asio::buffer(buf_), ec);
+      auto read_some = v.source.read_some(asio::buffer(buf_), ec);
 
       if (ec)
         return boost::none;
@@ -112,17 +112,17 @@ template<typename Stream>
 std::size_t write_request(
     Stream & stream,
     http::request_header hd,
-    source_ptr src,
+    source &src,
     system::error_code & ec)
 {
   const auto itr = hd.find(beast::http::field::content_type);
   if (itr == hd.end())
   {
-    auto def = src->default_content_type();
+    auto def = src.default_content_type();
     if (!def.empty())
       hd.set(beast::http::field::content_type, def);
   }
-  if (auto sz = src->size())
+  if (auto sz = src.size())
   {
     http::request<detail::fixed_source_body> req(std::move(hd), src);
     req.prepare_payload();
@@ -131,9 +131,9 @@ std::size_t write_request(
   else
   {
     char prebuffer[BOOST_REQUESTS_CHUNK_SIZE];
-    auto init = src->read_some(asio::buffer(prebuffer), ec);
+    auto init = src.read_some(asio::buffer(prebuffer), ec);
     http::request<detail::source_body> req(std::move(hd),
-                                           detail::source_body::value_type{std::move(src),
+                                           detail::source_body::value_type{src,
                                                                            asio::const_buffer(prebuffer, init.first),
                                                                            init.second});
 
@@ -159,17 +159,17 @@ struct async_write_request_op : asio::coroutine
 
   Stream & stream;
   http::request_header hd;
-  source_ptr src;
+  source &src;
 
-  optional<std::size_t> sz = src->size();
+  optional<std::size_t> sz = src.size();
   optional<http::request<detail::fixed_source_body>> freq;
   optional<http::request<detail::source_body>>       sreq;
 
   char prebuffer[BOOST_REQUESTS_CHUNK_SIZE];
   std::pair<std::size_t, bool> init;
 
-  async_write_request_op(Stream & stream, http::request_header hd, source_ptr src)
-    : stream(stream), hd(std::move(hd)), src(std::move(src))
+  async_write_request_op(Stream & stream, http::request_header hd, source &src)
+    : stream(stream), hd(std::move(hd)), src(src)
   {}
 
   std::size_t resume(requests::detail::co_token_t<step_signature_type> self,
@@ -182,7 +182,7 @@ struct async_write_request_op : asio::coroutine
         const auto itr = hd.find(beast::http::field::content_type);
         if (itr == hd.end())
         {
-          auto def = src->default_content_type();
+          auto def = src.default_content_type();
           if (!def.empty())
             hd.set(beast::http::field::content_type, def);
         }
@@ -195,12 +195,12 @@ struct async_write_request_op : asio::coroutine
       }
       else
       {
-        init = src->read_some(asio::buffer(prebuffer), ec);
+        init = src.read_some(asio::buffer(prebuffer), ec);
         if (ec)
           return 0u;
 
         sreq.emplace(std::move(hd),
-                     detail::source_body::value_type{std::move(src),
+                     detail::source_body::value_type{src,
                                                      asio::buffer(prebuffer, init.first),
                                                      init.second});
 
@@ -225,11 +225,11 @@ BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void(system::error_code, std
 async_write_request(
     Stream & stream,
     http::request_header hd,
-    source_ptr src,
+    source &src,
     CompletionToken && token)
 {
   return detail::co_run<detail::async_write_request_op<Stream>>(
-      std::forward<CompletionToken>(token), std::ref(stream), std::move(hd), std::move(src));
+      std::forward<CompletionToken>(token), std::ref(stream), std::move(hd), std::ref(src));
 }
 
 

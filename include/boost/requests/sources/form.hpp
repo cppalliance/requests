@@ -8,6 +8,7 @@
 #include <boost/requests/source.hpp>
 #include <boost/beast/core/file.hpp>
 
+
 #if defined(__cpp_lib_filesystem)
 #include <filesystem>
 #endif
@@ -57,6 +58,19 @@ struct form_source : source
 
   core::string_view default_content_type() override { return "application/x-www-form-urlencoded"; }
 };
+
+inline form_source tag_invoke(const make_source_tag&, urls::params_encoded_view pev)
+{
+  return form_source(pev);
+
+}
+
+template<typename Form>
+inline auto tag_invoke(const make_source_tag&, Form && f)
+    -> std::enable_if_t<std::is_same<std::decay_t<Form>, form_source>::value, form_source>
+{
+  return form_source(std::move(f));
+}
 
 }
 }

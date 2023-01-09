@@ -6,15 +6,21 @@
 #define BOOST_REQUESTS_SOURCES_FILE_HPP
 
 #include <boost/requests/source.hpp>
+#include <boost/requests/mime_types.hpp>
 #include <boost/beast/core/file.hpp>
 
 #if defined(__cpp_lib_filesystem)
 #include <filesystem>
 #endif
 
-
 namespace boost
 {
+
+namespace filesystem
+{
+class path;
+}
+
 namespace requests
 {
 
@@ -69,6 +75,14 @@ struct file_source : source
       return "text/plain";
   }
 };
+
+BOOST_REQUESTS_DECL file_source tag_invoke(const make_source_tag&, const boost::filesystem::path & path);
+BOOST_REQUESTS_DECL file_source tag_invoke(const make_source_tag&, boost::filesystem::path &&) = delete;
+#if defined(__cpp_lib_filesystem)
+BOOST_REQUESTS_DECL file_source tag_invoke(const make_source_tag&, const std::filesystem::path & path);
+BOOST_REQUESTS_DECL file_source tag_invoke(const make_source_tag&,       std::filesystem::path &&) = delete;
+#endif
+
 
 }
 }

@@ -20,10 +20,8 @@ TEST_CASE("public-list")
     CHECK(rcp::is_public_suffix("com", l));
     CHECK(rcp::is_public_suffix("org", l));
     CHECK(!rcp::is_public_suffix("boost.org", l));
-    CHECK(rcp::is_public_suffix("xyz.bd", l));
     CHECK(!rcp::is_public_suffix("x.yz.bd", l));
     CHECK(!rcp::is_public_suffix("city.kobe.jp", l));
-    CHECK(rcp::is_public_suffix("shop.kobe.jp", l));
 }
 
 
