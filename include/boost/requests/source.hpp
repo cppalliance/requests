@@ -9,6 +9,7 @@
 #include <boost/requests/http.hpp>
 #include <boost/container/pmr/polymorphic_allocator.hpp>
 #include <boost/core/detail/string_view.hpp>
+#include <boost/asio/async_result.hpp>
 #include <boost/asio/buffer.hpp>
 #include <boost/optional.hpp>
 
@@ -59,11 +60,12 @@ template<typename Stream,
          BOOST_ASIO_COMPLETION_TOKEN_FOR(void(system::error_code, std::size_t)) CompletionToken
            BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(typename Stream::executor_type)>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void(system::error_code, std::size_t))
-   async_write_request(
-      Stream & stream,
-      http::request_header hd,
-      source &src,
-      CompletionToken && token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(typename Stream::executor_type));
+  async_write_request(
+    Stream & stream,
+    http::request_header hd,
+    source &src,
+    CompletionToken && token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(typename Stream::executor_type));
+
 
 
 }
@@ -71,6 +73,7 @@ BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void(system::error_code, std
 
 #include <boost/requests/impl/source.hpp>
 #include <boost/requests/sources/buffer.hpp>
+#include <boost/requests/sources/empty.hpp>
 #include <boost/requests/sources/file.hpp>
 #include <boost/requests/sources/string.hpp>
 #include <boost/requests/sources/string_view.hpp>

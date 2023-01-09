@@ -54,11 +54,11 @@ struct basic_string_view_source final : source
   core::string_view default_content_type() final
   {
     BOOST_IF_CONSTEXPR (sizeof(Char) == 1)
-    return "text/plain; charset=utf-8";
+      return "text/plain; charset=utf-8";
     else BOOST_IF_CONSTEXPR (sizeof(Char) == 2)
-        return "text/plain; charset=utf-16";
+      return "text/plain; charset=utf-16";
     else BOOST_IF_CONSTEXPR (sizeof(Char) == 4)
-        return "text/plain; charset=utf-32";
+      return "text/plain; charset=utf-32";
     return "";
   }
 };

@@ -124,9 +124,18 @@ std::size_t write_request(
   }
   if (auto sz = src.size())
   {
-    http::request<detail::fixed_source_body> req(std::move(hd), src);
-    req.prepare_payload();
-    return beast::http::write(stream, req, ec);
+    if (*sz == 0)
+    {
+      http::request<http::empty_body> req(std::move(hd));
+      req.prepare_payload();
+      return beast::http::write(stream, req, ec);
+    }
+    else
+    {
+      http::request<detail::fixed_source_body> req(std::move(hd), src);
+      req.prepare_payload();
+      return beast::http::write(stream, req, ec);
+    }
   }
   else
   {
@@ -164,8 +173,10 @@ struct async_write_request_op : asio::coroutine
   source &src;
 
   optional<std::size_t> sz = src.size();
-  optional<http::request<detail::fixed_source_body>> freq;
-  optional<http::request<detail::source_body>>       sreq;
+  variant2::variant<variant2::monostate,
+                    http::request<http::empty_body>,
+                    http::request<detail::fixed_source_body>,
+                    http::request<detail::source_body>> freq;
 
   char prebuffer[BOOST_REQUESTS_CHUNK_SIZE];
   std::pair<std::size_t, bool> init;
@@ -177,7 +188,6 @@ struct async_write_request_op : asio::coroutine
   std::size_t resume(requests::detail::co_token_t<step_signature_type> self,
                      system::error_code ec = {}, std::size_t n = 0u)
   {
-
     BOOST_ASIO_CORO_REENTER(this)
     {
       {
@@ -191,9 +201,17 @@ struct async_write_request_op : asio::coroutine
       }
       if (sz)
       {
-        freq.emplace(std::move(hd), src);
-        freq->prepare_payload();
-        BOOST_ASIO_CORO_YIELD beast::http::async_write(stream, *freq, std::move(self));
+        if (*sz == 0)
+        {
+          freq.emplace<1>(std::move(hd)).prepare_payload();
+          BOOST_ASIO_CORO_YIELD beast::http::async_write(stream, variant2::get<1>(freq), std::move(self));
+        }
+        else
+        {
+          freq.emplace<2>(std::move(hd), src).prepare_payload();
+          BOOST_ASIO_CORO_YIELD beast::http::async_write(stream, variant2::get<2>(freq), std::move(self));
+        }
+
       }
       else
       {
@@ -201,17 +219,17 @@ struct async_write_request_op : asio::coroutine
         if (ec)
           return 0u;
 
-        sreq.emplace(std::move(hd),
+        freq.emplace<3>(std::move(hd),
                      detail::source_body::value_type{src,
                                                      asio::buffer(prebuffer, init.first),
                                                      init.second});
 
         if (!init.second)
-          sreq->set(beast::http::field::content_length, std::to_string(init.first));
+          variant2::get<3>(freq).set(beast::http::field::content_length, std::to_string(init.first));
         else
-          sreq->prepare_payload();
+          variant2::get<3>(freq).prepare_payload();
 
-        BOOST_ASIO_CORO_YIELD beast::http::async_write(stream, *sreq, std::move(self));
+        BOOST_ASIO_CORO_YIELD beast::http::async_write(stream, variant2::get<3>(freq), std::move(self));
       }
     }
     return n;

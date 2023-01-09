@@ -34,11 +34,19 @@ TEST_CASE("sync")
   std::thread thr{
       [&]{
         system::error_code ec;
-        requests::http::request<beast::http::empty_body> req{requests::http::verb::get, "/test", 11};
+        requests::http::request<beast::http::empty_body> req{requests::http::verb::post, "/test", 11};
         auto sp = tag_invoke(requests::make_source_tag{}, json::value{"foobaria"});
         write_request(wp,
                       std::move(req),
                       sp,
+                      ec);
+        CHECK(ec == system::error_code{});
+
+        requests::http::request<beast::http::empty_body> re2{requests::http::verb::get, "/test2", 11};
+        auto ep = requests::make_source(requests::empty());
+        write_request(wp,
+                      std::move(re2),
+                      ep,
                       ec);
         CHECK(ec == system::error_code{});
       }};
@@ -49,10 +57,19 @@ TEST_CASE("sync")
   system::error_code ec;
   beast::http::read(rp, buf, req, ec);
   CHECK(ec == system::error_code{});
-  CHECK(req.method() == beast::http::verb::get);
+  CHECK(req.method() == beast::http::verb::post);
   CHECK(req.target() == "/test");
   CHECK(req.at(boost::beast::http::field::content_type) == "application/json");
   CHECK(json::parse(req.body()) == json::value{"foobaria"});
+
+
+  requests::http::request<beast::http::empty_body> re2;
+  beast::http::read(rp, buf, re2, ec);
+  CHECK(ec == system::error_code{});
+  CHECK(re2.method() == beast::http::verb::get);
+  CHECK(re2.target() == "/test2");
+  CHECK(re2.count(boost::beast::http::field::content_type) == 0);
+
   thr.join();
 }
 
@@ -61,23 +78,36 @@ asio::awaitable<void> async_impl()
   asio::readable_pipe rp{co_await asio::this_coro::executor};
   asio::writable_pipe wp{co_await asio::this_coro::executor};
   auto sp = tag_invoke(requests::make_source_tag{}, json::string("foobaria"));
+  auto ep = tag_invoke(requests::make_source_tag{}, requests::empty());
   asio::connect_pipe(rp, wp);
-  {
-    requests::http::request<beast::http::empty_body> req{requests::http::verb::get, "/test", 11};
-    async_write_request(wp,
-                        std::move(req),
-                        sp,
-                        asio::detached);
-  }
+
+  co_await asio::co_spawn(
+    co_await asio::this_coro::executor,
+    [&]() -> asio::awaitable<void>
+    {
+      requests::http::request<beast::http::empty_body> req{requests::http::verb::post, "/test", 11};
+      requests::http::request<beast::http::empty_body> re2{requests::http::verb::get, "/test2", 11};
+
+      co_await async_write_request(wp, std::move(req), sp, asio::use_awaitable);
+      co_await async_write_request(wp, std::move(re2), ep, asio::use_awaitable);
+    },
+    asio::use_awaitable);
 
   requests::http::request<beast::http::string_body> req;
   beast::flat_buffer buf;
   system::error_code ec;
   co_await beast::http::async_read(rp, buf, req, asio::use_awaitable);
-  CHECK(req.method() == beast::http::verb::get);
+  CHECK(req.method() == beast::http::verb::post);
   CHECK(req.target() == "/test");
   CHECK(req.at(boost::beast::http::field::content_type) == "application/json");
   CHECK(json::parse(req.body()) == "foobaria");
+
+  requests::http::request<beast::http::empty_body> re2;
+  co_await beast::http::async_read(rp, buf, re2, asio::use_awaitable);
+  CHECK(ec == system::error_code{});
+  CHECK(re2.method() == beast::http::verb::get);
+  CHECK(re2.target() == "/test2");
+  CHECK(re2.count(boost::beast::http::field::content_type) == 0);
 
   co_return ;
 }

@@ -37,6 +37,7 @@
 #include <boost/requests/rfc/impl/dates.ipp>
 #include <boost/requests/rfc/impl/link.ipp>
 #include <boost/requests/rfc/impl/quoted_string.ipp>
+#include <boost/requests/sources/impl/empty.ipp>
 #include <boost/requests/sources/impl/file.ipp>
 #include <boost/requests/sources/impl/json.ipp>
 
