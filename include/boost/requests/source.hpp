@@ -38,18 +38,22 @@ auto make_source(Source && source) -> decltype(tag_invoke(make_source_tag{}, std
 template<typename Stream>
 std::size_t write_request(
     Stream & stream,
-    http::request_header hd,
+    http::verb method,
+    core::string_view target,
+    http::fields header,
     source& src,
     system::error_code & ec);
 
 template<typename Stream>
 std::size_t write_request(
     Stream & stream,
-    http::request_header hd,
+    http::verb method,
+    core::string_view target,
+    http::fields header,
     source &src)
 {
   boost::system::error_code ec;
-  auto res = write_request(stream, std::move(hd), std::move(src), ec);
+  auto res = write_request(stream, method, std::move(header), target, std::move(src), ec);
   if (ec)
     throw_exception(system::system_error(ec, "write_request"));
   return res;
@@ -62,11 +66,11 @@ template<typename Stream,
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void(system::error_code, std::size_t))
   async_write_request(
     Stream & stream,
-    http::request_header hd,
+    http::verb method,
+    core::string_view target,
+    http::fields header,
     source &src,
     CompletionToken && token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(typename Stream::executor_type));
-
-
 
 }
 }

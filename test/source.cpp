@@ -34,18 +34,16 @@ TEST_CASE("sync")
   std::thread thr{
       [&]{
         system::error_code ec;
-        requests::http::request<beast::http::empty_body> req{requests::http::verb::post, "/test", 11};
         auto sp = tag_invoke(requests::make_source_tag{}, json::value{"foobaria"});
         write_request(wp,
-                      std::move(req),
+                      requests::http::verb::post, "/test", {},
                       sp,
                       ec);
         CHECK(ec == system::error_code{});
 
-        requests::http::request<beast::http::empty_body> re2{requests::http::verb::get, "/test2", 11};
         auto ep = requests::make_source(requests::empty());
         write_request(wp,
-                      std::move(re2),
+                      requests::http::verb::get, "/test2", {},
                       ep,
                       ec);
         CHECK(ec == system::error_code{});
@@ -85,11 +83,8 @@ asio::awaitable<void> async_impl()
     co_await asio::this_coro::executor,
     [&]() -> asio::awaitable<void>
     {
-      requests::http::request<beast::http::empty_body> req{requests::http::verb::post, "/test", 11};
-      requests::http::request<beast::http::empty_body> re2{requests::http::verb::get, "/test2", 11};
-
-      co_await async_write_request(wp, std::move(req), sp, asio::use_awaitable);
-      co_await async_write_request(wp, std::move(re2), ep, asio::use_awaitable);
+      co_await async_write_request(wp, requests::http::verb::post, "/test", {}, sp, asio::use_awaitable);
+      co_await async_write_request(wp, requests::http::verb::get, "/test2", {}, ep, asio::use_awaitable);
     },
     asio::use_awaitable);
 
