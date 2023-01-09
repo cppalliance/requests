@@ -24,7 +24,7 @@ struct json_source : source
   ~json_source() = default;
   optional<std::size_t> size() const override {return none;};
   BOOST_REQUESTS_DECL void reset() override;
-  BOOST_REQUESTS_DECL std::pair<std::size_t, bool> read_some(asio::mutable_buffer buffer, system::error_code & ec) override;
+  BOOST_REQUESTS_DECL std::pair<std::size_t, bool> read_some(void * data, std::size_t size, system::error_code & ec) override;
   core::string_view default_content_type() override {return "application/json";}
 };
 

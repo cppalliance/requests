@@ -53,7 +53,7 @@ struct file_source : source
   {
     file.seek(0, ec);
   }
-  std::pair<std::size_t, bool> read_some(asio::mutable_buffer buffer, system::error_code & ec) override
+  std::pair<std::size_t, bool> read_some(void * data, std::size_t size, system::error_code & ec) override
   {
     if (this->ec)
     {
@@ -61,7 +61,7 @@ struct file_source : source
       return {0u, true};
     }
 
-    auto n = file.read(buffer.data(), buffer.size(), ec);
+    auto n = file.read(data, size, ec);
     return {n, file.pos(ec) == file.size(ec)};
   }
   core::string_view default_content_type() override

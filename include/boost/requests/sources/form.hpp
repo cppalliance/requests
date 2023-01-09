@@ -45,11 +45,11 @@ struct form_source : source
   {
     pos = 1u;
   }
-  std::pair<std::size_t, bool> read_some(asio::mutable_buffer buffer, system::error_code & ec) override
+  std::pair<std::size_t, bool> read_some(void * data, std::size_t size, system::error_code & ec) override
   {
     const auto left = param_view.buffer().size() - pos;
-    const auto sz = buffer.size();
-    auto dst = static_cast<char*>(buffer.data());
+    const auto sz = size;
+    auto dst = static_cast<char*>(data);
     auto res = std::char_traits<char>::copy(dst, param_view.buffer().data() + pos, (std::min)(left, sz));
     std::size_t n = std::distance(dst, res);
     pos += n;

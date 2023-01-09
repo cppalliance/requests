@@ -34,15 +34,15 @@ struct basic_string_source final : source
     pos = 0;
   }
 
-  std::pair<std::size_t, bool> read_some(asio::mutable_buffer buffer, system::error_code & ) final
+  std::pair<std::size_t, bool> read_some(void * data, std::size_t size, system::error_code & ) final
   {
-    const auto left = data.size() - pos;
-    const auto sz = buffer.size() / sizeof(Char);
-    auto dst = static_cast<char*>(buffer.data());
-    auto res = Traits::copy(dst, data.c_str() + pos, (std::min)(left, sz));
+    const auto left = this->data.size() - pos;
+    const auto sz = size / sizeof(Char);
+    auto dst = static_cast<char*>(data);
+    auto res = Traits::copy(dst, this->data.c_str() + pos, (std::min)(left, sz));
     std::size_t n = std::distance(dst, res);
     pos += n;
-    return {n, pos != data.size()};
+    return {n, pos != this->data.size()};
   }
 
   core::string_view default_content_type() final

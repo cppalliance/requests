@@ -29,9 +29,9 @@ struct buffer_source : source
   {
     current = buffer;
   }
-  std::pair<std::size_t, bool> read_some(asio::mutable_buffer buffer, system::error_code & ec) override
+  std::pair<std::size_t, bool> read_some(void * data, std::size_t size, system::error_code & ec) override
   {
-    auto n = asio::buffer_copy(buffer, this->current);
+    auto n = asio::buffer_copy(asio::buffer(data, size), this->current);
     current += n;
     return {n, current.size() > 0u};
   }

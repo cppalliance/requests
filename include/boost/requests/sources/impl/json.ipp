@@ -26,9 +26,9 @@ void json_source::reset()
   ser.reset(&data);
 
 }
-std::pair<std::size_t, bool> json_source::read_some(asio::mutable_buffer buffer, system::error_code & ec)
+std::pair<std::size_t, bool> json_source::read_some(void * data, std::size_t size, system::error_code & ec)
 {
-  auto n = ser.read(static_cast<char *>(buffer.data()), buffer.size());
+  auto n = ser.read(static_cast<char*>(data), size);
   return {n.size(), !ser.done()};
 }
 

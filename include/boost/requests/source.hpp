@@ -22,7 +22,7 @@ struct source
   virtual ~source() = default;
   virtual optional<std::size_t> size() const = 0;
   virtual void reset() = 0;
-  virtual std::pair<std::size_t, bool> read_some(asio::mutable_buffer buffer, system::error_code & ) = 0;
+  virtual std::pair<std::size_t, bool> read_some(void * data, std::size_t size, system::error_code & ) = 0;
   virtual core::string_view default_content_type() {return "";}
 };
 

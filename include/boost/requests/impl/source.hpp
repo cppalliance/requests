@@ -53,7 +53,7 @@ struct fixed_source_body
     get(system::error_code& ec)
     {
       const_buffers_type res;
-      auto read_some = src.read_some(asio::buffer(buf_), ec);
+      auto read_some = src.read_some(buf_, sizeof(buf_), ec);
       if (ec)
         return boost::none;
 
@@ -97,7 +97,7 @@ struct source_body
     {
       if (v.prefetched.size() > 0)
         return std::pair<const_buffers_type, bool>{exchange(v.prefetched, asio::const_buffer("", 0u)), v.more};
-      auto read_some = v.source.read_some(asio::buffer(buf_), ec);
+      auto read_some = v.source.read_some(buf_, sizeof(buf_), ec);
 
       if (ec)
         return boost::none;
@@ -131,7 +131,7 @@ std::size_t write_request(
   else
   {
     char prebuffer[BOOST_REQUESTS_CHUNK_SIZE];
-    auto init = src.read_some(asio::buffer(prebuffer), ec);
+    auto init = src.read_some(prebuffer, sizeof(prebuffer), ec);
     http::request<detail::source_body> req(std::move(hd),
                                            detail::source_body::value_type{src,
                                                                            asio::const_buffer(prebuffer, init.first),
@@ -146,7 +146,9 @@ std::size_t write_request(
   }
 }
 
-namespace detail {
+namespace detail
+{
+
 template<typename Stream>
 struct async_write_request_op : asio::coroutine
 {
@@ -195,7 +197,7 @@ struct async_write_request_op : asio::coroutine
       }
       else
       {
-        init = src.read_some(asio::buffer(prebuffer), ec);
+        init = src.read_some(prebuffer, sizeof(prebuffer), ec);
         if (ec)
           return 0u;
 
