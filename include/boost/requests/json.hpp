@@ -10,7 +10,6 @@
 
 #include <boost/container/pmr/polymorphic_allocator.hpp>
 #include <boost/json.hpp>
-#include <boost/requests/body_traits.hpp>
 #include <boost/requests/detail/async_coroutine.hpp>
 #include <boost/requests/error.hpp>
 #include <boost/requests/fields/link.hpp>
@@ -37,57 +36,6 @@ namespace boost
 {
 namespace requests
 {
-
-
-template<>
-struct request_body_traits<json::value, void>
-{
-  static core::string_view default_content_type( const json::value &  )
-  {
-    return "application/json";
-  }
-
-  using body_type = beast::http::string_body;
-
-  static typename body_type::value_type make_body(const json::value & js, system::error_code & ec)
-  {
-    return json::serialize(js);
-  }
-};
-
-template<>
-struct request_body_traits<json::object, void>
-{
-  static core::string_view default_content_type( const json::object &  )
-  {
-    return "application/json";
-  }
-
-  using body_type = beast::http::string_body;
-
-  static typename body_type::value_type make_body(const json::object & js, system::error_code & ec)
-  {
-    return json::serialize(js);
-  }
-};
-
-
-template<>
-struct request_body_traits<json::array, void>
-{
-  static core::string_view default_content_type( const json::array &  )
-  {
-    return "application/json";
-  }
-  using body_type = beast::http::string_body;
-
-  static typename body_type::value_type make_body(const json::array & js, system::error_code & ec)
-  {
-    return json::serialize(js);
-  }
-};
-
-
 
 inline auto as_json(const response & res,
                     json::storage_ptr ptr,

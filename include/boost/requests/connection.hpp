@@ -19,11 +19,11 @@
 #include <boost/beast/http/string_body.hpp>
 #include <boost/beast/http/write.hpp>
 #include <boost/beast/websocket/stream.hpp>
-#include <boost/requests/body_traits.hpp>
 #include <boost/requests/detail/async_coroutine.hpp>
 #include <boost/requests/detail/ssl.hpp>
 #include <boost/requests/detail/tracker.hpp>
 #include <boost/requests/fields/keep_alive.hpp>
+#include <boost/requests/source.hpp>
 #include <boost/requests/redirect.hpp>
 #include <boost/requests/request_options.hpp>
 #include <boost/requests/request_settings.hpp>
