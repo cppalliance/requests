@@ -321,6 +321,7 @@ template<typename Implementation,
          typename ... Args>
 auto co_run(Token && token, Args && ... args)
 {
+  static_assert(std::is_constructible<Implementation, Args&&...>::value);
   return asio::async_initiate<Token, typename Implementation::completion_signature_type>(
       co_runner<Implementation>{}, token, std::forward<Args>(args)...);
 }

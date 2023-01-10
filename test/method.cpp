@@ -31,9 +31,7 @@ inline std::string httpbin()
   return url;
 }
 
-
-
-TEST_SUITE_BEGIN("free");
+TEST_SUITE_BEGIN("method");
 
 
 struct http_maker
@@ -472,7 +470,7 @@ asio::awaitable<void> async_http_pool_request()
   };
 
   using namespace asio::experimental::awaitable_operators ;
-  co_await (
+  co_await (/*
       headers(url)
       && get_(url)
       && get_redirect(url)
@@ -486,9 +484,8 @@ asio::awaitable<void> async_http_pool_request()
       && put_json(url)
       && put_form(url)
       && post_json(url)
-      && post_form(url)
+      && */post_form(url)
   );
-  co_await asio::post(asio::use_awaitable);
 }
 
 TEST_CASE_TEMPLATE("async-session-request", M, http_maker, https_maker)

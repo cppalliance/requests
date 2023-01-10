@@ -23,16 +23,28 @@
 
 using namespace boost;
 
-namespace boost
+struct xml_ref_source final : requests::source
 {
-namespace requests
-{
+  const pugi::xml_document &doc;
+  mutable std::stringstream stream;
 
-// generic traits for uploading
-template<>
-struct request_body_traits<pugi::xml_document, void>
-{
-  static core::string_view default_content_type( const pugi::xml_document & doc)
+  xml_ref_source(const pugi::xml_document & doc) : doc(doc) {}
+
+  optional<std::size_t> size() const
+  {
+    return static_cast<std::size_t>(stream.tellp());
+  }
+  void reset()
+  {
+    stream.clear();
+    doc.print(stream);
+  }
+  std::pair<std::size_t, bool> read_some(void * data, std::size_t size, system::error_code & )
+  {
+    auto n = stream.readsome(static_cast<char*>(data), size);
+    return {n, stream.eof() };
+  }
+  core::string_view default_content_type()
   {
     const auto c = doc.root().children();
     const auto sz = std::distance(c.begin(), c.end());
@@ -47,18 +59,17 @@ struct request_body_traits<pugi::xml_document, void>
 
     return "application/xml";
   }
-  using body_type = beast::http::string_body;
-
-  static typename body_type::value_type make_body(const pugi::xml_document & doc, system::error_code & ec)
-  {
-    using vt = typename body_type::value_type;
-    std::ostringstream helper;
-    doc.print(helper);
-    return helper.str();
-  }
 };
 
+namespace pugi
+{
+
+xml_ref_source tag_invoke(const requests::make_source_tag&, const pugi::xml_document &doc)
+{
+  return xml_ref_source{std::move(doc)};
 }
+
+
 }
 
 inline auto as_xml(const requests::response & res) -> pugi::xml_document

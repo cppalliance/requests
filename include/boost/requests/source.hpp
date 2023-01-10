@@ -32,7 +32,7 @@ struct make_source_tag {};
 template<typename Source>
 auto make_source(Source && source) -> decltype(tag_invoke(make_source_tag{}, std::declval<Source>()))
 {
-  return tag_invoke(make_source_tag{}, static_cast<Source&&>(source));
+  return tag_invoke(make_source_tag{}, std::forward<Source>(source));
 }
 
 template<typename Stream>
@@ -54,7 +54,7 @@ std::size_t write_request(
     source &src)
 {
   boost::system::error_code ec;
-  auto res = write_request(stream, method, std::move(header), target, std::move(src), ec);
+  auto res = write_request(stream, method, target, header, src, ec);
   if (ec)
     throw_exception(system::system_error(ec, "write_request"));
   return res;

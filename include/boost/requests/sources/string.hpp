@@ -39,8 +39,9 @@ struct basic_string_source final : source
     const auto left = this->data.size() - pos;
     const auto sz = size / sizeof(Char);
     auto dst = static_cast<char*>(data);
-    auto res = Traits::copy(dst, this->data.c_str() + pos, (std::min)(left, sz));
-    std::size_t n = std::distance(dst, res);
+    auto cnt = (std::min)(left, sz);
+    std::char_traits<Char>::copy(dst, this->data.data() + pos, cnt);
+    std::size_t n = cnt * sizeof(Char);
     pos += n;
     return {n, pos != this->data.size()};
   }

@@ -40,6 +40,7 @@ struct fixed_source_body
     writer(beast::http::header<isRequest, Fields> const&,
            source & src) : src(src)
     {
+      src.reset();
     }
 
     void
@@ -83,6 +84,7 @@ struct source_body
     writer(beast::http::header<isRequest, Fields> const&,
            value_type value) : v(std::move(value))
     {
+      value.source.reset();
     }
 
     void
@@ -124,6 +126,8 @@ std::size_t write_request(
     if (!def.empty())
       header.set(beast::http::field::content_type, def);
   }
+  src.reset();
+
   if (auto sz = src.size())
   {
     if (*sz == 0)
@@ -139,7 +143,6 @@ std::size_t write_request(
     {
       http::request<detail::fixed_source_body> req(method, target, 11, src, std::move(header));
       req.prepare_payload();
-
       auto n =  beast::http::write(stream, req, ec);
       header = std::move(req.base());
       return n;
@@ -217,6 +220,8 @@ struct async_write_request_op : asio::coroutine
             header.set(beast::http::field::content_type, def);
         }
       }
+      src.reset();
+
       if (sz)
       {
         if (*sz == 0)

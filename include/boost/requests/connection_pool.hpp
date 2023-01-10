@@ -156,14 +156,16 @@ struct connection_pool
                request_settings req) -> stream
     {
       boost::system::error_code ec;
-      auto res = ropen(method, path, std::move(body), std::move(req), ec);
+      auto res = ropen(method, path, std::forward<RequestBody>(body), std::move(req), ec);
       if (ec)
         throw_exception(system::system_error(ec, "open"));
       return res;
     }
 
-    template<typename RequestBody>
-    auto ropen(http::request<RequestBody> & req,
+    auto ropen(beast::http::verb method,
+               urls::pct_string_view path,
+               http::fields & headers,
+               source & src,
                request_options opt,
                cookie_jar * jar,
                system::error_code & ec) -> stream
@@ -175,18 +177,18 @@ struct connection_pool
         return stream{get_executor(), nullptr};
 
       BOOST_ASSERT(conn != nullptr);
-      return conn->ropen(req, opt, jar, ec);
+      return conn->ropen(method, path, headers, src, opt, jar, ec);
     }
 
-    template<typename RequestBody>
     auto ropen(beast::http::verb method,
-               urls::url_view path,
-               http::request<RequestBody> & req,
+               urls::pct_string_view path,
+               http::fields & headers,
+               source & src,
                request_options opt,
                cookie_jar * jar) -> stream
     {
       boost::system::error_code ec;
-      auto res = ropen(method, path, req, opt, jar, ec);
+      auto res = ropen(method, path, headers, src, opt, jar, ec);
       if (ec)
         throw_exception(system::system_error(ec, "open"));
       return res;
@@ -203,11 +205,13 @@ struct connection_pool
                 request_settings req,
                 CompletionToken && completion_token);
 
-    template<typename RequestBody,
-              typename CompletionToken>
+    template<typename CompletionToken>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                        void (boost::system::error_code, stream))
-    async_ropen(http::request<RequestBody> & req,
+    async_ropen(beast::http::verb method,
+                urls::pct_string_view path,
+                http::fields & headers,
+                source & src,
                 request_options opt,
                 cookie_jar * jar,
                 CompletionToken && completion_token);
@@ -232,9 +236,7 @@ struct connection_pool
 
     template<typename>
     struct async_ropen_op;
-
-    template<typename>
-    struct async_ropen_op_1;
+    struct async_ropen_op_src;
 };
 
 template<typename Token>

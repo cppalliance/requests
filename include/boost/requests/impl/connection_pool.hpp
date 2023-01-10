@@ -132,10 +132,10 @@ template<typename RequestBody,
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, stream))
 connection_pool::async_ropen(beast::http::verb method,
-                                           urls::url_view path,
-                                           RequestBody && body,
-                                           request_settings req,
-                                           CompletionToken && completion_token)
+                             urls::url_view path,
+                             RequestBody && body,
+                             request_settings req,
+                             CompletionToken && completion_token)
 {
   return asio::async_compose<CompletionToken, void(system::error_code, stream)>(
       async_ropen_op<RequestBody>{{}, this, method, path, std::forward<RequestBody>(body), std::move(req)},
@@ -144,14 +144,16 @@ connection_pool::async_ropen(beast::http::verb method,
   );
 }
 
-template<typename RequestBody>
-struct connection_pool::async_ropen_op_1 : asio::coroutine
+struct connection_pool::async_ropen_op_src : asio::coroutine
 {
   using executor_type = asio::any_io_executor;
   executor_type get_executor() {return this_->get_executor(); }
 
   connection_pool * this_;
-  http::request<RequestBody> & req;
+  beast::http::verb method;
+  urls::pct_string_view path;
+  http::fields & headers;
+  source & src;
   request_options opt;
   cookie_jar * jar;
 
@@ -166,7 +168,7 @@ struct connection_pool::async_ropen_op_1 : asio::coroutine
       if (ec)
         return self.complete(ec, stream{this_->get_executor(), nullptr});
 
-      yield conn->async_ropen(req, std::move(opt), jar, std::move(self));
+      yield conn->async_ropen(method, path, headers, src, std::move(opt), jar, std::move(self));
     }
   }
 
@@ -178,20 +180,20 @@ struct connection_pool::async_ropen_op_1 : asio::coroutine
 };
 
 
-template<typename RequestBody,
-         typename CompletionToken>
+template<typename CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code,
                                    stream))
-connection_pool::async_ropen(http::request<RequestBody> & req,
-                                           request_options opt,
-                                           cookie_jar * jar,
-                                           CompletionToken && completion_token)
+connection_pool::async_ropen(beast::http::verb method,
+                             urls::pct_string_view path,
+                             http::fields & headers,
+                             source & src,
+                             request_options opt,
+                             cookie_jar * jar,
+                             CompletionToken && completion_token)
 {
   return asio::async_compose<CompletionToken, void(system::error_code, stream)>(
-      async_ropen_op_1<RequestBody>{{}, this, req, std::move(opt), jar},
-      completion_token,
-      mutex_
-  );
+      async_ropen_op_src{{}, this, method, path, headers, src, std::move(opt), jar},
+      completion_token, mutex_);
 }
 
 

@@ -196,16 +196,21 @@ struct connection
                urls::url_view path,
                RequestBody && body,
                request_settings req) -> stream;
-    template<typename RequestBody>
-    auto ropen(http::request<RequestBody> & req,
+
+    BOOST_REQUESTS_DECL
+    auto ropen(beast::http::verb method,
+               urls::pct_string_view path,
+               http::fields & headers,
+               source & src,
                request_options opt,
                cookie_jar * jar,
                system::error_code & ec) -> stream;
 
-    template<typename RequestBody>
+    BOOST_REQUESTS_DECL
     auto ropen(beast::http::verb method,
-               urls::url_view path,
-               http::request<RequestBody> & req,
+               urls::pct_string_view path,
+               http::fields & headers,
+               source & src,
                request_options opt,
                cookie_jar * jar) -> stream;
 
@@ -219,52 +224,19 @@ struct connection
                 request_settings req,
                 CompletionToken && completion_token);
 
-    template<typename RequestBody,
-              typename CompletionToken>
+    template<typename CompletionToken>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                        void (boost::system::error_code,
                                             stream))
-    async_ropen(http::request<RequestBody> & req,
+    async_ropen(beast::http::verb method,
+                urls::pct_string_view path,
+                http::fields & headers,
+                source & src,
                 request_options opt,
                 cookie_jar * jar,
                 CompletionToken && completion_token);
-
-    template<typename CompletionToken>
-    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                       void (boost::system::error_code, stream))
-    async_ropen(http::request<http::empty_body> & req,
-                request_options opt,
-                cookie_jar * jar,
-                CompletionToken && completion_token);
-
-    template<typename CompletionToken>
-    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                       void (boost::system::error_code, stream))
-    async_ropen(http::request<http::file_body> & req,
-                request_options opt,
-                cookie_jar * jar,
-                CompletionToken && completion_token );
-
-    template<typename CompletionToken>
-    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                       void (boost::system::error_code, stream))
-    async_ropen(http::request<http::string_body> & req,
-                request_options opt,
-                cookie_jar * jar,
-                CompletionToken && completion_token );
-
-    BOOST_REQUESTS_DECL auto ropen(http::request<http::empty_body>  & req, request_options opt, cookie_jar * jar, system::error_code & ec) -> stream;
-    BOOST_REQUESTS_DECL auto ropen(http::request<http::file_body>   & req, request_options opt, cookie_jar * jar, system::error_code & ec) -> stream;
-    BOOST_REQUESTS_DECL auto ropen(http::request<http::string_body> & req, request_options opt, cookie_jar * jar, system::error_code & ec) -> stream;
-
     bool uses_ssl() const {return use_ssl_;}
-
   private:
-
-    template<typename Body>
-    void write_impl(http::request<Body> & req,
-                    asem::lock_guard<detail::basic_mutex<executor_type>> & read_lock,
-                    system::error_code & ec);
 
     next_layer_type next_layer_;
     bool use_ssl_{false};
@@ -280,23 +252,18 @@ struct connection
     struct async_close_op;
     struct async_connect_op;
 
-    template<typename RequestBody>
     struct async_ropen_op;
 
-    struct async_ropen_file_op;
-    struct async_ropen_string_op;
-    struct async_ropen_empty_op;
+    template<typename RequestSource>
+    struct async_ropen_op_body;
 
-    template<typename Body> async_ropen_op<Body> pick_ropen_op(Body * );
-    async_ropen_file_op   pick_ropen_op(http::file_body   *);
-    async_ropen_string_op pick_ropen_op(http::string_body *);
-    async_ropen_empty_op  pick_ropen_op(http::empty_body  *);
+    template<typename RequestSource>
+    struct async_ropen_op_body_base;
 
     BOOST_REQUESTS_DECL std::size_t do_read_some_(beast::http::basic_parser<false> & parser);
     BOOST_REQUESTS_DECL std::size_t do_read_some_(beast::http::basic_parser<false> & parser, system::error_code & ec) ;
     BOOST_REQUESTS_DECL void do_async_read_some_(beast::http::basic_parser<false> & parser, detail::co_token_t<void(system::error_code, std::size_t)>) ;
     BOOST_REQUESTS_DECL void do_async_close_(detail::co_token_t<void(system::error_code)>);
-
 
     friend struct stream;
 };

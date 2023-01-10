@@ -18,6 +18,127 @@
 namespace boost {
 namespace requests {
 
+
+auto session::ropen(
+    beast::http::verb method,
+    urls::url_view url,
+    http::fields & headers,
+    source & src,
+    system::error_code & ec) -> stream
+{
+  auto opts = options_;
+
+  response_base::history_type history{headers.get_allocator()};
+
+
+  auto do_ropen =
+      [&](http::fields & hd, urls::pct_string_view target, request_options opts) -> stream
+  {
+    auto p = get_pool(url, ec);
+    if (ec)
+      return stream{get_executor(), nullptr};
+
+    return p->ropen(method, target, hd, src, opts, &jar_, ec);
+  };
+
+  const auto is_secure = (url.scheme_id() == urls::scheme::https)
+                         || (url.scheme_id() == urls::scheme::wss);
+
+  auto host = url.encoded_host();
+
+  if (!is_secure && opts.enforce_tls)
+  {
+    static constexpr auto loc((BOOST_CURRENT_LOCATION));
+    BOOST_REQUESTS_ASSIGN_EC(ec, error::insecure);
+    return stream{get_executor(), nullptr};
+  }
+
+  {
+    detail::monotonic_token mv;
+    auto cc = jar_.get(host, is_secure, url.encoded_path(), mv);
+    if (!cc.empty())
+      headers.set(http::field::cookie, cc);
+  }
+
+
+  auto str = do_ropen(headers, url.encoded_target(), opts);
+
+  if (!ec) // all good
+    return str;
+
+  if (opts.max_redirects == str.history().size())
+    return str;
+
+  urls::url url_cache;
+  while (ec == error::forbidden_redirect)
+  {
+    ec.clear();
+    if (str.history().empty())
+    {
+      BOOST_REQUESTS_ASSIGN_EC(ec, error::invalid_redirect);
+      break;
+    }
+    opts.max_redirects -= str.history().size();
+    const auto & last = str.history().back();
+    auto rc = last.base().result();
+
+    auto loc_itr = last.base().find(http::field::location);
+
+    if (opts.max_redirects == 0)
+    {
+      BOOST_REQUESTS_ASSIGN_EC(ec, error::too_many_redirects);
+      break ;
+    }
+
+    if (((rc != http::status::moved_permanently)
+         && (rc != http::status::found)
+         && (rc != http::status::temporary_redirect)
+         && (rc != http::status::permanent_redirect))
+        || (loc_itr == last.base().end()))
+    {
+      BOOST_REQUESTS_ASSIGN_EC(ec, error::invalid_redirect);
+      break;
+    }
+
+    const auto nurl = interpret_location(url.encoded_resource(), loc_itr->value());
+    if (nurl.has_error())
+    {
+      ec = nurl.error();
+      break;
+    }
+
+    if (!should_redirect(options_.redirect, url, *nurl))
+    {
+      BOOST_REQUESTS_ASSIGN_EC(ec, error::forbidden_redirect);
+      break ;
+    }
+
+    if (nurl->has_authority())
+      url = *nurl;
+    else
+    {
+      url_cache = url;
+      url_cache.set_encoded_path(nurl->encoded_path());
+      url = url_cache;
+    }
+
+
+    {
+      detail::monotonic_token mv;
+      auto cc = jar_.get(host, is_secure, url.encoded_path(), mv);
+      if (!cc.empty())
+        headers.set(http::field::cookie, cc);
+    }
+    history.insert(history.end(),
+                   std::make_move_iterator(std::move(str).history().begin()),
+                   std::make_move_iterator(std::move(str).history().end()));
+
+    str = do_ropen(headers, url.encoded_target(), opts);
+  }
+  str.prepend_history(std::move(history));
+  return str;
+}
+
 auto session::make_request_(http::fields fields) -> requests::request_settings
 {
   return requests::request_settings{
@@ -105,6 +226,113 @@ std::shared_ptr<connection_pool> session::async_get_pool_op::resume(
     }
   }
   return nullptr;
+}
+
+auto session::async_ropen_op::resume(requests::detail::co_token_t<step_signature_type> self,
+                                     system::error_code & ec,
+                                     variant2::variant<variant2::monostate, std::shared_ptr<connection_pool>, stream> s) -> stream
+{
+  reenter(this)
+  {
+    headers.set(beast::http::field::host, url.encoded_host_and_port());
+    headers.set(beast::http::field::user_agent, "Requests-" BOOST_BEAST_VERSION_STRING);
+
+    if (!is_secure && this_->options_.enforce_tls)
+    {
+      static constexpr auto loc((BOOST_CURRENT_LOCATION));
+      BOOST_REQUESTS_ASSIGN_EC(ec, error::insecure);
+      return stream{get_executor(), nullptr};
+    }
+
+    {
+      detail::monotonic_token mv;
+      auto cc = this_->jar_.get(url.encoded_host(), is_secure, url.encoded_path(), mv);
+      if (!cc.empty())
+        headers.set(http::field::cookie, cc);
+    }
+
+    yield this_->async_get_pool(url, std::move(self));
+    if (ec)
+      return stream{get_executor(), nullptr};
+    yield variant2::get<1>(s)->async_ropen(method, url.encoded_resource(),
+                                           headers, src, opts, &this_->jar_, std::move(self));
+
+    if (!ec || opts.max_redirects == variant2::get<2>(s).history().size())
+      return std::move(variant2::get<2>(s));
+
+    while (ec == error::forbidden_redirect)
+    {
+      ec.clear();
+      if (variant2::get<2>(s).history().empty())
+      {
+        BOOST_REQUESTS_ASSIGN_EC(ec, error::invalid_redirect);
+        break;
+      }
+      opts.max_redirects -= variant2::get<2>(s).history().size();
+      if (opts.max_redirects == 0)
+      {
+        BOOST_REQUESTS_ASSIGN_EC(ec, error::too_many_redirects);
+        break ;
+      }
+
+      {
+        const auto & last = variant2::get<2>(s).history().back();
+        auto loc_itr = last.base().find(http::field::location);
+        auto rc = last.base().result();
+        if (((rc != http::status::moved_permanently)
+             && (rc != http::status::found)
+             && (rc != http::status::temporary_redirect)
+             && (rc != http::status::permanent_redirect))
+            || (loc_itr == last.base().end()))
+        {
+          BOOST_REQUESTS_ASSIGN_EC(ec, error::invalid_redirect);
+          break;
+        }
+        const auto nurl = interpret_location(url.encoded_resource(), loc_itr->value());
+        if (nurl.has_error())
+        {
+          ec = nurl.error();
+          break;
+        }
+
+        if (!should_redirect(this_->options_.redirect, url, *nurl))
+        {
+          BOOST_REQUESTS_ASSIGN_EC(ec, error::forbidden_redirect);
+          break ;
+        }
+
+        if (nurl->has_authority())
+          url = *nurl;
+        else
+        {
+          url_cache = url;
+          url_cache.set_encoded_path(nurl->encoded_path());
+          url = url_cache;
+        }
+
+      }
+
+      {
+        detail::monotonic_token mv;
+        auto cc = this_->jar_.get(url.encoded_host(), is_secure, url.encoded_path(), mv);
+        if (!cc.empty())
+          headers.set(http::field::cookie, cc);
+        else
+          headers.erase(http::field::cookie);
+      }
+      history.insert(history.end(),
+                     std::make_move_iterator(std::move(variant2::get<2>(s)).history().begin()),
+                     std::make_move_iterator(std::move(variant2::get<2>(s)).history().end()));
+      yield this_->async_get_pool(url, std::move(self));
+      if (ec)
+        return stream{get_executor(), nullptr};
+      yield variant2::get<1>(s)->async_ropen(method, url.encoded_resource(), headers, src, opts, &this_->jar_, std::move(self));
+    }
+    variant2::get<2>(s).prepend_history(std::move(history));
+    return std::move(variant2::get<2>(s));
+
+  }
+  return stream{this_->get_executor(), nullptr};
 }
 
 }

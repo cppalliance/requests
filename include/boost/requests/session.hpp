@@ -120,17 +120,20 @@ struct session
       return res;
     }
 
-    template<typename Body>
-    auto ropen(urls::url_view url,
-               http::request<Body>& req,
-               system::error_code & ec) -> stream;
+    BOOST_REQUESTS_DECL auto ropen(
+              beast::http::verb method,
+              urls::url_view url,
+              http::fields & headers,
+              source & src,
+              system::error_code & ec) -> stream;
 
-    template<typename Body>
-    auto ropen(urls::url_view url,
-               http::request<Body>& req) -> stream
+    auto ropen(beast::http::verb method,
+               urls::url_view url,
+               http::fields & headers,
+               source & src) -> stream
     {
       boost::system::error_code ec;
-      auto res = ropen(url, req, ec);
+      auto res = ropen(method, url, headers, src, ec);
       if (ec)
         throw_exception(system::system_error(ec, "ropen"));
       return res;
@@ -146,12 +149,14 @@ struct session
                 http::fields req,
                 CompletionToken && completion_token);
 
-    template<typename RequestBody,
-              BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, stream)) CompletionToken>
+    template< BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, stream)) CompletionToken>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                        void (boost::system::error_code, stream))
     async_ropen(urls::url_view url,
-                http::request<RequestBody> & req,
+                http::verb method,
+                urls::url_view path,
+                http::fields & headers,
+                source & src,
                 CompletionToken && completion_token);
 
   private:
@@ -169,8 +174,14 @@ struct session
     cookie_jar jar_{boost::container::pmr::polymorphic_allocator<char>(&pmr_)};
 
     struct async_get_pool_op;
-    template<typename RequestBody>
+
     struct async_ropen_op;
+
+    template<typename RequestSource>
+    struct async_ropen_op_body;
+
+    template<typename RequestSource>
+    struct async_ropen_op_body_base;
 
     BOOST_REQUESTS_DECL auto make_request_(http::fields fields) -> requests::request_settings;
     BOOST_REQUESTS_DECL static urls::url normalize_(urls::url_view in);

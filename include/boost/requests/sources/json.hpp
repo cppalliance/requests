@@ -37,7 +37,7 @@ auto tag_invoke(const make_source_tag&, Json && f)
         std::is_same<std::decay_t<Json>, json::string>::value,
         json_source>
 {
-  return json_source(std::move(f));
+  return json_source(std::forward<Json>(f));
 }
 
 }

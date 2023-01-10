@@ -8,7 +8,6 @@
 #include <boost/requests/source.hpp>
 #include <boost/beast/core/file.hpp>
 
-
 #if defined(__cpp_lib_filesystem)
 #include <filesystem>
 #endif
@@ -23,7 +22,7 @@ struct form_source : source
 {
   urls::url storage;
   urls::params_encoded_view param_view{storage.encoded_params()};
-  std::size_t pos{1u};
+  std::size_t pos{0u};
 
   form_source(urls::params_encoded_view js) : param_view(js)
   {
@@ -39,19 +38,19 @@ struct form_source : source
   ~form_source() = default;
   optional<std::size_t> size( ) const override
   {
-    return param_view.size() - 1u;
+    return param_view.buffer().size();
   };
   void reset() override
   {
-    pos = 1u;
+    pos = 0u;
   }
   std::pair<std::size_t, bool> read_some(void * data, std::size_t size, system::error_code & ec) override
   {
     const auto left = param_view.buffer().size() - pos;
     const auto sz = size;
     auto dst = static_cast<char*>(data);
-    auto res = std::char_traits<char>::copy(dst, param_view.buffer().data() + pos, (std::min)(left, sz));
-    std::size_t n = std::distance(dst, res);
+    auto n = (std::min)(left, sz);
+    std::char_traits<char>::copy(dst, param_view.buffer().data() + pos, n);
     pos += n;
     return {n, pos != param_view.buffer().size()};
   }
@@ -67,9 +66,9 @@ inline form_source tag_invoke(const make_source_tag&, urls::params_encoded_view 
 
 template<typename Form>
 inline auto tag_invoke(const make_source_tag&, Form && f)
-    -> std::enable_if_t<std::is_same<std::decay_t<Form>, form_source>::value, form_source>
+    -> std::enable_if_t<std::is_same<std::decay_t<Form>, form>::value, form_source>
 {
-  return form_source(std::move(f));
+  return form_source(std::forward<Form>(f));
 }
 
 }
