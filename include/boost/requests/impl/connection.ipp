@@ -9,6 +9,8 @@
 #define BOOST_REQUESTS_IMPL_CONNECTION_IPP
 
 #include <boost/requests/connection.hpp>
+#include <boost/beast/version.hpp>
+#include <boost/beast/http/read.hpp>
 #include <boost/requests/detail/define.hpp>
 #include <boost/asio/yield.hpp>
 

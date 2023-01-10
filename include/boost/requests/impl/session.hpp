@@ -10,7 +10,6 @@
 
 #include <boost/requests/session.hpp>
 #include <boost/url/grammar/string_token.hpp>
-#include <boost/asio/yield.hpp>
 
 namespace boost {
 namespace requests {
@@ -176,8 +175,6 @@ session::async_ropen(urls::url_view url,
 
 }
 }
-
-#include <boost/asio/unyield.hpp>
 
 #if defined(BOOST_REQUESTS_HEADER_ONLY)
 #include <boost/requests/impl/session.ipp>

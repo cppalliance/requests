@@ -9,7 +9,6 @@
 #define BOOST_REQUESTS_IMPL_CONNECTION_POOL_HPP
 
 #include <boost/requests/connection_pool.hpp>
-#include <boost/asio/experimental/parallel_group.hpp>
 #include <boost/asio/yield.hpp>
 
 namespace boost {

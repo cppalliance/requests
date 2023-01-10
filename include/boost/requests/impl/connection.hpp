@@ -14,18 +14,16 @@
 #include <boost/requests/detail/ssl.hpp>
 #include <boost/requests/fields/location.hpp>
 #include <boost/requests/request_settings.hpp>
-#include <boost/requests/keep_alive.hpp>
+#include <boost/requests/detail/tracker.hpp>
 
 #include <boost/asem/lock_guard.hpp>
 #include <boost/asio/deferred.hpp>
 #include <boost/asio/redirect_error.hpp>
 #include <boost/asio/ssl/host_name_verification.hpp>
-#include <boost/asio/yield.hpp>
 #include <boost/beast/core/buffer_ref.hpp>
 #include <boost/container/pmr/monotonic_buffer_resource.hpp>
 #include <boost/core/exchange.hpp>
 #include <boost/optional.hpp>
-#include <boost/requests/detail/define.hpp>
 #include <boost/smart_ptr/allocate_unique.hpp>
 #include <boost/url/grammar/ci_string.hpp>
 
@@ -309,8 +307,6 @@ connection::async_ropen(beast::http::verb method,
 }
 }
 
-#include <boost/asio/unyield.hpp>
-#include <boost/requests/detail/undefine.hpp>
 
 #if defined(BOOST_REQUESTS_HEADER_ONLY)
 #include <boost/requests/impl/connection.ipp>

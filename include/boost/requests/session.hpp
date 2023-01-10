@@ -6,9 +6,7 @@
 #ifndef BOOST_REQUESTS_BASIC_SESSION_HPP
 #define BOOST_REQUESTS_BASIC_SESSION_HPP
 
-#include <boost/asio/any_io_executor.hpp>
 #include <boost/requests/connection_pool.hpp>
-#include <boost/beast/http/message.hpp>
 #include <boost/container/pmr/polymorphic_allocator.hpp>
 #include <boost/container/pmr/string.hpp>
 #include <boost/container/pmr/synchronized_pool_resource.hpp>

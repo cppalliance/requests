@@ -6,10 +6,6 @@
 #define BOOST_REQUESTS_POOL_HPP
 
 #include <boost/requests/connection.hpp>
-#include <boost/asem/st.hpp>
-#include <list>
-#include <boost/blank.hpp>
-#include <boost/core/empty_value.hpp>
 
 namespace boost {
 namespace requests {

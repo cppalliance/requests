@@ -5,30 +5,19 @@
 #ifndef BOOST_REQUESTS_CONNECTION_HPP
 #define BOOST_REQUESTS_CONNECTION_HPP
 
-#include <boost/asem/lock_guard.hpp>
 #include <boost/asem/mt.hpp>
 #include <boost/asio/any_io_executor.hpp>
-#include <boost/asio/experimental/parallel_group.hpp>
 #include <boost/asio/generic/stream_protocol.hpp>
-#include <boost/asio/prepend.hpp>
 #include <boost/asio/ssl/stream.hpp>
-#include <boost/asio/strand.hpp>
 #include <boost/beast/core/flat_buffer.hpp>
-#include <boost/beast/http/empty_body.hpp>
-#include <boost/beast/http/read.hpp>
-#include <boost/beast/http/string_body.hpp>
-#include <boost/beast/http/write.hpp>
-#include <boost/beast/websocket/stream.hpp>
 #include <boost/requests/detail/async_coroutine.hpp>
 #include <boost/requests/detail/ssl.hpp>
-#include <boost/requests/detail/tracker.hpp>
 #include <boost/requests/fields/keep_alive.hpp>
 #include <boost/requests/source.hpp>
 #include <boost/requests/redirect.hpp>
 #include <boost/requests/request_options.hpp>
 #include <boost/requests/request_settings.hpp>
 #include <boost/requests/response.hpp>
-#include <boost/smart_ptr/allocate_unique.hpp>
 #include <boost/url/url_view.hpp>
 
 namespace boost {
