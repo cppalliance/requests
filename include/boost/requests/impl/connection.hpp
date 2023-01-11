@@ -11,6 +11,7 @@
 #include <boost/requests/connection.hpp>
 #include <boost/requests/detail/async_coroutine.hpp>
 #include <boost/requests/detail/config.hpp>
+#include <boost/requests/detail/defaulted.hpp>
 #include <boost/requests/detail/ssl.hpp>
 #include <boost/requests/fields/location.hpp>
 #include <boost/requests/request_settings.hpp>
@@ -301,8 +302,6 @@ connection::async_ropen(beast::http::verb method,
   return detail::co_run<async_ropen_op>(std::forward<CompletionToken>(completion_token),
                                         this, method, path, std::ref(headers), std::ref(src), std::move(opt), jar);
 }
-
-
 
 }
 }

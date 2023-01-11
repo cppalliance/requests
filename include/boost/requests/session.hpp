@@ -199,21 +199,48 @@ struct session::defaulted : session
   using session::async_ropen;
   using session::async_get_pool;
 
+  template<typename RequestBody,
+            typename CompletionToken>
+  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, stream))
+  async_ropen(beast::http::verb method,
+              urls::url_view path,
+              RequestBody && body,
+              http::fields req,
+              CompletionToken && completion_token)
+  {
+    return session::async_ropen(method, path, std::forward<RequestBody>(body), std::move(req),
+                                        detail::with_defaulted_token<Token>(std::forward<CompletionToken>(completion_token)));
+  }
+
+  template<typename CompletionToken>
+  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, stream))
+  async_ropen(urls::url_view url,
+              http::verb method,
+              urls::url_view path,
+              http::fields & headers,
+              source & src,
+              CompletionToken && completion_token )
+  {
+    return session::async_ropen(url, method, path, headers, src,
+                                detail::with_defaulted_token<Token>(std::forward<CompletionToken>(completion_token)));
+  }
+
   template<typename RequestBody>
   auto async_ropen(beast::http::verb method,
                    urls::url_view path,
                    RequestBody && body,
-                   request_settings req)
+                   http::fields req)
   {
-    return session::async_ropen(method, path, std::forward<RequestBody>(body), std::move(req), default_token());
+    return async_ropen(method, path, std::forward<RequestBody>(body), std::move(req), default_token());
   }
 
-  template<typename RequestBody>
-  auto async_ropen(http::request<RequestBody> & req,
-                   request_options opt,
-                   cookie_jar * jar = nullptr)
+  auto async_ropen(urls::url_view url,
+                   http::verb method,
+                   urls::url_view path,
+                   http::fields & headers,
+                   source & src)
   {
-    return session::async_ropen(req, std::move(opt), jar, default_token());
+    return async_ropen(url, method, path, headers, src, default_token());
   }
 
 

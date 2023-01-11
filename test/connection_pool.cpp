@@ -306,10 +306,8 @@ asio::awaitable<void> async_connection_pool_request(bool https)
 
   auto stream = [](Pool  & hc, core::string_view url) -> asio::awaitable<void>
   {
-    auto str =
-        asio::use_awaitable.as_default_on(
-        co_await hc.async_ropen(beast::http::verb::get,  urls::url_view("/get"), requests::empty{},
-                                       {requests::headers({{"Test-Header", "it works"}}), {false}}));
+    auto str = co_await hc.async_ropen(beast::http::verb::get,  urls::url_view("/get"), requests::empty{},
+                                       {requests::headers({{"Test-Header", "it works"}}), {false}});
 
     json::stream_parser sp;
     char buf[32];
@@ -331,9 +329,8 @@ asio::awaitable<void> async_connection_pool_request(bool https)
 
   auto stream_dump = [](Pool  & hc, core::string_view url) -> asio::awaitable<void>
   {
-    auto str = asio::use_awaitable.as_default_on(
-              co_await  hc.async_ropen(beast::http::verb::get,  urls::url_view( urls::url_view("/get")), requests::empty{},
-                                       {requests::headers({{"Test-Header", "it works"}}), {false}}));
+    auto str = co_await  hc.async_ropen(beast::http::verb::get,  urls::url_view( urls::url_view("/get")), requests::empty{},
+                                       {requests::headers({{"Test-Header", "it works"}}), {false}});
     co_await str.async_dump();
 
   };

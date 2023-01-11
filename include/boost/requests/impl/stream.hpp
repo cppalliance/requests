@@ -58,7 +58,7 @@ std::size_t stream::read_some(const MutableBuffer & buffer, system::error_code &
     if (should_close)
     {
       boost::system::error_code ec_;
-      impl_->close(ec_);
+      impl_->do_close_(ec_);
       return res;
     }
   }
@@ -98,7 +98,7 @@ std::size_t stream::read(DynamicBuffer & buffer, system::error_code & ec)
     if (should_close)
     {
       boost::system::error_code ec_;
-      impl_->close(ec_);
+      impl_->do_close_(ec_);
       return res;
     }
   }

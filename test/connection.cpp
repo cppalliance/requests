@@ -333,8 +333,7 @@ asio::awaitable<void> async_connection_request(bool https)
 
   auto stream = [](requests::connection::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
-    requests::stream::defaulted<asio::use_awaitable_t<>> str =
-                co_await hc.async_ropen(beast::http::verb::get, urls::url_view("/get"), requests::empty{},
+    auto str = co_await hc.async_ropen(beast::http::verb::get, urls::url_view("/get"), requests::empty{},
                                        {requests::headers({{"Test-Header", "it works"}}), {false}});
 
     json::stream_parser sp;
@@ -358,8 +357,7 @@ asio::awaitable<void> async_connection_request(bool https)
 
   auto stream_full = [](requests::connection::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
-    requests::stream::defaulted<asio::use_awaitable_t<>> str =
-          co_await hc.async_ropen(beast::http::verb::get, urls::url_view("/get"), requests::empty{},
+    auto str = co_await hc.async_ropen(beast::http::verb::get, urls::url_view("/get"), requests::empty{},
                                        {requests::headers({{"Test-Header", "it works"}}), {false}});
 
     std::string ss;
@@ -377,8 +375,7 @@ asio::awaitable<void> async_connection_request(bool https)
 
   auto stream_dump = [](requests::connection::defaulted<asio::use_awaitable_t<>> & hc, core::string_view url) -> asio::awaitable<void>
   {
-    requests::stream::defaulted<asio::use_awaitable_t<>> str =
-              co_await hc.async_ropen(beast::http::verb::get, urls::url_view("/get"), requests::empty{},
+    auto str = co_await hc.async_ropen(beast::http::verb::get, urls::url_view("/get"), requests::empty{},
                                        {requests::headers({{"Test-Header", "it works"}}), {false}});
     co_await str.async_dump();
 

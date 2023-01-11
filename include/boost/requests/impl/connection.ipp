@@ -540,10 +540,8 @@ void connection::close(system::error_code & ec)
   if (use_ssl_)
     next_layer_.shutdown(ec);
 
-  if (ec)
-    return ;
-
-  next_layer_.next_layer().close(ec);
+  if (next_layer_.next_layer().is_open())
+    next_layer_.next_layer().close(ec);
 }
 
 
@@ -602,9 +600,23 @@ void connection::async_close_op::resume(requests::detail::co_token_t<step_signat
     {
       yield this_->next_layer_.async_shutdown(std::move(self));
     }
-    if (!ec)
+    if (this_->next_layer_.next_layer().is_open())
       this_->next_layer_.next_layer().close(ec);
   }
+}
+
+
+void connection::do_close_(system::error_code & ec)
+{
+  auto wlock = asem::lock(write_mtx_, ec);
+  if (ec)
+    return;
+
+  if (use_ssl_)
+    next_layer_.shutdown(ec);
+
+  if (next_layer_.next_layer().is_open())
+    next_layer_.next_layer().close(ec);
 }
 
 }

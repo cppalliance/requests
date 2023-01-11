@@ -240,21 +240,50 @@ struct connection_pool::defaulted : connection_pool
 {
   using default_token = Token;
   using connection_pool::connection_pool;
+  using stream     = typename requests::stream::defaulted<Token>;
+  using connection = typename requests::connection::defaulted<Token>;
+
+  using connection_pool::async_lookup;
+  using connection_pool::async_get_connection;
 
   auto async_lookup(urls::url_view av)
   {
     return connection_pool::async_lookup(av, default_token());
   }
 
+
   auto
   async_get_connection()
   {
-    return connection_pool::async_get_connection(default_token());
+    return async_get_connection(default_token());
   }
-  using connection_pool::async_lookup;
-  using connection_pool::async_get_connection;
-  using connection_pool::async_ropen;
 
+  template<typename RequestBody,
+            typename CompletionToken>
+  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, stream))
+  async_ropen(beast::http::verb method,
+              urls::url_view path,
+              RequestBody && body,
+              request_settings req,
+              CompletionToken && completion_token)
+  {
+    return connection_pool::async_ropen(method, path, std::forward<RequestBody>(body), std::move(req),
+                                        detail::with_defaulted_token<Token>(std::forward<CompletionToken>(completion_token)));
+  }
+
+  template<typename CompletionToken>
+  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, stream))
+  async_ropen(beast::http::verb method,
+              urls::pct_string_view path,
+              http::fields & headers,
+              source & src,
+              request_options opt,
+              cookie_jar * jar,
+              CompletionToken && completion_token )
+  {
+    return connection_pool::async_ropen(method, path, headers, src, std::move(opt), jar,
+                                        detail::with_defaulted_token<Token>(std::forward<CompletionToken>(completion_token)));
+  }
 
   template<typename RequestBody>
   auto async_ropen(beast::http::verb method,
@@ -262,7 +291,7 @@ struct connection_pool::defaulted : connection_pool
                    RequestBody && body,
                    request_settings req)
   {
-    return connection_pool::async_ropen(method, path, std::forward<RequestBody>(body), std::move(req), default_token());
+    return async_ropen(method, path, std::forward<RequestBody>(body), std::move(req), default_token());
   }
 
   template<typename RequestBody>
@@ -270,7 +299,7 @@ struct connection_pool::defaulted : connection_pool
                    request_options opt,
                    cookie_jar * jar = nullptr)
   {
-    return connection_pool::async_ropen(req, std::move(opt), jar, default_token());
+    return async_ropen(req, std::move(opt), jar, default_token());
   }
 
 };

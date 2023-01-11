@@ -39,7 +39,7 @@ void stream::dump(system::error_code & ec)
   if (should_close)
   {
     boost::system::error_code ec_;
-    impl_->close(ec_);
+    impl_->do_close_(ec_);
   }
 }
 

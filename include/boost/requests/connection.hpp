@@ -11,6 +11,7 @@
 #include <boost/asio/ssl/stream.hpp>
 #include <boost/beast/core/flat_buffer.hpp>
 #include <boost/requests/detail/async_coroutine.hpp>
+#include <boost/requests/detail/defaulted.hpp>
 #include <boost/requests/detail/ssl.hpp>
 #include <boost/requests/fields/keep_alive.hpp>
 #include <boost/requests/source.hpp>
@@ -253,6 +254,7 @@ struct connection
     BOOST_REQUESTS_DECL std::size_t do_read_some_(beast::http::basic_parser<false> & parser, system::error_code & ec) ;
     BOOST_REQUESTS_DECL void do_async_read_some_(beast::http::basic_parser<false> & parser, detail::co_token_t<void(system::error_code, std::size_t)>) ;
     BOOST_REQUESTS_DECL void do_async_close_(detail::co_token_t<void(system::error_code)>);
+    BOOST_REQUESTS_DECL void do_close_(system::error_code & ec);
 
     friend struct stream;
 };
@@ -264,16 +266,25 @@ struct connection::rebind_executor<Executor1, void_t<typename Executor1::default
   using other = defaulted<typename Executor1::default_completion_token_type>;
 };
 
+}
+}
 
-template<typename Token>
+#include <boost/requests/stream.hpp>
+
+namespace boost
+{
+namespace requests
+{
+
+ template<typename Token>
 struct connection::defaulted : connection
 {
   using default_token = Token;
   using connection::connection;
+  using stream = typename requests::stream::defaulted<Token>;
   defaulted(connection && lhs) :  connection(std::move(lhs)) {}
   using connection::async_connect;
   using connection::async_close;
-  using connection::async_ropen;
 
   auto async_connect(endpoint_type ep)
   {
@@ -284,13 +295,40 @@ struct connection::defaulted : connection
     return connection::async_close(default_token());
   }
 
+  template<typename RequestBody,
+            typename CompletionToken>
+  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, stream))
+  async_ropen(beast::http::verb method,
+              urls::url_view path,
+              RequestBody && body,
+              request_settings req,
+              CompletionToken && completion_token)
+  {
+    return connection::async_ropen(method, path, std::forward<RequestBody>(body), std::move(req),
+                                   detail::with_defaulted_token<Token>(std::forward<CompletionToken>(completion_token)));
+  }
+
+  template<typename CompletionToken>
+  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, stream))
+  async_ropen(beast::http::verb method,
+              urls::pct_string_view path,
+              http::fields & headers,
+              source & src,
+              request_options opt,
+              cookie_jar * jar,
+              CompletionToken && completion_token )
+  {
+    return connection::async_ropen(method, path, headers, src, std::move(opt), jar,
+                                   detail::with_defaulted_token<Token>(std::forward<CompletionToken>(completion_token)));
+  }
+
   template<typename RequestBody>
   auto async_ropen(beast::http::verb method,
                    urls::url_view path,
                    RequestBody && body,
                    request_settings req)
   {
-    return connection::async_ropen(method, path, std::forward<RequestBody>(body), std::move(req), default_token());
+    return this->async_ropen(method, path, std::forward<RequestBody>(body), std::move(req), default_token());
   }
 
   template<typename RequestBody>
@@ -298,7 +336,7 @@ struct connection::defaulted : connection
                    request_options opt,
                    cookie_jar * jar = nullptr)
   {
-    return connection::async_ropen(req, std::move(opt), jar, default_token());
+    return this->async_ropen(req, std::move(opt), jar, default_token());
   }
 
 };
