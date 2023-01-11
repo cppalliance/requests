@@ -266,22 +266,23 @@ struct connection::rebind_executor<Executor1, void_t<typename Executor1::default
   using other = defaulted<typename Executor1::default_completion_token_type>;
 };
 
-}
-}
-
-#include <boost/requests/stream.hpp>
-
-namespace boost
+namespace detail
 {
-namespace requests
+template<typename Stream, typename Token>
+struct defaulted_helper
 {
+  using type = typename Stream::template defaulted<Token>;
+};
 
- template<typename Token>
+}
+
+
+template<typename Token>
 struct connection::defaulted : connection
 {
   using default_token = Token;
   using connection::connection;
-  using stream = typename requests::stream::defaulted<Token>;
+  using stream = typename detail::defaulted_helper<stream, Token>::type;
   defaulted(connection && lhs) :  connection(std::move(lhs)) {}
   using connection::async_connect;
   using connection::async_close;
@@ -344,7 +345,6 @@ struct connection::defaulted : connection
 }
 }
 
-#include <boost/requests/stream.hpp>
 
 #include <boost/requests/impl/connection.hpp>
 

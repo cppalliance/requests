@@ -8,6 +8,7 @@
 #ifndef BOOST_REQUESTS_IMPL_CONNECTION_HPP
 #define BOOST_REQUESTS_IMPL_CONNECTION_HPP
 
+#include <boost/requests/stream.hpp>
 #include <boost/requests/connection.hpp>
 #include <boost/requests/detail/async_coroutine.hpp>
 #include <boost/requests/detail/config.hpp>
@@ -31,8 +32,6 @@
 
 namespace boost {
 namespace requests {
-
-
 
 struct connection::async_connect_op : asio::coroutine
 {

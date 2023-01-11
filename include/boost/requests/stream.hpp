@@ -5,13 +5,15 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
+// this is on purpose
+#include <boost/requests/connection.hpp>
+
 #ifndef BOOST_REQUESTS_STREAM_HPP
 #define BOOST_REQUESTS_STREAM_HPP
 
 #include <boost/requests/detail/config.hpp>
 #include <boost/requests/detail/pmr.hpp>
 #include <boost/requests/detail/tracker.hpp>
-#include <boost/requests/connection.hpp>
 #include <boost/requests/fields/keep_alive.hpp>
 #include <boost/requests/http.hpp>
 #include <boost/requests/detail/async_coroutine.hpp>

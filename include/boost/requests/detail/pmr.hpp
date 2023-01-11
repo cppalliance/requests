@@ -6,6 +6,7 @@
 #define BOOST_REQUESTS_DETAIL_PMR_HPP
 
 #include <boost/container/pmr/memory_resource.hpp>
+#include <boost/container/pmr/global_resource.hpp>
 
 namespace boost {
 namespace requests {
