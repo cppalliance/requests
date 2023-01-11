@@ -35,6 +35,15 @@ auto make_source(Source && source) -> decltype(tag_invoke(make_source_tag{}, std
   return tag_invoke(make_source_tag{}, std::forward<Source>(source));
 }
 
+template<typename Source>
+auto tag_invoke(const make_source_tag&, Source && s)
+    -> std::enable_if_t<
+        std::is_base_of<source, std::decay_t<Source>>::value,
+        Source>
+{
+  return std::forward<Source>(s);
+}
+
 template<typename Stream>
 std::size_t write_request(
     Stream & stream,
