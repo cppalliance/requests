@@ -15,9 +15,6 @@
 #include <boost/asio/buffer.hpp>
 #include <boost/url/url_view.hpp>
 
-// TODO: Remove
-#include <boost/core/demangle.hpp>
-
 #if defined(BOOST_ASIO_HAS_FILE)
 #include <boost/asio/basic_stream_file.hpp>
 #else
