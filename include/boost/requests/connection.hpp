@@ -84,6 +84,20 @@ struct connection
     , endpoint_(std::move(lhs.endpoint_))
     {}
 
+    connection & operator=(connection && lhs)
+    {
+       next_layer_ = std::move(lhs.next_layer_);
+       use_ssl_ = lhs.use_ssl_;
+       read_mtx_ = std::move(lhs.read_mtx_);
+       write_mtx_ = std::move(lhs.write_mtx_);
+       host_ = std::move(lhs.host_);
+       buffer_ = std::move(lhs.buffer_);
+       ongoing_requests_ = std::move(lhs.ongoing_requests_.load());
+       keep_alive_set_ = std::move(lhs.keep_alive_set_);
+       endpoint_ = std::move(lhs.endpoint_);
+       return *this;
+    }
+
     /// Construct a stream.
     template<typename ExecutorOrContext>
     explicit connection(ExecutorOrContext && exec_or_ctx, asio::ssl::context & ctx)

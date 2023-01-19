@@ -811,11 +811,17 @@ struct async_request_json_op : asio::coroutine
       if (!ec)
       {
         str_.emplace(std::move(variant2::get<1>(s)));
-        yield async_read_json(*str_, ptr, std::move(self));
-
         rb.headers = std::move(*str_).headers();
         rb.history = std::move(*str_).history();
+        yield async_read_json(*str_, ptr, std::move(self));
       }
+      else
+      {
+        rb.headers = std::move(std::move(variant2::get<1>(s))).headers();
+        rb.history = std::move(std::move(variant2::get<1>(s))).history();
+      }
+
+
       if (ec)
          break;
 
@@ -870,11 +876,16 @@ struct async_request_optional_json_op : asio::coroutine
       if (!ec)
       {
         str_.emplace(std::move(variant2::get<1>(s)));
+        rb.headers = std::move(*str_).headers();
+        rb.history = std::move(*str_).history();
         yield async_read_json(*str_, ptr, std::move(self));
       }
+      else
+      {
+        rb.headers = std::move(std::move(variant2::get<1>(s))).headers();
+        rb.history = std::move(std::move(variant2::get<1>(s))).history();
+      }
 
-      rb.headers = std::move(*str_).headers();
-      rb.history = std::move(*str_).history();
       if (ec)
         break;
 
@@ -946,7 +957,7 @@ async_patch(Connection & conn,
 template<typename Value = value,
           typename Connection,
           typename RequestBody,
-          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<Value>)) CompletionToken
+          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<optional<Value>>)) CompletionToken
               BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(typename Connection::executor_type)>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, response<Value>))
 async_put(Connection & conn,

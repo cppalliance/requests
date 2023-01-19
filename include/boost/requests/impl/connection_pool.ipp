@@ -293,6 +293,25 @@ auto connection_pool::async_get_connection_op::resume(
   return nullptr;
 }
 
+stream connection_pool::async_ropen_op::resume(
+    requests::detail::co_token_t<step_signature_type> self,
+    system::error_code & ec,
+    variant2::variant<variant2::monostate, std::shared_ptr<connection>, stream> res)
+{
+  reenter(this)
+  {
+    yield this_->async_get_connection(std::move(self));
+    conn = variant2::get<1>(res);
+    if (!ec && conn == nullptr)
+      ec =  asio::error::not_found;
+    if (ec)
+      return stream{this_->get_executor(), nullptr};
+
+    yield conn->async_ropen(method, path, headers, src, std::move(opt), jar, std::move(self));
+    return variant2::get<2>(std::move(res));
+  }
+  return stream{get_executor(), nullptr};
+}
 
 }
 }

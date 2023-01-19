@@ -91,59 +91,7 @@ connection_pool::async_get_connection(CompletionToken && completion_token)
       );
 }
 
-template<typename RequestBody>
 struct connection_pool::async_ropen_op : asio::coroutine
-{
-  using executor_type = asio::any_io_executor;
-  executor_type get_executor() {return this_->get_executor(); }
-
-  connection_pool * this_;
-  beast::http::verb method;
-  urls::url_view path;
-  RequestBody && body;
-  request_settings req;
-
-  template<typename Self>
-  void operator()(Self && self, error_code ec = {}, std::shared_ptr<connection> conn = nullptr)
-  {
-    reenter(this)
-    {
-      yield this_->async_get_connection(std::move(self));
-      if (!ec && conn == nullptr)
-        ec =  asio::error::not_found;
-      if (ec)
-        return self.complete(ec, stream{this_->get_executor(), nullptr});
-
-      yield conn->async_ropen(method, path, std::forward<RequestBody>(body), std::move(req), std::move(self));
-    }
-  }
-
-  template<typename Self>
-  void operator()(Self && self, error_code ec, stream res)
-  {
-    self.complete(ec, std::move(res));
-  }
-};
-
-
-template<typename RequestBody,
-         typename CompletionToken>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                   void (boost::system::error_code, stream))
-connection_pool::async_ropen(beast::http::verb method,
-                             urls::url_view path,
-                             RequestBody && body,
-                             request_settings req,
-                             CompletionToken && completion_token)
-{
-  return asio::async_compose<CompletionToken, void(system::error_code, stream)>(
-      async_ropen_op<RequestBody>{{}, this, method, path, std::forward<RequestBody>(body), std::move(req)},
-      completion_token,
-      mutex_
-  );
-}
-
-struct connection_pool::async_ropen_op_src : asio::coroutine
 {
   using executor_type = asio::any_io_executor;
   executor_type get_executor() {return this_->get_executor(); }
@@ -156,26 +104,39 @@ struct connection_pool::async_ropen_op_src : asio::coroutine
   request_options opt;
   cookie_jar * jar;
 
-  template<typename Self>
-  void operator()(Self && self, error_code ec = {}, std::shared_ptr<connection> conn = nullptr)
-  {
-    reenter(this)
-    {
-      yield this_->async_get_connection(std::move(self));
-      if (!ec && conn == nullptr)
-        ec =  asio::error::not_found;
-      if (ec)
-        return self.complete(ec, stream{this_->get_executor(), nullptr});
+  std::shared_ptr<connection> conn;
 
-      yield conn->async_ropen(method, path, headers, src, std::move(opt), jar, std::move(self));
-    }
+  async_ropen_op(connection_pool * this_,
+                 beast::http::verb method,
+                 urls::pct_string_view path,
+                 http::fields & headers,
+                 source & src,
+                 request_options opts,
+                 cookie_jar * jar)
+      : this_(this_), method(method), path(path), headers(headers), src(src), opt(std::move(opts)), jar(jar)
+  {
   }
 
-  template<typename Self>
-  void operator()(Self && self, error_code ec, stream res)
+
+  async_ropen_op(connection_pool * this_,
+                 beast::http::verb method,
+                 urls::url_view path,
+                 http::fields & headers,
+                 source & src,
+                 request_options opt,
+                 cookie_jar * jar)
+      : this_(this_), method(method), path(path.encoded_resource()),
+        headers(headers), src(src), opt(std::move(opt)), jar(jar)
   {
-    self.complete(ec, std::move(res));
   }
+
+  using completion_signature_type = void(system::error_code, stream);
+  using step_signature_type       = void(system::error_code, variant2::variant<variant2::monostate, std::shared_ptr<connection>, stream>);
+
+  BOOST_REQUESTS_DECL
+  auto resume(requests::detail::co_token_t<step_signature_type> self,
+              system::error_code & ec,
+              variant2::variant<variant2::monostate, std::shared_ptr<connection>, stream> res = variant2::monostate()) -> stream;
 };
 
 
@@ -190,12 +151,59 @@ connection_pool::async_ropen(beast::http::verb method,
                              cookie_jar * jar,
                              CompletionToken && completion_token)
 {
-  return asio::async_compose<CompletionToken, void(system::error_code, stream)>(
-      async_ropen_op_src{{}, this, method, path, headers, src, std::move(opt), jar},
-      completion_token, mutex_);
+  return detail::co_run<async_ropen_op>(
+      std::forward<CompletionToken>(completion_token),
+      this, method, path, std::ref(headers), std::ref(src), std::move(opt), jar);
 }
 
+template<typename RequestSource>
+struct connection_pool::async_ropen_op_body_base
+{
+  RequestSource source_impl;
+  http::fields headers;
 
+  template<typename RequestBody>
+  async_ropen_op_body_base(RequestBody && body, http::fields headers)
+      : source_impl(requests::make_source(std::forward<RequestBody>(body))), headers(std::move(headers))
+  {
+  }
+};
+
+
+template<typename RequestSource>
+struct connection_pool::async_ropen_op_body : async_ropen_op_body_base<RequestSource>, async_ropen_op
+{
+  template<typename RequestBody>
+  async_ropen_op_body(
+      connection_pool * this_,
+      beast::http::verb method,
+      urls::url_view path,
+      RequestBody && body,
+      request_settings req)
+      : async_ropen_op_body_base<RequestSource>{std::forward<RequestBody>(body), std::move(req.fields)},
+        async_ropen_op{this_, method, path.encoded_resource(), async_ropen_op_body_base<RequestSource>::headers,
+                       this->source_impl,
+                       std::move(req.opts), req.jar}
+  {}
+};
+
+
+template<typename RequestBody,
+          typename CompletionToken>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
+                                   void (boost::system::error_code, stream))
+connection_pool::async_ropen(beast::http::verb method,
+                             urls::url_view path,
+                             RequestBody && body,
+                             request_settings req,
+                             CompletionToken && completion_token)
+{
+  using rp = async_ropen_op_body<std::decay_t<decltype(make_source(std::forward<RequestBody>(body)))>>;
+  return detail::co_run<rp>(
+      std::forward<CompletionToken>(completion_token),
+      this, method, path, std::forward<RequestBody>(body),
+      std::move(req));
+}
 
 }
 }

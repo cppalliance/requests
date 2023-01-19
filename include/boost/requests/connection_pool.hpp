@@ -231,8 +231,12 @@ struct connection_pool
     struct async_get_connection_op;
 
     template<typename>
+    struct async_ropen_op_body;
+
+    template<typename RequestSource>
+    struct async_ropen_op_body_base;
+
     struct async_ropen_op;
-    struct async_ropen_op_src;
 };
 
 template<typename Token>

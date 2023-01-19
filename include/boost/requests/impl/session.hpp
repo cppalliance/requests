@@ -21,7 +21,7 @@ struct session::async_get_pool_op : asio::coroutine
   executor_type get_executor() {return this_->get_executor(); }
 
   session *this_;
-  urls::url url;
+  urls::url_view url;
   const bool is_https;
 
   asem::lock_guard<asem::mt::mutex> lock;
@@ -82,7 +82,7 @@ struct session::async_ropen_op : asio::coroutine
   http::verb method;
 
   struct request_options opts;
-  urls::url_view url;
+  urls::url url;
   core::string_view default_mime_type;
 
   system::error_code ec_;
