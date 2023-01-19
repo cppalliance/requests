@@ -3,7 +3,7 @@ file(GLOB_RECURSE ALL_EXAMPLES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURR
 
 
 add_library(boost_requests_example_impl impl.cpp)
-target_compile_definitions(boost_requests_example_impl PUBLIC BOOST_REQUESTS_SEPARATE_COMPILATION=1 BOOST_REQUESTS_USE_STD_FS=1 BOOST_BEAST_SEPARATE_COMPILATION=1 BOOST_ASIO_SEPARATE_COMPILATION=1)
+target_compile_definitions(boost_requests_example_impl PUBLIC BOOST_REQUESTS_USE_STD_FS=1 BOOST_REQUESTS_SEPARATE_COMPILATION=1 BOOST_BEAST_SEPARATE_COMPILATION=1 BOOST_ASIO_SEPARATE_COMPILATION=1 BOOST_FILESYSTEM_NO_DEPRECATED=1)
 target_link_libraries(boost_requests_example_impl  PUBLIC Threads::Threads OpenSSL::Crypto OpenSSL::SSL Boost::headers Boost::container rt pugixml::static)
 
 

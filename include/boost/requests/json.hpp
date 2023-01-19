@@ -1059,7 +1059,7 @@ async_get(urls::url_view target,
 {
   return asio::async_initiate<CompletionToken,
                               void(boost::system::error_code, Value)>(
-          detail::async_free_request_op{}, completion_token,
+          detail::async_free_request_op<Value>{}, completion_token,
           http::verb::get,  target, empty{}, std::move(req));
 }
 
@@ -1074,7 +1074,7 @@ async_post(urls::url_view target,
 {
   return asio::async_initiate<CompletionToken,
                               void(boost::system::error_code, Value)>(
-      detail::async_free_request_op{}, completion_token,
+      detail::async_free_request_op<Value>{}, completion_token,
       http::verb::post,  target, std::forward<RequestBody>(request_body), std::move(req));
 }
 
@@ -1091,7 +1091,7 @@ async_patch(urls::url_view target,
 {
   return asio::async_initiate<CompletionToken,
                               void(boost::system::error_code, response<Value>)>(
-      detail::async_free_request_op{}, completion_token,
+      detail::async_free_request_op<Value>{}, completion_token,
       http::verb::patch,  target, std::forward<RequestBody>(request_body), std::move(req));
 }
 
@@ -1107,7 +1107,7 @@ async_put(urls::url_view target,
 {
   return asio::async_initiate<CompletionToken,
                               void(boost::system::error_code, response<Value>)>(
-      detail::async_free_request_op{}, completion_token,
+      detail::async_free_request_op<Value>{}, completion_token,
       http::verb::put,  target, std::forward<RequestBody>(request_body), std::move(req));
 }
 
@@ -1123,7 +1123,7 @@ async_delete(urls::url_view target,
 {
   return asio::async_initiate<CompletionToken,
                               void(boost::system::error_code, response<Value>)>(
-      detail::async_free_request_op{}, completion_token,
+      detail::async_free_request_op<Value>{}, completion_token,
       http::verb::delete_,  target, std::forward<RequestBody>(request_body), std::move(req));
 }
 
@@ -1138,7 +1138,7 @@ async_delete(urls::url_view target,
 {
   return asio::async_initiate<CompletionToken,
                               void(boost::system::error_code, response<Value>)>(
-      detail::async_free_request_op{}, completion_token,
+      detail::async_free_request_op<Value>{}, completion_token,
       http::verb::delete_,  target, empty{}, std::move(req));
 }
 
@@ -1152,7 +1152,7 @@ async_options(urls::url_view target,
 {
   return asio::async_initiate<CompletionToken,
                               void(boost::system::error_code, response<Value>)>(
-      detail::async_free_request_op{}, completion_token,
+      detail::async_free_request_op<Value>{}, completion_token,
       http::verb::options,  target, empty{}, std::move(req));
 }
 

@@ -173,12 +173,12 @@ struct async_write_to_file_op : asio::coroutine
 
   Stream &str;
   beast::file f;
-  const std::filesystem::path & file;
+  const filesystem::path & file;
   char buffer[BOOST_REQUESTS_CHUNK_SIZE];
 
   std::size_t written = 0u;
 
-  async_write_to_file_op(Stream * str, const std::filesystem::path & pt) : str(*str), file(pt) {}
+  async_write_to_file_op(Stream * str, const filesystem::path & pt) : str(*str), file(pt) {}
 
   std::size_t resume(requests::detail::co_token_t<step_signature_type> self,
                      system::error_code & ec, std::size_t n = 0u)

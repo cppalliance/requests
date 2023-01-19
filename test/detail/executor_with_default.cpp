@@ -9,7 +9,7 @@
 #include <boost/asio/any_io_executor.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/strand.hpp>
-#include <boost/asio/use_awaitable.hpp>
+#include <boost/asio/deferred.hpp>
 
 
 #include "../doctest.h"
@@ -24,7 +24,7 @@ TEST_CASE("executor_with_default")
   CHECK(typeid(asio::io_context::executor_type)     == typeid(strip_executor_with_default_t<asio::io_context::executor_type>));
   CHECK(typeid(asio::strand<asio::any_io_executor>) == typeid(strip_executor_with_default_t<asio::strand<asio::any_io_executor>>));
 
-  CHECK(typeid(asio::any_io_executor)               == typeid(strip_executor_with_default_t<asio::use_awaitable_t<>::executor_with_default<asio::any_io_executor>>));
-  CHECK(typeid(asio::io_context::executor_type)     == typeid(strip_executor_with_default_t<asio::use_awaitable_t<>::executor_with_default<asio::io_context::executor_type>>));
-  CHECK(typeid(asio::strand<asio::any_io_executor>) == typeid(strip_executor_with_default_t<asio::use_awaitable_t<>::executor_with_default<asio::strand<asio::any_io_executor>>>));
+  CHECK(typeid(asio::any_io_executor)               == typeid(strip_executor_with_default_t<asio::deferred_t::executor_with_default<asio::any_io_executor>>));
+  CHECK(typeid(asio::io_context::executor_type)     == typeid(strip_executor_with_default_t<asio::deferred_t::executor_with_default<asio::io_context::executor_type>>));
+  CHECK(typeid(asio::strand<asio::any_io_executor>) == typeid(strip_executor_with_default_t<asio::deferred_t::executor_with_default<asio::strand<asio::any_io_executor>>>));
 }

@@ -20,6 +20,7 @@ struct json_source : source
   boost::json::serializer ser;
 
   BOOST_REQUESTS_DECL json_source(json::value data);
+  json_source(const json_source & data);
 
   ~json_source() = default;
   optional<std::size_t> size() const override {return none;};
@@ -37,7 +38,7 @@ auto tag_invoke(const make_source_tag&, Json && f)
         std::is_same<std::decay_t<Json>, json::string>::value,
         json_source>
 {
-  return json_source(std::forward<Json>(f));
+  return {std::forward<Json>(f)};
 }
 
 }

@@ -34,7 +34,7 @@ inline field_entry basic_auth(core::string_view username,
   auto sz = beast::detail::base64::encoded_size(username.size() + 1 + password.size());
   std::string res;
   res.resize(sizeof("Basic") + sz);
-  constexpr beast::string_view prefix = "Basic ";
+  const beast::string_view prefix = "Basic ";
   auto itr = std::copy(prefix.begin(), prefix.end(), res.begin());
   const auto data = std::string(username) + ":" + std::string(password);
   beast::detail::base64::encode(&*itr, data.data(), data.size());

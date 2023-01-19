@@ -26,6 +26,9 @@ namespace http {
 
 using boost::beast::http::field;
 using boost::beast::http::status;
+using boost::beast::http::status_class;
+using boost::beast::http::to_status_class;
+using boost::beast::http::to_string;
 using boost::beast::http::verb;
 using fields = boost::beast::http::basic_fields<boost::container::pmr::polymorphic_allocator<char>>;
 

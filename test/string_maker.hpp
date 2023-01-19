@@ -13,6 +13,7 @@
 #include <boost/core/demangle.hpp>
 #include <boost/core/detail/string_view.hpp>
 #include <boost/requests/fields/set_cookie.hpp>
+#include <boost/asio/bind_executor.hpp>
 #include <boost/asio/multiple_exceptions.hpp>
 #include <boost/system/result.hpp>
 #include <boost/json.hpp>
@@ -144,6 +145,62 @@ struct StringMaker<std::exception_ptr>
   }
 };
 
+}
+
+inline void check_ec(boost::system::error_code ec,
+                     boost::source_location loc = BOOST_CURRENT_LOCATION)
+{
+  if (ec.has_location())
+    loc = ec.location();
+  doctest::detail::ResultBuilder rb(doctest::assertType::DT_REQUIRE, loc.file_name(), loc.line(), loc.function_name());
+  rb.setResult(doctest::detail::Result{!ec, doctest::StringMaker< boost::system::error_code>::convert(ec)});
+  DOCTEST_ASSERT_LOG_AND_REACT(rb);
+}
+
+template<typename Handler>
+struct tracker_t
+{
+  boost::source_location loc;
+  Handler handler;
+  bool called = false;
+  tracker_t(
+      Handler && handler,
+      const boost::source_location & loc = BOOST_CURRENT_LOCATION)
+      : handler(std::forward<Handler>(handler)), loc(loc) {}
+
+  template<typename ... Args>
+  void operator()(Args && ... args)
+  {
+    called = true;
+    std::move(handler)(std::forward<Args>(args)...);
+  }
+
+  tracker_t(tracker_t && lhs) : loc(lhs.loc), handler(std::move(lhs.handler)), called(lhs.called)
+  {
+    lhs.called = true;
+  }
+
+  ~tracker_t()
+  {
+    doctest::detail::ResultBuilder rb(doctest::assertType::DT_CHECK, loc.file_name(), loc.line(), loc.function_name());
+    rb.setResult(doctest::detail::Result{called, "called"});
+    DOCTEST_ASSERT_LOG_AND_REACT(rb);
+  }
+};
+
+template<typename Handler>
+auto tracker(Handler && handler, const boost::source_location & loc = BOOST_CURRENT_LOCATION) -> tracker_t<std::decay_t<Handler>>
+{
+  return tracker_t<std::decay_t<Handler>>(std::forward<Handler>(handler), loc);
+}
+
+
+template<typename Handler>
+auto tracker(boost::asio::any_io_executor exec, Handler && handler,
+             const boost::source_location & loc = BOOST_CURRENT_LOCATION) ->
+    boost::asio::executor_binder<tracker_t<std::decay_t<Handler>>, boost::asio::any_io_executor>
+{
+  return boost::asio::bind_executor(exec, tracker_t<std::decay_t<Handler>>(std::forward<Handler>(handler), loc));
 }
 
 #endif

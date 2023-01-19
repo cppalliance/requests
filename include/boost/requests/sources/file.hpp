@@ -30,14 +30,11 @@ struct file_source : source
   beast::file file;
   system::error_code ec;
 
-  file_source(const boost::filesystem::path & file) : path(file.c_str())
-  {
-    this->file.open(file.string().c_str(), beast::file_mode::read, ec);
-  }
-  file_source(const std  ::filesystem::path & file) : path(file.c_str())
-  {
-    this->file.open(file.string().c_str(), beast::file_mode::read, ec);
-  }
+  BOOST_REQUESTS_DECL file_source(const boost::filesystem::path & file);
+#if defined(__cpp_lib_filesystem)
+  BOOST_REQUESTS_DECL file_source(const std::filesystem::path & file);
+#endif
+  file_source(const file_source & );
 
   ~file_source() = default;
   optional<std::size_t> size() const override

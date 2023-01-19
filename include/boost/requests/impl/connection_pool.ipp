@@ -33,13 +33,19 @@ void connection_pool::lookup(urls::url_view sv, system::error_code & ec)
 
     use_ssl_ = false;
     host_ = "localhost";
-    endpoints_ = {asio::local::stream_protocol::endpoint(sv.encoded_target())};
+    endpoints_ = {asio::local::stream_protocol::endpoint(
+                        asio::string_view(
+                          sv.encoded_target().data(),
+                          sv.encoded_target().size()
+                        ))};
   }
   else if (scheme == "http" || scheme == "https")
   {
     asio::ip::tcp::resolver resolver{get_executor()};
     const auto service = sv.has_port() ? sv.port() : scheme;
-    auto eps = resolver.resolve(sv.encoded_host_name(), service, ec);
+    auto eps = resolver.resolve(
+        asio::string_view(sv.encoded_host_name().data(), sv.encoded_host_name().size()),
+        asio::string_view(service.data(), service.size()), ec);
 
     if (!ec && eps.empty())
       BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::not_found)
@@ -102,13 +108,16 @@ void connection_pool::async_lookup_op::resume(requests::detail::co_token_t<step_
 
       this_->use_ssl_ = false;
       this_->host_ = "localhost";
-      this_->endpoints_ = {asio::local::stream_protocol::endpoint(sv.encoded_target())};
+      this_->endpoints_ = {asio::local::stream_protocol::endpoint(
+          asio::string_view(sv.encoded_target().data(), sv.encoded_target().size()))};
     }
     else if (scheme == "http" || scheme == "https")
     {
       resolver.emplace(get_executor());
       service = sv.has_port() ? sv.port() : scheme;
-      yield resolver->async_resolve(sv.encoded_host_name(), service, std::move(self));
+      yield resolver->async_resolve(
+          asio::string_view(sv.encoded_host_name().data(), sv.encoded_host_name().size()),
+          asio::string_view(service.data(), service.size()), std::move(self));
 
       if (!ec && eps.empty())
       BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::not_found)

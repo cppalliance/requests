@@ -74,7 +74,7 @@ struct request_category_t final : system::error_category
 
   string_view message( error ev ) const
   {
-    if (ev == error{0})
+    if (ev == error{})
       return "success";
     switch (ev)
     {

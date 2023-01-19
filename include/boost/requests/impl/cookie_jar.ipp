@@ -109,7 +109,10 @@ bool cookie_jar::set(const set_cookie & set,
     if (request_uri_path.empty() || request_uri_path.size() == 1u)
       sc.path = "/";
     else
-      sc.path = urls::parse_relative_ref(request_uri_path).value().encoded_path();
+    {
+      auto tmp = urls::parse_relative_ref(request_uri_path).value();
+      sc.path.assign(tmp.encoded_path().begin(), tmp.encoded_path().end());
+    }
     for (auto & c : sc.path)
       c = urls::grammar::to_lower(c);
   }

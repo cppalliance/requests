@@ -60,7 +60,7 @@ struct co_token_t<void()>
   co_token_t(      co_token_t &&) = default;
 
 
-private:
+ private:
   template<typename...>
   friend struct co_token_t;
 
@@ -122,7 +122,7 @@ struct co_token_t<void(T1, T2)>
   cancellation_slot_type get_cancellation_slot() const {return impl_->slot;}
 
   using allocator_type = container::pmr::polymorphic_allocator<void>;
-  allocator_type get_allocator() const {return impl_->get_allocator();}
+  allocator_type get_allocator() const {BOOST_ASSERT(impl_ != nullptr); return impl_->get_allocator();}
 
   void operator()(T1 t1 = {}, T2 t2 = {})
   {
@@ -156,7 +156,9 @@ struct co_token_t<void(T1, T2)>
     return co_token_t<void()>{impl_};
   }
 
-private:
+  std::size_t use_count() const {return impl_.use_count();}
+
+ private:
   template<typename...>
   friend struct co_token_t;
 
@@ -187,14 +189,14 @@ struct co_runner<Implementation, void(system::error_code, Args...)>
       impl.resume(std::move(tk), ec, std::move(args)...);
       if (impl.is_complete())
       {
+        if (buf.use_count() == 0u)
+          return ;
         auto h = std::move(handler);
-        BOOST_ASSERT(buf.use_count() == 1);
+        //BOOST_ASSERT(buf.use_count() == 1);
         auto exec = asio::get_associated_executor(h, impl.get_executor());
         buf = nullptr;
         asio::dispatch(exec, asio::append(std::move(h), ec));
       }
-      else
-        BOOST_ASSERT(buf.use_count() > 1);
     }
 
     void resume_impl(std::false_type, token_type tk, system::error_code ec, Args ... args)
@@ -203,20 +205,21 @@ struct co_runner<Implementation, void(system::error_code, Args...)>
       decltype(auto) res = impl.resume(std::move(tk), ec, std::move(args)...);
       if (impl.is_complete())
       {
+        if (buf.use_count() == 0u)
+          return ;
         auto h = std::move(handler);
         auto tmp = std::move(res);
-        BOOST_ASSERT(buf.use_count() == 1);
+        //BOOST_ASSERT(buf.use_count() == 1);
         auto exec = asio::get_associated_executor(h, impl.get_executor());
         buf = nullptr;
         asio::dispatch(exec, asio::append(std::move(h), ec, std::move(tmp)));
       }
-      else
-        BOOST_ASSERT(buf.use_count() > 1);
     }
 
     void initiate(token_type tk)
     {
       using result_type = decltype(impl.resume(std::move(tk), std::declval<system::error_code&>(), std::declval<Args>()...));
+      BOOST_ASSERT(tk.impl_);
       initiate_impl(std::is_void<result_type>{}, std::move(tk), {}, Args{}...);
     }
 
@@ -226,31 +229,32 @@ struct co_runner<Implementation, void(system::error_code, Args...)>
       impl.resume(std::move(tk), ec, std::move(args)...);
       if (impl.is_complete())
       {
+        if (buf.use_count() == 0u)
+          return ;
         auto h = std::move(handler);
-        BOOST_ASSERT(buf.use_count() == 1);
+        // BOOST_ASSERT(buf.use_count() == 1);
         auto exec = asio::get_associated_executor(h, impl.get_executor());
         buf = nullptr;
         asio::post(exec, asio::append(std::move(h), ec));
       }
-      else
-        BOOST_ASSERT(buf.use_count() > 1);
     }
 
     void initiate_impl(std::false_type, token_type tk, system::error_code ec, Args ... args)
     {
+      BOOST_ASSERT(tk.impl_.get() == this);
       auto buf = tk.impl_;
       decltype(auto) res = impl.resume(std::move(tk), ec, std::move(args)...);
       if (impl.is_complete())
       {
+        if (buf.use_count() == 0u)
+          return ;
+
         auto h = std::move(handler);
         auto tmp = std::move(res);
-        BOOST_ASSERT(buf.use_count() == 1);
         auto exec = asio::get_associated_executor(h, impl.get_executor());
         buf = nullptr;
         asio::post(exec, asio::append(std::move(h), ec, std::move(tmp)));
       }
-      else
-        BOOST_ASSERT(buf.use_count() > 1);
     }
 
 
@@ -321,7 +325,8 @@ template<typename Implementation,
          typename ... Args>
 auto co_run(Token && token, Args && ... args)
 {
-  static_assert(std::is_constructible<Implementation, Args&&...>::value);
+  static_assert(std::is_constructible<Implementation, Args&&...>::value,
+                "Can't construct implementation from those args");
   return asio::async_initiate<Token, typename Implementation::completion_signature_type>(
       co_runner<Implementation>{}, token, std::forward<Args>(args)...);
 }

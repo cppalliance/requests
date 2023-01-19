@@ -8,19 +8,25 @@
 #include <boost/requests/json.hpp>
 #include <boost/requests/connection.hpp>
 
-#include <boost/asio/awaitable.hpp>
-#include <boost/asio/co_spawn.hpp>
 #include <boost/asio/detached.hpp>
-#include <boost/asio/experimental/awaitable_operators.hpp>
 #include <boost/asio/redirect_error.hpp>
-#include <boost/asio/use_awaitable.hpp>
 #include <boost/optional/optional_io.hpp>
 
 #include "doctest.h"
 #include "string_maker.hpp"
 
+namespace requests = boost::requests;
+namespace filesystem = requests::filesystem;
+namespace asio = boost::asio;
+namespace json = boost::json;
+namespace urls = boost::urls;
+namespace beast = boost::beast;
 
-using namespace boost;
+#if defined(BOOST_REQUESTS_USE_STD_FS)
+using boost::system::error_code;
+#else
+using std::error_code;
+#endif
 
 inline std::string httpbin()
 {
@@ -32,28 +38,8 @@ inline std::string httpbin()
 
 
 TEST_SUITE_BEGIN("json-connection");
-/*
 
-template<typename Stream, typename Exec>
-auto make_conn_impl(Exec && exec, asio::ssl::context & sslctx, std::false_type)
-{
-  return Stream(exec);
-}
-
-template<typename Stream, typename Exec>
-auto make_conn_impl(Exec && exec, asio::ssl::context & sslctx, std::true_type)
-{
-  return Stream(exec, sslctx);
-}
-
-
-template<typename Stream, typename Exec>
-auto make_conn(Exec && exec, asio::ssl::context & sslctx)
-{
-  return make_conn_impl<Stream>(std::forward<Exec>(exec), sslctx, requests::detail::has_ssl<Stream>{});
-}
-
-TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, requests::https_connection)
+void json_request_connection(bool https)
 {
   auto url = httpbin();
 
@@ -64,18 +50,19 @@ TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, reques
   sslctx.set_verify_mode(asio::ssl::verify_peer);
   sslctx.set_default_verify_paths();
 
-  Conn hc = make_conn<Conn>(ctx.get_executor(), sslctx);
+  auto hc = https ? requests::connection(ctx.get_executor(), sslctx) : requests::connection(ctx.get_executor());
   hc.set_host(url);
   asio::ip::tcp::resolver rslvr{ctx};
-  auto ep = *rslvr.resolve(url, requests::detail::has_ssl_v<Conn> ? "https" : "http").begin();
+  asio::ip::tcp::endpoint ep = *rslvr.resolve(url, https ? "https" : "http").begin();
 
   hc.connect(ep);
 
-  SUBCASE("headers")
+
+  // SUBCASE("headers")
   {
-    auto hdr = request(hc, beast::http::verb::get, urls::url_view("/headers"),
-                          requests::empty{},
-                          {requests::headers({{"Test-Header", "it works"}}), {false}});
+    auto hdr = request(hc, requests::http::verb::get, urls::url_view("/headers"),
+                       requests::empty{},
+                       {requests::headers({{"Test-Header", "it works"}}), {false}});
 
     auto hd = as_json(hdr).at("headers");
 
@@ -83,22 +70,22 @@ TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, reques
     CHECK(hd.at("Test-Header") == json::value("it works"));
   }
 
-  SUBCASE("stream")
+  // SUBCASE("stream")
   {
-    auto str = hc.ropen(beast::http::verb::get, urls::url_view("/get"),
+    auto str = hc.ropen(requests::http::verb::get, urls::url_view("/get"),
                         requests::empty{}, {requests::headers({{"Test-Header", "it works"}}), {false}});
 
     json::stream_parser sp;
 
     char buf[32];
 
-    system::error_code ec;
+    error_code ec;
     while (!str.done() && !ec)
     {
       auto sz = str.read_some(asio::buffer(buf), ec);
-      CHECK(ec == system::error_code{});
+      CHECK(ec == error_code{});
       sp.write_some(buf, sz, ec);
-      CHECK(ec == system::error_code{});
+      CHECK(ec == error_code{});
     }
 
     auto hd = sp.release().at("headers");
@@ -107,13 +94,13 @@ TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, reques
     CHECK(hd.at("Test-Header") == json::value("it works"));
   }
 
-  SUBCASE("get-redirect")
+  // SUBCASE("get-redirect")
   {
     auto hdr = requests::json::get(hc, urls::url_view("/redirect-to?url=%2Fget"),
-                        {requests::headers({{"Test-Header", "it works"}}), {false}});
+                                   {requests::headers({{"Test-Header", "it works"}}), {false}});
 
     CHECK(hdr.history.size() == 1u);
-    CHECK(hdr.history.at(0u).at(beast::http::field::location) == "/get");
+    CHECK(hdr.history.at(0u).at(requests::http::field::location) == "/get");
 
     auto hd = hdr.value.at("headers");
 
@@ -121,16 +108,16 @@ TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, reques
     CHECK(hd.at("Test-Header") == json::value("it works"));
   }
 
-  SUBCASE("too-many-redirects")
+  // SUBCASE("too-many-redirects")
   {
-    system::error_code ec;
+    error_code ec;
     auto res = requests::json::get(hc, urls::url_view("/redirect/10"), {{}, {false, requests::redirect_mode::private_domain, 5}}, ec);
     CHECK(res.history.size() == 5);
     CHECK(res.headers.begin() == res.headers.end());
     CHECK(ec == requests::error::too_many_redirects);
   }
 
-  SUBCASE("delete")
+  // SUBCASE("delete")
   {
     auto hdr = requests::json::delete_(hc,  urls::url_view("/delete"), json::value{{"test-key", "test-value"}}, {{}, {false}});
 
@@ -140,7 +127,7 @@ TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, reques
     CHECK(js->at("headers").at("Content-Type") == "application/json");
   }
 
-  SUBCASE("patch")
+  // SUBCASE("patch")
   {
     json::value msg {{"test-key", "test-value"}};
     auto hdr = requests::json::patch(hc, urls::url_view("/patch"), msg, {{}, {false}});
@@ -151,7 +138,7 @@ TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, reques
     CHECK(js.at("json") == msg);
   }
 
-  SUBCASE("json")
+  // SUBCASE("json")
   {
     json::value msg {{"test-key", "test-value"}};
     auto hdr = requests::json::put(hc, urls::url_view("/put"), msg, {{}, {false}});
@@ -164,7 +151,7 @@ TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, reques
     CHECK(js->at("json") == msg);
   }
 
-  SUBCASE("post")
+  // SUBCASE("post")
   {
     json::value msg {{"test-key", "test-value"}};
     auto hdr = requests::json::post(hc, urls::url_view("/post"), msg, {{}, {false}});
@@ -174,141 +161,162 @@ TEST_CASE_TEMPLATE("sync-https-request", Conn, requests::http_connection, reques
     CHECK(js.at("headers").at("Content-Type") == "application/json");
     CHECK(js.at("json") == msg);
   }
+
+}
+
+TEST_CASE("sync-connection-request")
+{
+  SUBCASE("http")  { json_request_connection(false);}
+  SUBCASE("https") { json_request_connection(true);}
+}
+
+void run_json_tests(error_code ec,
+                    requests::connection & hc,
+                    urls::url_view url)
+{
+  requests::json::async_get(
+      hc, urls::url_view("/get"),
+      requests::request_settings{requests::headers({{"Test-Header", "it works"}}), {false}},
+      tracker(
+          [url](error_code ec, requests::json::response<> hdr)
+          {
+            check_ec(ec);
+            auto & hd = hdr.value.at("headers");
+
+            CHECK(hd.at("Host")        == json::value(url.encoded_host()));
+            CHECK(hd.at("Test-Header") == json::value("it works"));
+          }));
+
+
+  requests::json::async_get(
+      hc, urls::url_view("/redirect-to?url=%2Fget"),
+      requests::request_settings{requests::headers({{"Test-Header", "it works"}}), {false}},
+      tracker(
+        [url](error_code ec, requests::json::response<> hdr)
+        {
+          check_ec(ec);
+          CHECK(hdr.history.size() == 1u);
+          CHECK(hdr.history.at(0u).at(beast::http::field::location) == "/get");
+
+          auto & hd = hdr.value.at("headers");
+
+          CHECK(hd.at("Host")        == json::value(url.encoded_host()));
+          CHECK(hd.at("Test-Header") == json::value("it works"));
+        }));
+
+
+  requests::json::async_get(
+      hc, urls::url_view("/redirect/10"), {{}, {false, requests::redirect_mode::private_domain, 5}},
+      tracker(
+          [url](error_code ec, requests::json::response<> res)
+          {
+            CHECK(res.history.size() == 5);
+            CHECK(res.headers.begin() == res.headers.end());
+            CHECK(ec == requests::error::too_many_redirects);
+          }));
+
+
+  requests::json::async_delete(
+      hc, urls::url_view("/delete"), json::value{{"test-key", "test-value"}}, {{}, {false}},
+      tracker(
+        [url](error_code ec, requests::json::response<> hdr)
+        {
+            check_ec(ec);
+            auto & js = hdr.value;
+            CHECK(beast::http::to_status_class(hdr.headers.result()) == beast::http::status_class::successful);
+            CHECK(js.at("headers").at("Content-Type") == "application/json");
+        }));
+
+    requests::json::async_patch(
+        hc, urls::url_view("/patch"), json::value {{"test-key", "test-value"}}, {{}, {false}},
+        tracker(
+          [url](error_code ec, requests::json::response<> hdr)
+          {
+            check_ec(ec);
+            auto & js = hdr.value;
+            CHECK(hdr.headers.result() == beast::http::status::ok);
+            CHECK(js.at("headers").at("Content-Type") == "application/json");
+            CHECK(js.at("json") == json::value{{"test-key", "test-value"}});
+          }));
+
+  requests::json::async_put(
+        hc, urls::url_view("/put"), json::value{{"test-key", "test-value"}}, {{}, {false}},
+        tracker(
+            [url](error_code ec, requests::json::response<boost::optional<json::value>> hdr)
+            {
+              check_ec(ec);
+              auto & js = hdr.value;
+              CHECK(hdr.headers.result() == beast::http::status::ok);
+              REQUIRE(js);
+              CHECK(js->at("headers").at("Content-Type") == "application/json");
+              CHECK(js->at("json") == json::value{{"test-key", "test-value"}});
+            }));
+
+  requests::json::async_post(
+      hc, urls::url_view("/post"), json::value{{"test-key", "test-value"}}, {{}, {false}},
+      tracker(
+          [url](error_code ec, requests::json::response<> hdr)
+          {
+            check_ec(ec);
+            auto & js = hdr.value;
+            CHECK(hdr.headers.result() == beast::http::status::ok);
+            CHECK(js.at("headers").at("Content-Type") == "application/json");
+            CHECK(js.at("json") == json::value{{"test-key", "test-value"}});
+          }));
 }
 
 
-
-template<typename Conn>
-asio::awaitable<void> async_https_request()
+TEST_CASE("async-json-request")
 {
-  auto url = httpbin();
-
+  urls::url url;
+  url.set_host(httpbin());
+  asio::io_context ctx;
   asio::ssl::context sslctx{asio::ssl::context_base::tls_client};
-
   sslctx.set_verify_mode(asio::ssl::verify_peer);
   sslctx.set_default_verify_paths();
+  requests::connection conn(ctx, sslctx);
 
-  auto hc = make_conn<Conn>(co_await asio::this_coro::executor, sslctx);
-  hc.set_host(url);
-  asio::ip::tcp::resolver rslvr{co_await asio::this_coro::executor};
-  auto ep = *rslvr.resolve(url, requests::detail::has_ssl_v<Conn> ? "https" : "http").begin();
-  co_await hc.async_connect(ep);
+  auto do_the_thing = asio::deferred(
+      [&](error_code ec, asio::ip::tcp::resolver::results_type res)
+      {
+        check_ec(ec);
+        asio::ip::tcp::endpoint ep;
+        if (!ec)
+          ep = res.begin()->endpoint();
+        else
+          REQUIRE(!res.size());
 
-  auto get_ = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
+        return asio::deferred.when(!ec)
+            .then(conn.async_connect(ep, asio::deferred))
+            .otherwise(asio::post(ctx, asio::append(asio::deferred, ec)));
+      });
+
+  SUBCASE("http")
   {
-    requests::request_settings r{requests::headers({{"Test-Header", "it works"}}), {false}};
-    auto hdr = co_await requests::json::async_get(hc, urls::url_view("/get"), r);
+    conn = requests::connection(ctx);
+    asio::ip::tcp::resolver rslvr{ctx};
+    url.set_scheme("http");
+    CHECK(!conn.uses_ssl());
+    conn.set_host(url.encoded_host());
 
-    auto & hd = hdr.value.at("headers");
+    rslvr.async_resolve(asio::string_view(url.encoded_host().data(), url.encoded_host().size()),
+                        "80", do_the_thing)
+                       (asio::append(&run_json_tests, std::ref(conn), urls::url_view(url)));
+    ctx.run();
+  }
 
-    CHECK(hd.at("Host")        == json::value(url));
-    CHECK(hd.at("Test-Header") == json::value("it works"));
-  };
-
-  auto get_redirect = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
+  SUBCASE("https")
   {
-    requests::request_settings r{requests::headers({{"Test-Header", "it works"}}), {false}};
-    auto hdr = co_await requests::json::async_get(hc, urls::url_view("/redirect-to?url=%2Fget"), r);
-
-    CHECK(hdr.history.size() == 1u);
-    CHECK(hdr.history.at(0u).at(beast::http::field::location) == "/get");
-
-    auto & hd = hdr.value.at("headers");
-
-    CHECK(hd.at("Host")        == json::value(url));
-    CHECK(hd.at("Test-Header") == json::value("it works"));
-  };
-
-  auto too_many_redirects = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
-  {
-    system::error_code ec;
-    requests::request_settings r{{}, {false, requests::redirect_mode::private_domain, 5}};
-
-    auto res = co_await requests::json::async_get(hc, urls::url_view("/redirect/10"), r,
-                                  asio::redirect_error(asio::use_awaitable, ec));
-    CHECK(res.history.size() == 5);
-    CHECK(res.headers.begin() == res.headers.end());
-    CHECK(ec == requests::error::too_many_redirects);
-  };
-
-  auto delete_ = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
-  {
-    requests::request_settings r{{}, {false}};
-    json::value v{{"test-key", "test-value"}};
-    auto hdr = co_await requests::json::async_delete(hc,  urls::url_view("/delete"), v, r);
-
-    auto & js = hdr.value;
-    CHECK(beast::http::to_status_class(hdr.headers.result()) == beast::http::status_class::successful);
-    CHECK(js.at("headers").at("Content-Type") == "application/json");
-  };
-
-  auto patch_ = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
-  {
-    json::value msg {{"test-key", "test-value"}};
-    requests::request_settings r{{}, {false}};
-    auto hdr = co_await requests::json::async_patch(hc, urls::url_view("/patch"), msg, r);
-
-    auto & js = hdr.value;
-    CHECK(hdr.headers.result() == beast::http::status::ok);
-    CHECK(js.at("headers").at("Content-Type") == "application/json");
-    CHECK(js.at("json") == msg);
-  };
-
-  auto put_ = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
-  {
-    json::value msg {{"test-key", "test-value"}};
-    requests::request_settings r{{}, {false}};
-    auto hdr = co_await requests::json::async_put(hc, urls::url_view("/put"), msg, r);
-
-    auto & js = hdr.value;
-    CHECK(hdr.headers.result() == beast::http::status::ok);
-    REQUIRE(js);
-
-    CHECK(js->at("headers").at("Content-Type") == "application/json");
-    CHECK(js->at("json") == msg);
-  };
-
-  auto post_ = [](Conn & hc, core::string_view url) -> asio::awaitable<void>
-  {
-    json::value msg {{"test-key", "test-value"}};
-
-    requests::request_settings r{{}, {false}};
-    auto hdr = co_await requests::json::async_post(hc, urls::url_view("/post"), msg, r);
-
-    auto & js = hdr.value;
-    CHECK(hdr.headers.result() == beast::http::status::ok);
-    CHECK(js.at("headers").at("Content-Type") == "application/json");
-    CHECK(js.at("json") == msg);
-  };
-
-
-  using namespace asio::experimental::awaitable_operators ;
-  co_await (
-         get_(hc, url)
-      && get_redirect(hc, url)
-      && too_many_redirects(hc, url)
-      && delete_(hc, url)
-      && patch_(hc, url)
-      && put_(hc, url)
-      && post_(hc, url)
-  );
+    conn = requests::connection(ctx, sslctx);
+    asio::ip::tcp::resolver rslvr{ctx};
+    url.set_scheme("https");
+    CHECK(conn.uses_ssl());
+    conn.set_host(url.encoded_host());
+    rslvr.async_resolve(asio::string_view(url.encoded_host().data(), url.encoded_host().size()),
+                        "443", do_the_thing)
+                       (asio::append(&run_json_tests, std::ref(conn), urls::url_view(url)));
+    ctx.run();
+  }
 }
 
-
-
-TEST_CASE_TEMPLATE("async-https-request", Conn, aw_http_connection, aw_https_connection)
-{
-  auto url = httpbin();
-
-  asio::io_context ctx;
-  asio::co_spawn(ctx,
-                 async_https_request<Conn>(),
-                 [](std::exception_ptr e)
-                 {
-                   CHECK(e == nullptr);
-                 });
-
-  ctx.run();
-}
-*/
 TEST_SUITE_END();
