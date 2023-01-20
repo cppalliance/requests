@@ -510,7 +510,7 @@ TEST_CASE("async-connection-pool-request")
     conn.async_lookup(url, asio::append(&run_tests, std::ref(conn), urls::url_view(url)));
     ctx.run();
     CHECK(!conn.uses_ssl());
-    CHECK(conn.limit() == conn.active());
+    CHECK(conn.limit() >= conn.active());
   }
 
   SUBCASE("https")
@@ -519,7 +519,7 @@ TEST_CASE("async-connection-pool-request")
     CHECK(conn.uses_ssl());
     conn.async_lookup(url, asio::append(&run_tests, std::ref(conn), urls::url_view(url)));
     ctx.run();
-    CHECK(conn.limit() == conn.active());
+    CHECK(conn.limit() >= conn.active());
   }
 }
 

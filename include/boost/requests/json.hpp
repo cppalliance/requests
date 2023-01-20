@@ -819,11 +819,8 @@ struct async_request_json_op : asio::coroutine
       {
         rb.headers = std::move(std::move(variant2::get<1>(s))).headers();
         rb.history = std::move(std::move(variant2::get<1>(s))).history();
+        break;
       }
-
-
-      if (ec)
-         break;
 
       auto v = ::boost::json::try_value_to<Value>(variant2::get<2>(s));
       if (v)
@@ -884,10 +881,9 @@ struct async_request_optional_json_op : asio::coroutine
       {
         rb.headers = std::move(std::move(variant2::get<1>(s))).headers();
         rb.history = std::move(std::move(variant2::get<1>(s))).history();
+        break;
       }
 
-      if (ec)
-        break;
 
       if (variant2::get<2>(s))
       {
