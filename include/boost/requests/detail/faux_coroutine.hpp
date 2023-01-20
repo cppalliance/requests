@@ -60,11 +60,11 @@ struct faux_token_t<void()>
   faux_token_t(      faux_token_t &&) = default;
 
 
+  explicit faux_token_t(std::shared_ptr<base> impl) : impl_(std::move(impl)) {}
  private:
   template<typename...>
   friend struct faux_token_t;
 
-  explicit faux_token_t(std::shared_ptr<base> impl) : impl_(std::move(impl)) {}
 
   std::shared_ptr<base> impl_;
 
@@ -104,11 +104,11 @@ struct faux_token_t<void(T1)>
   faux_token_t(const faux_token_t & ) = delete;
   faux_token_t(      faux_token_t &&) = default;
 
+  explicit faux_token_t(std::shared_ptr<base> impl) : impl_(std::move(impl)) {}
 private:
   template<typename...>
   friend struct faux_token_t;
 
-  explicit faux_token_t(std::shared_ptr<base> impl) : impl_(std::move(impl)) {}
 
   std::shared_ptr<base> impl_;
 
@@ -158,11 +158,12 @@ struct faux_token_t<void(T1, T2)>
 
   std::size_t use_count() const {return impl_.use_count();}
 
+  explicit faux_token_t(std::shared_ptr<base> impl) : impl_(std::move(impl)) {}
+
  private:
   template<typename...>
   friend struct faux_token_t;
 
-  explicit faux_token_t(std::shared_ptr<base> impl) : impl_(std::move(impl)) {}
   std::shared_ptr<base> impl_;
   template<typename Implementation, typename> friend struct faux_runner;
 };

@@ -5,12 +5,12 @@
 #ifndef BOOST_REQUESTS_CONNECTION_HPP
 #define BOOST_REQUESTS_CONNECTION_HPP
 
-#include <boost/asem/mt.hpp>
 #include <boost/asio/any_io_executor.hpp>
 #include <boost/asio/generic/stream_protocol.hpp>
 #include <boost/asio/ssl/stream.hpp>
 #include <boost/beast/core/flat_buffer.hpp>
 #include <boost/requests/detail/defaulted.hpp>
+#include <boost/requests/detail/lock_guard.hpp>
 #include <boost/requests/detail/faux_coroutine.hpp>
 #include <boost/requests/detail/ssl.hpp>
 #include <boost/requests/fields/keep_alive.hpp>
@@ -244,8 +244,8 @@ struct connection
 
     next_layer_type next_layer_;
     bool use_ssl_{false};
-    asem::mt::mutex read_mtx_{next_layer_.get_executor()},
-                    write_mtx_{next_layer_.get_executor()};
+    detail::mutex read_mtx_{next_layer_.get_executor()},
+                 write_mtx_{next_layer_.get_executor()};
 
     std::string host_;
     beast::flat_buffer buffer_;

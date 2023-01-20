@@ -112,7 +112,7 @@ auto connection::ropen(beast::http::verb method,
                        system::error_code & ec) -> stream
 {
   const auto is_secure = use_ssl_;
-  using lock_type = asem::lock_guard<asem::mt::mutex>;
+  using lock_type = detail::lock_guard;
   detail::tracker t{this->ongoing_requests_};
   lock_type read_lock;
   if (jar)
@@ -512,11 +512,11 @@ auto connection::async_ropen_op::resume(
 
 void connection::connect(endpoint_type ep, system::error_code & ec)
 {
-  auto wlock = asem::lock(write_mtx_, ec);
+  auto wlock = detail::lock(write_mtx_, ec);
   if (ec)
     return;
 
-  auto rlock = asem::lock(read_mtx_, ec);
+  auto rlock = detail::lock(read_mtx_, ec);
   if (ec)
     return;
 
@@ -529,11 +529,11 @@ void connection::connect(endpoint_type ep, system::error_code & ec)
 
 void connection::close(system::error_code & ec)
 {
-  auto wlock = asem::lock(write_mtx_, ec);
+  auto wlock = detail::lock(write_mtx_, ec);
   if (ec)
     return;
 
-  auto rlock = asem::lock(read_mtx_, ec);
+  auto rlock = detail::lock(read_mtx_, ec);
   if (ec)
     return;
 
@@ -608,7 +608,7 @@ void connection::async_close_op::resume(requests::detail::faux_token_t<step_sign
 
 void connection::do_close_(system::error_code & ec)
 {
-  auto wlock = asem::lock(write_mtx_, ec);
+  auto wlock = detail::lock(write_mtx_, ec);
   if (ec)
     return;
 

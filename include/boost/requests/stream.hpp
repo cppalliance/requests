@@ -11,8 +11,7 @@
 #ifndef BOOST_REQUESTS_STREAM_HPP
 #define BOOST_REQUESTS_STREAM_HPP
 
-#include <boost/asem/basic_mutex.hpp>
-#include <boost/asem/lock_guard.hpp>
+#include <boost/requests/detail/lock_guard.hpp>
 #include <boost/asio/execution/bad_executor.hpp>
 #include <boost/beast/http/basic_parser.hpp>
 #include <boost/requests/detail/config.hpp>
@@ -176,7 +175,7 @@ struct stream
  private:
   executor_type executor_;
   connection* impl_;
-  asem::lock_guard<asem::mt::mutex> lock_;
+  detail::lock_guard lock_;
 
   std::unique_ptr<http::response_parser<http::buffer_body>,
                   detail::pmr_deleter> parser_;

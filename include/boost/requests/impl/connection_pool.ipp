@@ -21,13 +21,13 @@ void connection_pool::lookup(urls::url_view sv, system::error_code & ec)
   if (sv.has_scheme())
     scheme = sv.scheme();
 
-  asem::lock_guard<asem::mt::mutex> lock;
+  detail::lock_guard lock;
 
   if (scheme == "unix")
     // all good, no lookup needed
   {
 
-    lock =  asem::lock(mutex_, ec);
+    lock =  detail::lock(mutex_, ec);
     if (ec)
       return;
 
@@ -52,7 +52,7 @@ void connection_pool::lookup(urls::url_view sv, system::error_code & ec)
     if (ec)
       return;
 
-    lock =  asem::lock(mutex_, ec);
+    lock =  detail::lock(mutex_, ec);
     if (ec)
       return;
     use_ssl_ = scheme == "https";
@@ -165,7 +165,7 @@ void connection_pool::async_lookup_op::resume(requests::detail::faux_token_t<ste
 auto connection_pool::get_connection(error_code & ec) -> std::shared_ptr<connection>
 {
 
-  auto lock = asem::lock(mutex_, ec);
+  auto lock = detail::lock(mutex_, ec);
   if (ec)
     return nullptr;
 

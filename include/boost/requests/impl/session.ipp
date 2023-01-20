@@ -184,7 +184,7 @@ session::get_pool(urls::url_view url, error_code & ec) -> std::shared_ptr<connec
 
   const auto is_https = (url.scheme_id() == urls::scheme::https)
                         || (url.scheme_id() == urls::scheme::wss);
-  auto lock = asem::lock(mutex_, ec);
+  auto lock = detail::lock(mutex_, ec);
   if (ec)
     return std::shared_ptr<connection_pool>();
 

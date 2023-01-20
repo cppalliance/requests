@@ -119,7 +119,7 @@ struct stream::async_read_op : asio::coroutine
   {
   }
 
-  using lock_type = asem::lock_guard<asem::mt::mutex>;
+  using lock_type = detail::lock_guard;
   lock_type lock;
   system::error_code ec_;
   std::size_t res = 0u;
@@ -152,6 +152,9 @@ struct stream::async_read_op : asio::coroutine
         buffer.commit(n);
         res += n;
       }
+
+      if (ec)
+        break;
 
       if (!this_->parser_->is_done() && !ec)
         BOOST_REQUESTS_ASSIGN_EC(ec, beast::http::error::need_buffer)

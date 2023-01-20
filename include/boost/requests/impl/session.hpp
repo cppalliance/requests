@@ -24,7 +24,7 @@ struct session::async_get_pool_op : asio::coroutine
   urls::url_view url;
   const bool is_https;
 
-  asem::lock_guard<asem::mt::mutex> lock;
+  detail::lock_guard lock;
 
   async_get_pool_op(session *this_, urls::url_view url)
       : this_(this_), url(url),

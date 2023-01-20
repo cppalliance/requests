@@ -17,4 +17,4 @@
     if (ec)               \
        break;             \
   }                       \
-  Lock = asem::lock_guard<decltype(Mutex)>{Mutex, std::adopt_lock}
+  Lock = detail::lock_guard{Mutex, std::adopt_lock}

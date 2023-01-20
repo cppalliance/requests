@@ -18,7 +18,6 @@
 #include <boost/requests/request_settings.hpp>
 #include <boost/requests/stream.hpp>
 
-#include <boost/asem/lock_guard.hpp>
 #include <boost/asio/deferred.hpp>
 #include <boost/asio/redirect_error.hpp>
 #include <boost/asio/ssl/host_name_verification.hpp>
@@ -45,7 +44,7 @@ struct connection::async_connect_op : asio::coroutine
 
   async_connect_op(connection * this_, endpoint_type ep) : this_(this_), ep(ep) {}
 
-  using lock_type = asem::lock_guard<asem::mt::mutex>;
+  using lock_type = detail::lock_guard;
 
   lock_type read_lock, write_lock;
 
@@ -74,7 +73,7 @@ struct connection::async_close_op : asio::coroutine
   using executor_type = asio::any_io_executor;
   executor_type get_executor() const {return this_->get_executor();}
 
-  using lock_type = asem::lock_guard<asem::mt::mutex>;
+  using lock_type = detail::lock_guard;
   lock_type read_lock, write_lock;
 
 
@@ -184,7 +183,7 @@ struct connection::async_ropen_op
   using executor_type = asio::any_io_executor;
   executor_type get_executor() {return this_->get_executor(); }
 
-  using lock_type = asem::lock_guard<asem::mt::mutex>;
+  using lock_type = detail::lock_guard;
 
   connection * this_;
   optional<stream> str;

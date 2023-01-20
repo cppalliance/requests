@@ -27,8 +27,8 @@ struct connection_pool::async_lookup_op : asio::coroutine
   urls::string_view scheme = this_->use_ssl_ ? "https" : "http";
   urls::string_view service;
 
-  using mutex_type = asem::mt::mutex;
-  using lock_type = asem::lock_guard<mutex_type>;
+  using mutex_type = detail::mutex;
+  using lock_type = detail::lock_guard;
 
   lock_type lock;
 
@@ -62,7 +62,7 @@ struct connection_pool::async_get_connection_op : asio::coroutine
   connection_pool * this_;
   async_get_connection_op(connection_pool * this_) : this_(this_) {}
 
-  using lock_type = asem::lock_guard<asem::mt::mutex>;
+  using lock_type = detail::lock_guard;
   using conn_t = boost::unordered_multimap<endpoint_type,
                                            std::shared_ptr<connection>,
                                            detail::endpoint_hash>;

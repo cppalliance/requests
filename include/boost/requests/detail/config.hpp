@@ -10,12 +10,6 @@
 
 #include <boost/config.hpp>
 
-#if defined(BOOST_REQUESTS_SINGLE_THREADED)
-#include <boost/asem/st.hpp>
-#else
-#include <boost/asem/mt.hpp>
-#endif
-
 #ifndef BOOST_REQUESTS_HEADER_ONLY
 # ifndef BOOST_REQUESTS_SEPARATE_COMPILATION
 #   define BOOST_REQUESTS_HEADER_ONLY 1
@@ -63,17 +57,6 @@ namespace filesystem = std::filesystem ;
 namespace filesystem = boost::filesystem ;
 #endif
 
-namespace detail
-{
-
-
-#if defined(BOOST_REQUESTS_SINGLE_THREADED)
-using mutex = ::boost::asem::st::mutex;
-#else
-using mutex = ::boost::asem::mt::mutex;
-#endif
-
-}
 }
 }
 

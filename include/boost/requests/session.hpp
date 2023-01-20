@@ -159,7 +159,7 @@ struct session
 
   private:
     asio::ssl::context sslctx_{asio::ssl::context_base::tls_client};
-    asem::mt::mutex mutex_;
+    detail::mutex mutex_;
 
     struct request_options options_{default_options()};
 

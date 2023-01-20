@@ -8,6 +8,7 @@
 #ifndef BOOST_REQUESTS_DEFAULTED_HPP
 #define BOOST_REQUESTS_DEFAULTED_HPP
 
+#include <boost/asio/append.hpp>
 #include <boost/asio/associator.hpp>
 #include <boost/asio/async_result.hpp>
 

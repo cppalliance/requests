@@ -13,6 +13,7 @@
 #include <boost/core/demangle.hpp>
 #include <boost/core/detail/string_view.hpp>
 #include <boost/requests/fields/set_cookie.hpp>
+#include <boost/asio/any_io_executor.hpp>
 #include <boost/asio/bind_executor.hpp>
 #include <boost/asio/multiple_exceptions.hpp>
 #include <boost/system/result.hpp>

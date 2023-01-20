@@ -217,7 +217,7 @@ struct connection_pool
   private:
     asio::ssl::context & context_;
     bool use_ssl_{false};
-    asem::mt::mutex mutex_;
+    detail::mutex mutex_;
     std::string host_;
     std::vector<endpoint_type> endpoints_;
     std::size_t limit_;
