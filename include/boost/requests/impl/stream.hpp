@@ -119,7 +119,7 @@ struct stream::async_read_op : asio::coroutine
   {
   }
 
-  using lock_type = asem::lock_guard<detail::basic_mutex<executor_type>>;
+  using lock_type = asem::lock_guard<asem::mt::mutex>;
   lock_type lock;
   system::error_code ec_;
   std::size_t res = 0u;
@@ -208,11 +208,7 @@ struct stream::async_read_some_op : asio::coroutine
       }
     }
   }
-
-  using lock_type = asem::lock_guard<detail::basic_mutex<executor_type>>;
-  lock_type lock;
   system::error_code ec_;
-
 
   using completion_signature_type = void(system::error_code, std::size_t);
   using step_signature_type       = void(system::error_code, std::size_t);
@@ -241,11 +237,8 @@ struct stream::async_dump_op : asio::coroutine
   executor_type get_executor() {return this_->get_executor(); }
 
   stream * this_;
-  using mutex_type = detail::basic_mutex<executor_type>;
 
   char buffer[BOOST_REQUESTS_CHUNK_SIZE];
-  using lock_type = asem::lock_guard<detail::basic_mutex<executor_type>>;
-  lock_type lock;
   system::error_code ec_;
 
   async_dump_op(stream * this_) : this_(this_) {}

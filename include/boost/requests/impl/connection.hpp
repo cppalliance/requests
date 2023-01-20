@@ -45,8 +45,7 @@ struct connection::async_connect_op : asio::coroutine
 
   async_connect_op(connection * this_, endpoint_type ep) : this_(this_), ep(ep) {}
 
-  using mutex_type = detail::basic_mutex<executor_type>;
-  using lock_type = asem::lock_guard<detail::basic_mutex<executor_type>>;
+  using lock_type = asem::lock_guard<asem::mt::mutex>;
 
   lock_type read_lock, write_lock;
 
@@ -164,14 +163,14 @@ auto connection::ropen(
   const auto is_secure = use_ssl_;
 
   if (!detail::check_endpoint(path, endpoint_, host_, use_ssl_, ec))
-    return stream{get_executor(), this};
+    return stream{get_executor(), nullptr};
 
   if (((endpoint_.protocol() == asio::ip::tcp::v4())
     || (endpoint_.protocol() == asio::ip::tcp::v6()))
       && !is_secure && req.opts.enforce_tls)
   {
     BOOST_REQUESTS_ASSIGN_EC(ec, error::insecure);
-    return stream{get_executor(), this};
+    return stream{get_executor(), nullptr};
   }
 
   auto src = requests::make_source(std::forward<RequestBody>(body));

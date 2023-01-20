@@ -68,11 +68,9 @@ namespace detail
 
 
 #if defined(BOOST_REQUESTS_SINGLE_THREADED)
-template<typename Executor>
-using basic_mutex = asem::basic_mutex<boost::asem::st, Executor>;
+using mutex = ::boost::asem::st::mutex;
 #else
-template<typename Executor>
-using basic_mutex = asem::basic_mutex<boost::asem::mt, Executor>;
+using mutex = ::boost::asem::mt::mutex;
 #endif
 
 }

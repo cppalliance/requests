@@ -112,7 +112,7 @@ auto connection::ropen(beast::http::verb method,
                        system::error_code & ec) -> stream
 {
   const auto is_secure = use_ssl_;
-  using lock_type = asem::lock_guard<detail::basic_mutex<executor_type>>;
+  using lock_type = asem::lock_guard<asem::mt::mutex>;
   detail::tracker t{this->ongoing_requests_};
   lock_type read_lock;
   if (jar)
@@ -139,7 +139,7 @@ auto connection::ropen(beast::http::verb method,
     {
       write_mtx_.lock(ec);
       if (ec)
-        return stream{get_executor(), this};
+        return stream{get_executor(), nullptr};
       lock_type wlock{write_mtx_, std::adopt_lock};
       boost::optional<lock_type> alock;
 
@@ -147,7 +147,7 @@ auto connection::ropen(beast::http::verb method,
       if (!is_open() && keep_alive_set_.timeout < std::chrono::system_clock::now()) {
         read_mtx_.lock(ec);
         if (ec)
-          return stream{get_executor(), this};
+          return stream{get_executor(), nullptr};
 
         alock.emplace(read_mtx_, std::adopt_lock);
         // if the close goes wrong - so what, unless it's still open
@@ -165,7 +165,7 @@ auto connection::ropen(beast::http::verb method,
         {
           read_mtx_.lock(ec);
           if (ec)
-            return stream{get_executor(), this};
+            return stream{get_executor(), nullptr};
 
           alock.emplace(read_mtx_, std::adopt_lock);
         }
@@ -174,7 +174,7 @@ auto connection::ropen(beast::http::verb method,
         if (use_ssl_ && !ec)
           next_layer_.handshake(asio::ssl::stream_base::client, ec);
         if (ec)
-          return stream{get_executor(), this};
+          return stream{get_executor(), nullptr};
       }
 
       alock.reset();
@@ -185,21 +185,21 @@ auto connection::ropen(beast::http::verb method,
 
       if (ec == asio::error::broken_pipe || ec == asio::error::connection_reset)
         goto retry ;
-      else  if (ec)
-        return stream{get_executor(), this};
+      else if (ec)
+        return stream{get_executor(), nullptr};
 
       // release after acquire!
       read_mtx_.lock(ec);
 
       if (ec)
-        return stream{get_executor(), this};
+        return stream{get_executor(), nullptr};
 
       read_lock = {read_mtx_, std::adopt_lock};
     }
     // write end
 
     if (ec)
-      return stream{get_executor(), this};
+      return stream{get_executor(), nullptr};
 
     stream str{get_executor(), this};
     str.parser_ = detail::make_pmr<http::response_parser<http::buffer_body>>(headers.get_allocator().resource(),
@@ -505,7 +505,7 @@ auto connection::async_ropen_op::resume(
     return str_;
 
   }
-  return stream{this_->get_executor(), this_};
+  return stream{this_->get_executor(), nullptr};
 
 }
 

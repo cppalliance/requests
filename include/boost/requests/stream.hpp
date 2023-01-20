@@ -176,7 +176,7 @@ struct stream
  private:
   executor_type executor_;
   connection* impl_;
-  asem::lock_guard<detail::basic_mutex<executor_type>> lock_;
+  asem::lock_guard<asem::mt::mutex> lock_;
 
   std::unique_ptr<http::response_parser<http::buffer_body>,
                   detail::pmr_deleter> parser_;

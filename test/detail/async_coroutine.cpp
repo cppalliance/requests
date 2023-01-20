@@ -71,8 +71,8 @@ struct my_coro : asio::coroutine
   }
 };
 
-
-TEST_CASE("develop")
+TEST_SUITE_BEGIN("async_coro");
+TEST_CASE("sanity-check")
 {
   asio::io_context ctx;
   asio::writable_pipe source{ctx};
@@ -97,3 +97,4 @@ TEST_CASE("develop")
   ctx.run();
 }
 
+TEST_SUITE_END();

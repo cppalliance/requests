@@ -62,7 +62,7 @@ struct connection_pool::async_get_connection_op : asio::coroutine
   connection_pool * this_;
   async_get_connection_op(connection_pool * this_) : this_(this_) {}
 
-  using lock_type = asem::lock_guard<detail::basic_mutex<executor_type>>;
+  using lock_type = asem::lock_guard<asem::mt::mutex>;
   using conn_t = boost::unordered_multimap<endpoint_type,
                                            std::shared_ptr<connection>,
                                            detail::endpoint_hash>;
