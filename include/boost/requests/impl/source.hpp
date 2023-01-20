@@ -5,12 +5,12 @@
 #ifndef BOOST_REQUESTS_IMPL_SOURCE_HPP
 #define BOOST_REQUESTS_IMPL_SOURCE_HPP
 
-#include <boost/requests/source.hpp>
-#include <boost/requests/detail/async_coroutine.hpp>
-#include <boost/requests/detail/pmr.hpp>
 #include <boost/asio/consign.hpp>
 #include <boost/asio/prepend.hpp>
 #include <boost/beast/http/write.hpp>
+#include <boost/requests/detail/faux_coroutine.hpp>
+#include <boost/requests/detail/pmr.hpp>
+#include <boost/requests/source.hpp>
 
 namespace boost
 {
@@ -206,7 +206,7 @@ struct async_write_request_op : asio::coroutine
     : stream(stream), method(method), target(target), header(header), src(src)
   {}
 
-  std::size_t resume(requests::detail::co_token_t<step_signature_type> self,
+  std::size_t resume(requests::detail::faux_token_t<step_signature_type> self,
                      system::error_code ec = {}, std::size_t n = 0u)
   {
     BOOST_ASIO_CORO_REENTER(this)
@@ -275,7 +275,7 @@ async_write_request(
     source &src,
     CompletionToken && token)
 {
-  return detail::co_run<detail::async_write_request_op<Stream>>(
+  return detail::faux_run<detail::async_write_request_op<Stream>>(
       std::forward<CompletionToken>(token), std::ref(stream),
       method, target, std::ref(header), std::ref(src));
 }

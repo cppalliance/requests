@@ -10,7 +10,9 @@
 
 #include <boost/container/pmr/polymorphic_allocator.hpp>
 #include <boost/json.hpp>
-#include <boost/requests/detail/async_coroutine.hpp>
+#include <boost/json/parser.hpp>
+#include <boost/json/value.hpp>
+#include <boost/requests/detail/faux_coroutine.hpp>
 #include <boost/requests/error.hpp>
 #include <boost/requests/fields/link.hpp>
 #include <boost/requests/http.hpp>
@@ -18,8 +20,6 @@
 #include <boost/requests/request_settings.hpp>
 #include <boost/requests/sources/json.hpp>
 #include <boost/system/result.hpp>
-#include <boost/json/parser.hpp>
-#include <boost/json/value.hpp>
 
 #include <boost/range.hpp>
 #include <vector>
@@ -654,7 +654,7 @@ struct async_read_json_op : asio::coroutine
 
   async_read_json_op(Stream * str, json::storage_ptr ptr) : str(*str), sp{ptr} {}
 
-  value resume(requests::detail::co_token_t<step_signature_type> self,
+  value resume(requests::detail::faux_token_t<step_signature_type> self,
                system::error_code & ec, std::size_t n = 0u)
   {
     reenter(this)
@@ -693,7 +693,7 @@ struct async_read_optional_json_op : asio::coroutine
 
   async_read_optional_json_op(Stream * str, json::storage_ptr ptr) : str(*str), sp{ptr} {}
 
-  optional<value> resume(requests::detail::co_token_t<step_signature_type> self,
+  optional<value> resume(requests::detail::faux_token_t<step_signature_type> self,
                          system::error_code & ec, std::size_t n = 0u)
   {
     reenter(this)
@@ -736,7 +736,7 @@ async_read_json(Stream & str,
                 json::storage_ptr ptr = {},
                 CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Stream::executor_type))
 {
-  return requests::detail::co_run<
+  return requests::detail::faux_run<
       detail::async_read_json_op<Stream>>(std::forward<CompletionToken>(completion_token), &str, ptr);
 }
 
@@ -750,7 +750,7 @@ async_read_optional_json(Stream & str,
                 json::storage_ptr ptr = {},
                 CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Stream::executor_type))
 {
-  return requests::detail::co_run<
+  return requests::detail::faux_run<
       detail::async_read_optional_json_op<Stream>>(std::forward<CompletionToken>(completion_token), &str, ptr);
 }
 
@@ -798,7 +798,7 @@ struct async_request_json_op : asio::coroutine
       : conn(*conn), method(method), target(target),
         request_body(std::forward<RequestBody>(request_body)), req(std::move(req)) {}
 
-  response<Value> & resume(requests::detail::co_token_t<step_signature_type> self,
+  response<Value> & resume(requests::detail::faux_token_t<step_signature_type> self,
                          system::error_code & ec,
                          variant2::variant<variant2::monostate, stream, value> s)
   {
@@ -861,7 +861,7 @@ struct async_request_optional_json_op : asio::coroutine
       : conn(*conn), method(method), target(target),
         request_body(std::forward<RequestBody_>(request_body)), req(std::move(req)) {}
 
-  response<optional<Value>> & resume(requests::detail::co_token_t<step_signature_type> self,
+  response<optional<Value>> & resume(requests::detail::faux_token_t<step_signature_type> self,
                           system::error_code & ec,
                           variant2::variant<variant2::monostate, stream, optional<value>> s)
   {
@@ -910,7 +910,7 @@ async_get(Connection & conn,
           typename Connection::request_type req = {},
           CompletionToken && completion_token = typename Connection::default_token())
 {
-  return requests::detail::co_run<detail::async_request_json_op<
+  return requests::detail::faux_run<detail::async_request_json_op<
       Connection, Value>>(std::forward<CompletionToken>(completion_token),
                           &conn, http::verb::get,  target, empty{}, std::move(req));
 }
@@ -927,7 +927,7 @@ async_post(Connection & conn,
            typename Connection::request_type req = {},
            CompletionToken && completion_token = typename Connection::default_token())
 {
-  return requests::detail::co_run<detail::async_request_json_op<
+  return requests::detail::faux_run<detail::async_request_json_op<
       Connection, Value, std::decay_t<RequestBody>>>(std::forward<CompletionToken>(completion_token),
                           &conn, http::verb::post,  target, std::forward<RequestBody>(request_body), std::move(req));
 }
@@ -945,7 +945,7 @@ async_patch(Connection & conn,
            typename Connection::request_type req = {},
            CompletionToken && completion_token = typename Connection::default_token())
 {
-  return requests::detail::co_run<detail::async_request_json_op<
+  return requests::detail::faux_run<detail::async_request_json_op<
        Connection, Value, std::decay_t<RequestBody>>>(std::forward<CompletionToken>(completion_token),
                            &conn, http::verb::patch,  target, std::forward<RequestBody>(request_body), std::move(req));
 }
@@ -962,7 +962,7 @@ async_put(Connection & conn,
           typename Connection::request_type req = {},
           CompletionToken && completion_token = typename Connection::default_token())
 {
-  return requests::detail::co_run<detail::async_request_optional_json_op<
+  return requests::detail::faux_run<detail::async_request_optional_json_op<
       Connection, Value, std::decay_t<RequestBody>>>(std::forward<CompletionToken>(completion_token),
                           &conn, http::verb::put,  target, std::forward<RequestBody>(request_body), std::move(req));
 }
@@ -980,7 +980,7 @@ async_delete(Connection & conn,
             typename Connection::request_type req = {},
             CompletionToken && completion_token = typename Connection::default_token())
 {
-  return requests::detail::co_run<detail::async_request_json_op<
+  return requests::detail::faux_run<detail::async_request_json_op<
       Connection, Value, std::decay_t<RequestBody>>>(std::forward<CompletionToken>(completion_token),
                           &conn, http::verb::delete_,  target, std::forward<RequestBody>(request_body), std::move(req));
 }
@@ -997,7 +997,7 @@ async_delete(Connection & conn,
              typename Connection::request_type req = {},
              CompletionToken && completion_token = typename Connection::default_token())
 {
-  return requests::detail::co_run<detail::async_request_json_op<
+  return requests::detail::faux_run<detail::async_request_json_op<
       Connection, Value>>(std::forward<CompletionToken>(completion_token),
                           &conn, http::verb::delete_,  target, empty{}, std::move(req));
 }
@@ -1013,7 +1013,7 @@ async_options(Connection & conn,
               typename Connection::request_type req = {},
               CompletionToken && completion_token = typename Connection::default_token())
 {
-  return requests::detail::co_run<detail::async_request_json_op<
+  return requests::detail::faux_run<detail::async_request_json_op<
       Connection, Value>>(std::forward<CompletionToken>(completion_token),
                           &conn, http::verb::options,  target, empty{}, std::move(req));
 }
@@ -1035,7 +1035,7 @@ struct async_free_request_op
                   typename Connection::request_type req)
   {
     auto & sess = default_session(asio::get_associated_executor(handler));
-    return requests::detail::co_run<
+    return requests::detail::faux_run<
         async_request_json_op<decltype(sess), Value>>(
               std::forward<Handler>(handler),
               &sess, method, target,

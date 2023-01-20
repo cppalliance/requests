@@ -52,7 +52,7 @@ stream::~stream()
 }
 
 
-std::size_t stream::async_read_some_op::resume(requests::detail::co_token_t<step_signature_type> self,
+std::size_t stream::async_read_some_op::resume(requests::detail::faux_token_t<step_signature_type> self,
                                                system::error_code & ec, std::size_t res)
 {
 
@@ -102,7 +102,7 @@ std::size_t stream::async_read_some_op::resume(requests::detail::co_token_t<step
 }
 
 
-void stream::async_dump_op::resume(requests::detail::co_token_t<step_signature_type> self,
+void stream::async_dump_op::resume(requests::detail::faux_token_t<step_signature_type> self,
                                    system::error_code ec, std::size_t n)
 {
   reenter(this)

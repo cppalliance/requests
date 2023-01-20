@@ -8,15 +8,15 @@
 #ifndef BOOST_REQUESTS_IMPL_CONNECTION_HPP
 #define BOOST_REQUESTS_IMPL_CONNECTION_HPP
 
-#include <boost/requests/stream.hpp>
 #include <boost/requests/connection.hpp>
-#include <boost/requests/detail/async_coroutine.hpp>
 #include <boost/requests/detail/config.hpp>
 #include <boost/requests/detail/defaulted.hpp>
+#include <boost/requests/detail/faux_coroutine.hpp>
 #include <boost/requests/detail/ssl.hpp>
+#include <boost/requests/detail/tracker.hpp>
 #include <boost/requests/fields/location.hpp>
 #include <boost/requests/request_settings.hpp>
-#include <boost/requests/detail/tracker.hpp>
+#include <boost/requests/stream.hpp>
 
 #include <boost/asem/lock_guard.hpp>
 #include <boost/asio/deferred.hpp>
@@ -53,7 +53,7 @@ struct connection::async_connect_op : asio::coroutine
   using step_signature_type       = void(system::error_code);
 
   BOOST_REQUESTS_DECL
-  void resume(requests::detail::co_token_t<step_signature_type> self,
+  void resume(requests::detail::faux_token_t<step_signature_type> self,
               system::error_code & ec);
 };
 
@@ -62,7 +62,7 @@ BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (system::error_code))
 connection::async_connect(endpoint_type ep, CompletionToken && completion_token)
 {
 
-  return detail::co_run<async_connect_op>(
+  return detail::faux_run<async_connect_op>(
       std::forward<CompletionToken>(completion_token), this, ep);
 }
 
@@ -84,7 +84,7 @@ struct connection::async_close_op : asio::coroutine
   using step_signature_type       = void(system::error_code);
 
   BOOST_REQUESTS_DECL
-  void resume(requests::detail::co_token_t<step_signature_type> self,
+  void resume(requests::detail::faux_token_t<step_signature_type> self,
               system::error_code & ec);
 };
 
@@ -92,7 +92,7 @@ template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code)) Compl
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code))
 connection::async_close(CompletionToken && completion_token)
 {
-  return detail::co_run<async_close_op>(
+  return detail::faux_run<async_close_op>(
       std::forward<CompletionToken>(completion_token), this);
 }
 
@@ -234,7 +234,7 @@ struct connection::async_ropen_op
   using step_signature_type       = void(system::error_code, std::size_t);
 
   BOOST_REQUESTS_DECL
-  auto resume(requests::detail::co_token_t<step_signature_type> self,
+  auto resume(requests::detail::faux_token_t<step_signature_type> self,
               system::error_code & ec, std::size_t res_ = 0u) -> stream;
 };
 
@@ -279,7 +279,7 @@ connection::async_ropen(
     CompletionToken && completion_token)
 {
   using rp = async_ropen_op_body<std::decay_t<decltype(make_source(std::forward<RequestBody>(body)))>>;
-  return detail::co_run<rp>(
+  return detail::faux_run<rp>(
       std::forward<CompletionToken>(completion_token),
       this, method, path, std::forward<RequestBody>(body),
       std::move(req));
@@ -297,7 +297,7 @@ connection::async_ropen(beast::http::verb method,
                         cookie_jar * jar,
                         CompletionToken && completion_token)
 {
-  return detail::co_run<async_ropen_op>(std::forward<CompletionToken>(completion_token),
+  return detail::faux_run<async_ropen_op>(std::forward<CompletionToken>(completion_token),
                                         this, method, path, std::ref(headers), std::ref(src), std::move(opt), jar);
 }
 

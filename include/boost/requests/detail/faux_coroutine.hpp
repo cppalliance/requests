@@ -29,13 +29,13 @@ namespace detail
 {
 
 template<typename Implementation, typename = typename Implementation::step_signature_type>
-struct co_runner;
+struct faux_runner;
 
 template<typename ... Signatures>
-struct co_token_t;
+struct faux_token_t;
 
 template<>
-struct co_token_t<void()>
+struct faux_token_t<void()>
 {
   using cancellation_slot_type = asio::cancellation_slot;
   cancellation_slot_type get_cancellation_slot() const {return impl_->slot;}
@@ -51,29 +51,29 @@ struct co_token_t<void()>
 
   struct base
   {
-    virtual void resume(co_token_t<void()> impl) = 0;
+    virtual void resume(faux_token_t<void()> impl) = 0;
     asio::cancellation_slot slot;
     virtual container::pmr::polymorphic_allocator<void> get_allocator() = 0;
   };
 
-  co_token_t(const co_token_t & ) = delete;
-  co_token_t(      co_token_t &&) = default;
+  faux_token_t(const faux_token_t & ) = delete;
+  faux_token_t(      faux_token_t &&) = default;
 
 
  private:
   template<typename...>
-  friend struct co_token_t;
+  friend struct faux_token_t;
 
-  explicit co_token_t(std::shared_ptr<base> impl) : impl_(std::move(impl)) {}
+  explicit faux_token_t(std::shared_ptr<base> impl) : impl_(std::move(impl)) {}
 
   std::shared_ptr<base> impl_;
 
-  template<typename Implementation, typename> friend struct co_runner;
+  template<typename Implementation, typename> friend struct faux_runner;
 };
 
 
 template<typename T1>
-struct co_token_t<void(T1)>
+struct faux_token_t<void(T1)>
 {
   using cancellation_slot_type = asio::cancellation_slot;
   cancellation_slot_type get_cancellation_slot() const {return impl_->slot;}
@@ -87,36 +87,36 @@ struct co_token_t<void(T1)>
     base.resume(std::move(*this), std::move(t1));
   }
 
-  operator co_token_t<void()> () &&
+  operator faux_token_t<void()> () &&
   {
-    return co_token_t<void()>{impl_};
+    return faux_token_t<void()>{impl_};
   }
 
-  struct base : co_token_t<void()>::base
+  struct base : faux_token_t<void()>::base
   {
-    virtual void resume(co_token_t<void(T1)> tk, T1 t1) = 0;
-    void resume(co_token_t<void()> tk)
+    virtual void resume(faux_token_t<void(T1)> tk, T1 t1) = 0;
+    void resume(faux_token_t<void()> tk)
     {
-      resume(co_token_t<void(T1)>{std::static_pointer_cast<base>(std::move(tk.impl_))}, T1{});
+      resume(faux_token_t<void(T1)>{std::static_pointer_cast<base>(std::move(tk.impl_))}, T1{});
     }
   };
 
-  co_token_t(const co_token_t & ) = delete;
-  co_token_t(      co_token_t &&) = default;
+  faux_token_t(const faux_token_t & ) = delete;
+  faux_token_t(      faux_token_t &&) = default;
 
 private:
   template<typename...>
-  friend struct co_token_t;
+  friend struct faux_token_t;
 
-  explicit co_token_t(std::shared_ptr<base> impl) : impl_(std::move(impl)) {}
+  explicit faux_token_t(std::shared_ptr<base> impl) : impl_(std::move(impl)) {}
 
   std::shared_ptr<base> impl_;
 
-  template<typename Implementation, typename> friend struct co_runner;
+  template<typename Implementation, typename> friend struct faux_runner;
 };
 
 template<typename T1, typename T2>
-struct co_token_t<void(T1, T2)>
+struct faux_token_t<void(T1, T2)>
 {
   using cancellation_slot_type = asio::cancellation_slot;
   cancellation_slot_type get_cancellation_slot() const {return impl_->slot;}
@@ -130,50 +130,50 @@ struct co_token_t<void(T1, T2)>
     base.resume(std::move(*this), std::move(t1), std::move(t2));
   }
 
-  struct base : co_token_t<void(T1)>::base
+  struct base : faux_token_t<void(T1)>::base
   {
-    virtual void resume(co_token_t<void(T1, T2)> tk, T1 t1, T2 t2) = 0;
-    void resume(co_token_t<void()> tk) final
+    virtual void resume(faux_token_t<void(T1, T2)> tk, T1 t1, T2 t2) = 0;
+    void resume(faux_token_t<void()> tk) final
     {
-      resume(co_token_t<void(T1, T2)>{std::static_pointer_cast<base>(std::move(tk.impl_))}, T1{}, T2{});
+      resume(faux_token_t<void(T1, T2)>{std::static_pointer_cast<base>(std::move(tk.impl_))}, T1{}, T2{});
     }
-    void resume(co_token_t<void(T1)> tk, T1 t1)
+    void resume(faux_token_t<void(T1)> tk, T1 t1)
     {
-      resume(co_token_t<void(T1, T2)>{std::static_pointer_cast<base>(std::move(tk.impl_)) }, std::move(t1), T2{});
+      resume(faux_token_t<void(T1, T2)>{std::static_pointer_cast<base>(std::move(tk.impl_)) }, std::move(t1), T2{});
     }
   };
 
-  co_token_t(const co_token_t & ) = delete;
-  co_token_t(      co_token_t &&) = default;
+  faux_token_t(const faux_token_t & ) = delete;
+  faux_token_t(      faux_token_t &&) = default;
 
-  operator co_token_t<void(T1)> () &&
+  operator faux_token_t<void(T1)> () &&
   {
-    return co_token_t<void(T1)>{impl_};
+    return faux_token_t<void(T1)>{impl_};
   }
 
-  operator co_token_t<void()> () &&
+  operator faux_token_t<void()> () &&
   {
-    return co_token_t<void()>{impl_};
+    return faux_token_t<void()>{impl_};
   }
 
   std::size_t use_count() const {return impl_.use_count();}
 
  private:
   template<typename...>
-  friend struct co_token_t;
+  friend struct faux_token_t;
 
-  explicit co_token_t(std::shared_ptr<base> impl) : impl_(std::move(impl)) {}
+  explicit faux_token_t(std::shared_ptr<base> impl) : impl_(std::move(impl)) {}
   std::shared_ptr<base> impl_;
-  template<typename Implementation, typename> friend struct co_runner;
+  template<typename Implementation, typename> friend struct faux_runner;
 };
 
 
 
 template<typename Implementation, typename ... Args>
-struct co_runner<Implementation, void(system::error_code, Args...)>
+struct faux_runner<Implementation, void(system::error_code, Args...)>
 {
 
-  using token_type = co_token_t<void(system::error_code, Args...)>;
+  using token_type = faux_token_t<void(system::error_code, Args...)>;
   template<typename Handler>
   struct impl_ final : token_type::base
   {
@@ -323,12 +323,12 @@ struct co_runner<Implementation, void(system::error_code, Args...)>
 template<typename Implementation,
          typename Token,
          typename ... Args>
-auto co_run(Token && token, Args && ... args)
+auto faux_run(Token && token, Args && ... args)
 {
   static_assert(std::is_constructible<Implementation, Args&&...>::value,
                 "Can't construct implementation from those args");
   return asio::async_initiate<Token, typename Implementation::completion_signature_type>(
-      co_runner<Implementation>{}, token, std::forward<Args>(args)...);
+      faux_runner<Implementation>{}, token, std::forward<Args>(args)...);
 }
 
 

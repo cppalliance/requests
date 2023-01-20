@@ -68,7 +68,7 @@ struct async_request_op : asio::coroutine
       : conn(*conn), method(method), target(target),
         request_body(static_cast<RequestBody&&>(request_body)), req(std::move(req)) {}
 
-  response & resume(requests::detail::co_token_t<step_signature_type> self,
+  response & resume(requests::detail::faux_token_t<step_signature_type> self,
                    system::error_code & ec,
                    variant2::variant<std::size_t, stream> s)
   {
@@ -121,7 +121,7 @@ async_request(Connection & conn,
               typename Connection::request_type req,
               CompletionToken && completion_token)
 {
-  return requests::detail::co_run<detail::async_request_op<Connection, RequestBody>>(
+  return requests::detail::faux_run<detail::async_request_op<Connection, RequestBody>>(
                           std::forward<CompletionToken>(completion_token),
                           &conn, method, target, std::forward<RequestBody>(body), std::move(req));
 }

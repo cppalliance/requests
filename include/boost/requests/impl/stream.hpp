@@ -128,7 +128,7 @@ struct stream::async_read_op : asio::coroutine
   using completion_signature_type = void(system::error_code, std::size_t);
   using step_signature_type       = void(system::error_code, std::size_t);
 
-  std::size_t resume(requests::detail::co_token_t<step_signature_type> self,
+  std::size_t resume(requests::detail::faux_token_t<step_signature_type> self,
                      system::error_code & ec, std::size_t n = 0u)
   {
     reenter(this)
@@ -182,7 +182,7 @@ stream::async_read(
     DynamicBuffer & buffers,
     CompletionToken && token)
 {
-  return detail::co_run<async_read_op<DynamicBuffer>>(std::forward<CompletionToken>(token), this, buffers);
+  return detail::faux_run<async_read_op<DynamicBuffer>>(std::forward<CompletionToken>(token), this, buffers);
 }
 
 struct stream::async_read_some_op : asio::coroutine
@@ -214,7 +214,7 @@ struct stream::async_read_some_op : asio::coroutine
   using step_signature_type       = void(system::error_code, std::size_t);
 
   BOOST_REQUESTS_DECL
-  std::size_t resume(requests::detail::co_token_t<step_signature_type> self,
+  std::size_t resume(requests::detail::faux_token_t<step_signature_type> self,
                      system::error_code & ec, std::size_t res = 0u);
 
 };
@@ -227,7 +227,7 @@ stream::async_read_some(
     const MutableBufferSequence & buffers,
     CompletionToken && token)
 {
-  return detail::co_run<async_read_some_op>(std::forward<CompletionToken>(token), this, buffers);
+  return detail::faux_run<async_read_some_op>(std::forward<CompletionToken>(token), this, buffers);
 }
 
 
@@ -247,7 +247,7 @@ struct stream::async_dump_op : asio::coroutine
   using step_signature_type       = void(system::error_code, std::size_t);
 
   BOOST_REQUESTS_DECL
-  void resume(requests::detail::co_token_t<step_signature_type> self,
+  void resume(requests::detail::faux_token_t<step_signature_type> self,
               system::error_code ec = {}, std::size_t n = 0u);
 };
 
@@ -255,7 +255,7 @@ template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code)) Compl
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code))
 stream::async_dump(CompletionToken && token)
 {
-  return detail::co_run<async_dump_op>(std::forward<CompletionToken>(token), this);
+  return detail::faux_run<async_dump_op>(std::forward<CompletionToken>(token), this);
 }
 
 

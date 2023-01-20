@@ -205,7 +205,7 @@ session::get_pool(urls::url_view url, error_code & ec) -> std::shared_ptr<connec
 }
 
 std::shared_ptr<connection_pool> session::async_get_pool_op::resume(
-    requests::detail::co_token_t<step_signature_type> self,
+    requests::detail::faux_token_t<step_signature_type> self,
     error_code ec)
 {
   reenter(this)
@@ -228,7 +228,7 @@ std::shared_ptr<connection_pool> session::async_get_pool_op::resume(
   return nullptr;
 }
 
-auto session::async_ropen_op::resume(requests::detail::co_token_t<step_signature_type> self,
+auto session::async_ropen_op::resume(requests::detail::faux_token_t<step_signature_type> self,
                                      system::error_code & ec,
                                      variant2::variant<variant2::monostate, std::shared_ptr<connection_pool>, stream> s) -> stream
 {

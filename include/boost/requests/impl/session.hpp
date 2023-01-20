@@ -37,14 +37,14 @@ struct session::async_get_pool_op : asio::coroutine
   using step_signature_type       = void(system::error_code);
 
   BOOST_REQUESTS_DECL
-  std::shared_ptr<connection_pool> resume(requests::detail::co_token_t<step_signature_type>  self, error_code ec);
+  std::shared_ptr<connection_pool> resume(requests::detail::faux_token_t<step_signature_type>  self, error_code ec);
 };
 
 template< BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, std::shared_ptr<connection_pool>)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, pool_ptr))
 session::async_get_pool(urls::url_view url, CompletionToken && completion_token)
 {
-  return detail::co_run<async_get_pool_op>(std::forward<CompletionToken>(completion_token), this, url);
+  return detail::faux_run<async_get_pool_op>(std::forward<CompletionToken>(completion_token), this, url);
 }
 
 
@@ -109,7 +109,7 @@ struct session::async_ropen_op : asio::coroutine
   using completion_signature_type = void(system::error_code, stream);
   using step_signature_type       = void(system::error_code, variant2::variant<variant2::monostate, std::shared_ptr<connection_pool>, stream>);
 
-  BOOST_REQUESTS_DECL auto resume(requests::detail::co_token_t<step_signature_type> self,
+  BOOST_REQUESTS_DECL auto resume(requests::detail::faux_token_t<step_signature_type> self,
               system::error_code & ec, variant2::variant<variant2::monostate, std::shared_ptr<connection_pool>, stream> s) -> stream;
 };
 
@@ -154,7 +154,7 @@ session::async_ropen(beast::http::verb method,
                      CompletionToken && completion_token)
 {
   using op_t = async_ropen_op_body<std::decay_t<decltype(make_source(std::forward<RequestBody>(body)))>>;
-  return detail::co_run<op_t>(std::forward<CompletionToken>(completion_token),
+  return detail::faux_run<op_t>(std::forward<CompletionToken>(completion_token),
                               this, method, path, std::forward<RequestBody>(body), std::move(req));
 }
 
@@ -169,7 +169,7 @@ session::async_ropen(urls::url_view url,
                      CompletionToken && completion_token)
 {
   using op_t = async_ropen_op;
-  return detail::co_run<async_ropen_op>(std::forward<CompletionToken>(completion_token),
+  return detail::faux_run<async_ropen_op>(std::forward<CompletionToken>(completion_token),
                                         this, url, method, path, headers, src);
 }
 

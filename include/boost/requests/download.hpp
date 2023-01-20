@@ -8,11 +8,11 @@
 #ifndef BOOST_REQUESTS_DOWNLOAD_HPP
 #define BOOST_REQUESTS_DOWNLOAD_HPP
 
-#include <boost/requests/detail/async_coroutine.hpp>
+#include <boost/asio/buffer.hpp>
 #include <boost/requests/detail/config.hpp>
+#include <boost/requests/detail/faux_coroutine.hpp>
 #include <boost/requests/http.hpp>
 #include <boost/requests/service.hpp>
-#include <boost/asio/buffer.hpp>
 #include <boost/url/url_view.hpp>
 
 #if defined(BOOST_ASIO_HAS_FILE)
@@ -90,7 +90,7 @@ struct async_write_to_file_op : asio::coroutine
   {
   }
 
-  std::size_t resume(requests::detail::co_token_t<step_signature_type> self,
+  std::size_t resume(requests::detail::faux_token_t<step_signature_type> self,
                      system::error_code & ec, std::size_t n = 0u)
   {
     reenter(this)
@@ -180,7 +180,7 @@ struct async_write_to_file_op : asio::coroutine
 
   async_write_to_file_op(Stream * str, const filesystem::path & pt) : str(*str), file(pt) {}
 
-  std::size_t resume(requests::detail::co_token_t<step_signature_type> self,
+  std::size_t resume(requests::detail::faux_token_t<step_signature_type> self,
                      system::error_code & ec, std::size_t n = 0u)
   {
     reenter(this)
@@ -220,7 +220,7 @@ BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_c
 async_write_to_file(Stream & str, const filesystem::path & file,
                     CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Stream::executor_type))
 {
-  return requests::detail::co_run<
+  return requests::detail::faux_run<
       detail::async_write_to_file_op<Stream>>(std::forward<CompletionToken>(completion_token), &str, file);
 }
 
@@ -327,7 +327,7 @@ struct async_download_op : asio::coroutine
   using completion_signature_type = void(system::error_code, download_response);
   using step_signature_type       = void(system::error_code, optional<stream>);
 
-  download_response & resume(requests::detail::co_token_t<step_signature_type> self,
+  download_response & resume(requests::detail::faux_token_t<step_signature_type> self,
                           system::error_code & ec,
                           optional<stream> s = none)
   {
@@ -373,7 +373,7 @@ async_download(Connection & conn,
                filesystem::path download_path,
                CompletionToken && completion_token = typename Connection::default_token())
 {
-  return detail::co_run<detail::async_download_op<Connection>>(
+  return detail::faux_run<detail::async_download_op<Connection>>(
           std::forward<CompletionToken>(completion_token),
           &conn, target, std::move(req), std::move(download_path));
 }

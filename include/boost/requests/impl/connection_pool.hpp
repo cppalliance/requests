@@ -39,7 +39,7 @@ struct connection_pool::async_lookup_op : asio::coroutine
   using step_signature_type       = void(system::error_code, typename asio::ip::tcp::resolver::results_type);
 
 
-  BOOST_REQUESTS_DECL void resume(requests::detail::co_token_t<step_signature_type> self,
+  BOOST_REQUESTS_DECL void resume(requests::detail::faux_token_t<step_signature_type> self,
                                   system::error_code & ec, typename asio::ip::tcp::resolver::results_type eps = {});
 };
 
@@ -48,7 +48,7 @@ BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code))
 connection_pool::async_lookup(urls::url_view av, CompletionToken && completion_token)
 {
-  return detail::co_run<async_lookup_op>(
+  return detail::faux_run<async_lookup_op>(
       std::forward<CompletionToken>(completion_token),
       this, av, get_executor());
 }
@@ -76,7 +76,7 @@ struct connection_pool::async_get_connection_op : asio::coroutine
   using completion_signature_type = void(system::error_code, std::shared_ptr<connection>);
   using step_signature_type       = void(system::error_code);
 
-  BOOST_REQUESTS_DECL auto resume(requests::detail::co_token_t<step_signature_type> self,
+  BOOST_REQUESTS_DECL auto resume(requests::detail::faux_token_t<step_signature_type> self,
                                   system::error_code & ec) -> std::shared_ptr<connection>;
 };
 
@@ -85,7 +85,7 @@ BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (system::error_code, st
 connection_pool::async_get_connection(CompletionToken && completion_token)
 {
   // async_get_connection_op
-  return detail::co_run<async_get_connection_op>(
+  return detail::faux_run<async_get_connection_op>(
       std::forward<CompletionToken>(completion_token),
       this
       );
@@ -134,7 +134,7 @@ struct connection_pool::async_ropen_op : asio::coroutine
   using step_signature_type       = void(system::error_code, variant2::variant<variant2::monostate, std::shared_ptr<connection>, stream>);
 
   BOOST_REQUESTS_DECL
-  auto resume(requests::detail::co_token_t<step_signature_type> self,
+  auto resume(requests::detail::faux_token_t<step_signature_type> self,
               system::error_code & ec,
               variant2::variant<variant2::monostate, std::shared_ptr<connection>, stream> res = variant2::monostate()) -> stream;
 };
@@ -151,7 +151,7 @@ connection_pool::async_ropen(beast::http::verb method,
                              cookie_jar * jar,
                              CompletionToken && completion_token)
 {
-  return detail::co_run<async_ropen_op>(
+  return detail::faux_run<async_ropen_op>(
       std::forward<CompletionToken>(completion_token),
       this, method, path, std::ref(headers), std::ref(src), std::move(opt), jar);
 }
@@ -199,7 +199,7 @@ connection_pool::async_ropen(beast::http::verb method,
                              CompletionToken && completion_token)
 {
   using rp = async_ropen_op_body<std::decay_t<decltype(make_source(std::forward<RequestBody>(body)))>>;
-  return detail::co_run<rp>(
+  return detail::faux_run<rp>(
       std::forward<CompletionToken>(completion_token),
       this, method, path, std::forward<RequestBody>(body),
       std::move(req));

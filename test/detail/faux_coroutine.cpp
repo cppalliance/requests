@@ -5,7 +5,7 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#include <boost/requests/detail/async_coroutine.hpp>
+#include <boost/requests/detail/faux_coroutine.hpp>
 
 #include <boost/asio/connect_pipe.hpp>
 #include <boost/asio/detached.hpp>
@@ -44,7 +44,7 @@ struct my_coro : asio::coroutine
   using completion_signature_type = void(system::error_code);
   using step_signature_type       = void(system::error_code, std::size_t);
 
-  void resume(requests::detail::co_token_t<step_signature_type> token,
+  void resume(requests::detail::faux_token_t<step_signature_type> token,
               system::error_code & ec, std::size_t n = {})
   {
     reenter(this)
@@ -63,7 +63,7 @@ struct my_coro : asio::coroutine
         if (ec)
           break;
         yield {
-          requests::detail::co_token_t<void()> tt = std::move(token);
+          requests::detail::faux_token_t<void()> tt = std::move(token);
           asio::post(sink.get_executor(), std::move(tt));
         };
       }
@@ -78,7 +78,7 @@ TEST_CASE("sanity-check")
   asio::writable_pipe source{ctx};
   asio::readable_pipe sink{ctx};
 
-  requests::detail::co_run<my_coro>(
+  requests::detail::faux_run<my_coro>(
       [](system::error_code ec)
       {
         printf("EC : %s\n", ec.message().c_str());

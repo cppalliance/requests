@@ -317,7 +317,7 @@ void connection::set_host(core::string_view sv, system::error_code & ec)
 
 BOOST_REQUESTS_DECL
 auto connection::async_ropen_op::resume(
-            requests::detail::co_token_t<step_signature_type> self,
+            requests::detail::faux_token_t<step_signature_type> self,
             system::error_code & ec, std::size_t res_) -> stream
 {
   reenter(this)
@@ -561,7 +561,7 @@ std::size_t connection::do_read_some_(beast::http::basic_parser<false> & parser,
     return beast::http::read_some(next_layer_.next_layer(), buffer_, parser, ec);
 }
 
-void connection::do_async_read_some_(beast::http::basic_parser<false> & parser, detail::co_token_t<void(system::error_code, std::size_t)> tk)
+void connection::do_async_read_some_(beast::http::basic_parser<false> & parser, detail::faux_token_t<void(system::error_code, std::size_t)> tk)
 {
   if (use_ssl_)
     beast::http::async_read_some(next_layer_, buffer_, parser, std::move(tk));
@@ -569,12 +569,12 @@ void connection::do_async_read_some_(beast::http::basic_parser<false> & parser, 
     beast::http::async_read_some(next_layer_.next_layer(), buffer_, parser, std::move(tk));
 }
 
-void connection::do_async_close_(detail::co_token_t<void(system::error_code)> tk)
+void connection::do_async_close_(detail::faux_token_t<void(system::error_code)> tk)
 {
   async_close(std::move(tk));
 }
 
-void connection::async_connect_op::resume(requests::detail::co_token_t<step_signature_type> self,
+void connection::async_connect_op::resume(requests::detail::faux_token_t<step_signature_type> self,
                                           system::error_code & ec)
 {
   reenter(this)
@@ -589,7 +589,7 @@ void connection::async_connect_op::resume(requests::detail::co_token_t<step_sign
   }
 }
 
-void connection::async_close_op::resume(requests::detail::co_token_t<step_signature_type> self,
+void connection::async_close_op::resume(requests::detail::faux_token_t<step_signature_type> self,
                                           system::error_code & ec)
 {
   reenter(this)

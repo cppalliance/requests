@@ -10,15 +10,15 @@
 #include <boost/asio/generic/stream_protocol.hpp>
 #include <boost/asio/ssl/stream.hpp>
 #include <boost/beast/core/flat_buffer.hpp>
-#include <boost/requests/detail/async_coroutine.hpp>
 #include <boost/requests/detail/defaulted.hpp>
+#include <boost/requests/detail/faux_coroutine.hpp>
 #include <boost/requests/detail/ssl.hpp>
 #include <boost/requests/fields/keep_alive.hpp>
-#include <boost/requests/source.hpp>
 #include <boost/requests/redirect.hpp>
 #include <boost/requests/request_options.hpp>
 #include <boost/requests/request_settings.hpp>
 #include <boost/requests/response.hpp>
+#include <boost/requests/source.hpp>
 #include <boost/url/url_view.hpp>
 
 namespace boost {
@@ -266,8 +266,8 @@ struct connection
 
     BOOST_REQUESTS_DECL std::size_t do_read_some_(beast::http::basic_parser<false> & parser);
     BOOST_REQUESTS_DECL std::size_t do_read_some_(beast::http::basic_parser<false> & parser, system::error_code & ec) ;
-    BOOST_REQUESTS_DECL void do_async_read_some_(beast::http::basic_parser<false> & parser, detail::co_token_t<void(system::error_code, std::size_t)>) ;
-    BOOST_REQUESTS_DECL void do_async_close_(detail::co_token_t<void(system::error_code)>);
+    BOOST_REQUESTS_DECL void do_async_read_some_(beast::http::basic_parser<false> & parser, detail::faux_token_t<void(system::error_code, std::size_t)>) ;
+    BOOST_REQUESTS_DECL void do_async_close_(detail::faux_token_t<void(system::error_code)>);
     BOOST_REQUESTS_DECL void do_close_(system::error_code & ec);
 
     friend struct stream;

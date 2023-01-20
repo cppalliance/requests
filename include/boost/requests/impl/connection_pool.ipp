@@ -86,7 +86,7 @@ void connection_pool::lookup(urls::url_view sv, system::error_code & ec)
 
 
 
-void connection_pool::async_lookup_op::resume(requests::detail::co_token_t<step_signature_type> self,
+void connection_pool::async_lookup_op::resume(requests::detail::faux_token_t<step_signature_type> self,
                                               system::error_code & ec, typename asio::ip::tcp::resolver::results_type eps)
 {
   reenter(this)
@@ -232,7 +232,7 @@ auto connection_pool::get_connection(error_code & ec) -> std::shared_ptr<connect
 
 
 auto connection_pool::async_get_connection_op::resume(
-            requests::detail::co_token_t<step_signature_type> self,
+            requests::detail::faux_token_t<step_signature_type> self,
             system::error_code & ec) -> std::shared_ptr<connection>
 {
   reenter (this)
@@ -303,7 +303,7 @@ auto connection_pool::async_get_connection_op::resume(
 }
 
 stream connection_pool::async_ropen_op::resume(
-    requests::detail::co_token_t<step_signature_type> self,
+    requests::detail::faux_token_t<step_signature_type> self,
     system::error_code & ec,
     variant2::variant<variant2::monostate, std::shared_ptr<connection>, stream> res)
 {

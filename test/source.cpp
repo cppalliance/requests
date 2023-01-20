@@ -9,10 +9,7 @@
 
 #include "doctest.h"
 #include "string_maker.hpp"
-/*
-#include <boost/asio/awaitable.hpp>
-#include <boost/asio/co_spawn.hpp>
-#include <boost/asio/use_awaitable.hpp>*/
+
 #include <boost/asio/detached.hpp>
 #include <boost/asio/connect_pipe.hpp>
 #include <boost/asio/readable_pipe.hpp>
@@ -71,52 +68,5 @@ TEST_CASE("sync")
 
   thr.join();
 }
-/*
-asio::awaitable<void> async_impl()
-{
-  asio::readable_pipe rp{co_await asio::this_coro::executor};
-  asio::writable_pipe wp{co_await asio::this_coro::executor};
-  auto sp = tag_invoke(requests::make_source_tag{}, json::string("foobaria"));
-  auto ep = tag_invoke(requests::make_source_tag{}, requests::empty());
-  asio::connect_pipe(rp, wp);
-
-  co_await asio::co_spawn(
-    co_await asio::this_coro::executor,
-    [&]() -> asio::awaitable<void>
-    {
-      requests::http::fields hd;
-
-      co_await async_write_request(wp, requests::http::verb::post, "/test", hd, sp, asio::use_awaitable);
-      hd.clear();
-      co_await async_write_request(wp, requests::http::verb::get, "/test2", hd, ep, asio::use_awaitable);
-    },
-    asio::use_awaitable);
-
-  requests::http::request<beast::http::string_body> req;
-  beast::flat_buffer buf;
-  system::error_code ec;
-  co_await beast::http::async_read(rp, buf, req, asio::use_awaitable);
-  CHECK(req.method() == requests::http::verb::post);
-  CHECK(req.target() == "/test");
-  CHECK(req.at(boost::beast::http::field::content_type) == "application/json");
-  CHECK(json::parse(req.body()) == "foobaria");
-
-  requests::http::request<beast::http::empty_body> re2;
-  co_await beast::http::async_read(rp, buf, re2, asio::use_awaitable);
-  CHECK(ec == system::error_code{});
-  CHECK(re2.method() == requests::http::verb::get);
-  CHECK(re2.target() == "/test2");
-  CHECK(re2.count(boost::beast::http::field::content_type) == 0);
-
-  co_return ;
-}
-
-TEST_CASE("async")
-{
-  asio::io_context ctx;
-  asio::co_spawn(ctx, async_impl(), [&](std::exception_ptr e){CHECK(e == nullptr);});
-  ctx.run();
-}
-*/
 
 TEST_SUITE_END();

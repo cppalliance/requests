@@ -11,16 +11,16 @@
 #ifndef BOOST_REQUESTS_STREAM_HPP
 #define BOOST_REQUESTS_STREAM_HPP
 
+#include <boost/asem/basic_mutex.hpp>
+#include <boost/asem/lock_guard.hpp>
+#include <boost/asio/execution/bad_executor.hpp>
+#include <boost/beast/http/basic_parser.hpp>
 #include <boost/requests/detail/config.hpp>
+#include <boost/requests/detail/faux_coroutine.hpp>
 #include <boost/requests/detail/pmr.hpp>
 #include <boost/requests/detail/tracker.hpp>
 #include <boost/requests/fields/keep_alive.hpp>
 #include <boost/requests/http.hpp>
-#include <boost/requests/detail/async_coroutine.hpp>
-#include <boost/beast/http/basic_parser.hpp>
-#include <boost/asio/execution/bad_executor.hpp>
-#include <boost/asem/basic_mutex.hpp>
-#include <boost/asem/lock_guard.hpp>
 
 namespace boost
 {
