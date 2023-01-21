@@ -48,10 +48,14 @@ if(BOOST_REQUESTS_IS_ROOT AND BOOST_REQUESTS_BUILD_INLINE)
 endif()
 
 if (NOT BOOST_REQUESTS_BUILD_INLINE)
-    find_package(OpenSSL REQUIRED)
     find_package(Threads REQUIRED)
     find_package(Boost REQUIRED atomic container filesystem system json url)
     include_directories(include)
+endif()
+
+find_package(OpenSSL)
+if (NOT MSVC)
+    link_libraries(${OPENSSL_LIBRARIES})
 endif()
 
 add_library(boost_requests src/src.cpp)
