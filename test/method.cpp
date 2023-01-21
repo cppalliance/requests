@@ -36,6 +36,7 @@ inline std::string httpbin()
   std::string url = "httpbin.org";
   if (auto p = ::getenv("BOOST_REQUEST_HTTPBIN"))
     url = p;
+  MESSAGE(url);
   return url;
 }
 
