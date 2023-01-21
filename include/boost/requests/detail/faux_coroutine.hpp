@@ -39,8 +39,10 @@ struct faux_token_t<void()>
 {
   using cancellation_slot_type = asio::cancellation_slot;
   cancellation_slot_type get_cancellation_slot() const {BOOST_ASSERT(impl_ != nullptr); return impl_->slot;}
+  cancellation_slot_type get_cancellation_slot() const {BOOST_ASSERT(impl_ != nullptr); return impl_->slot;}
 
   using allocator_type = container::pmr::polymorphic_allocator<void>;
+  allocator_type get_allocator() const {BOOST_ASSERT(impl_ != nullptr); return impl_->get_allocator();}
   allocator_type get_allocator() const {BOOST_ASSERT(impl_ != nullptr); return impl_->get_allocator();}
 
   void operator()()
@@ -57,7 +59,10 @@ struct faux_token_t<void()>
   };
 
   faux_token_t(const faux_token_t & ) = delete;
-  faux_token_t(      faux_token_t &&) = default;
+  faux_token_t(      faux_token_t && lhs) : impl_(std::move(lhs.impl_))
+  {
+    BOOST_ASSERT(impl_ != nullptr);
+  }
 
   explicit faux_token_t(std::shared_ptr<base> impl) : impl_(std::move(impl)) {}
  private:
@@ -101,7 +106,10 @@ struct faux_token_t<void(T1)>
   };
 
   faux_token_t(const faux_token_t & ) = delete;
-  faux_token_t(      faux_token_t &&) = default;
+  faux_token_t(      faux_token_t && lhs) : impl_(std::move(lhs.impl_))
+  {
+    BOOST_ASSERT(impl_ != nullptr);
+  }
 
   explicit faux_token_t(std::shared_ptr<base> impl) : impl_(std::move(impl)) {}
 private:
@@ -143,8 +151,11 @@ struct faux_token_t<void(T1, T2)>
   };
 
   faux_token_t(const faux_token_t & ) = delete;
-  faux_token_t(      faux_token_t &&) = default;
-
+  faux_token_t(      faux_token_t && lhs) : impl_(std::move(lhs.impl_))
+  {
+    BOOST_ASSERT(impl_ != nullptr);
+  }
+  
   operator faux_token_t<void(T1)> () &&
   {
     return faux_token_t<void(T1)>{impl_};

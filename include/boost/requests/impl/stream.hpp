@@ -45,6 +45,7 @@ std::size_t stream::read_some(const MutableBuffer & buffer, system::error_code &
 
   auto res = impl_->do_read_some_(*parser_, ec);
 
+
   if (!parser_->is_done())
   {
     parser_->get().body().more = true;
