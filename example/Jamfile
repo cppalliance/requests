@@ -1,0 +1,32 @@
+#
+# Copyright (c) 2023 Klemens Morgenstern (klemens.morgenstern@gmx.net)
+#
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+#
+# Official repository: https://github.com/boostorg/json
+#
+
+import testing ;
+
+project : 
+requirements <include>../../.. 
+    <cxxstd>17:<boost.requests.use-std-fs>on
+    <cxxstd>20:<boost.requests.use-std-fs>on
+    <boost.requests.separate-compilation>on:<source>/boost//requests 
+    <boost.requests.use-std-fs>off:<source>/boost//filesystem
+;
+
+
+alias asio     : ../../beast//lib-asio ;
+alias asio-ssl : ../../beast//lib-asio-ssl ;
+alias beast    : ../../beast//lib-beast ;
+
+
+import regex ; 
+
+for local src in [ glob *.cpp : xml.cpp ]
+{
+    local name = [ regex.match "([^.]*)\\..*" : $(src) ] ;
+    exe $(name) : $(src) /boost//json /boost//url asio beast asio-ssl ;
+}

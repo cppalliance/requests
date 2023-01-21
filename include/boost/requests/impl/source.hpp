@@ -68,7 +68,7 @@ struct source_body
 {
   struct value_type
   {
-    source &source;
+    source &source_;
     asio::const_buffer prefetched;
     bool more;
   };
@@ -84,7 +84,7 @@ struct source_body
     writer(beast::http::header<isRequest, Fields> const&,
            value_type value) : v(std::move(value))
     {
-      value.source.reset();
+      value.source_.reset();
     }
 
     void
@@ -99,7 +99,7 @@ struct source_body
     {
       if (v.prefetched.size() > 0)
         return std::pair<const_buffers_type, bool>{exchange(v.prefetched, asio::const_buffer("", 0u)), v.more};
-      auto read_some = v.source.read_some(buf_, sizeof(buf_), ec);
+      auto read_some = v.source_.read_some(buf_, sizeof(buf_), ec);
 
       if (ec)
         return boost::none;

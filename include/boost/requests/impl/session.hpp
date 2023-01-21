@@ -59,8 +59,6 @@ auto session::ropen(
   const auto is_secure = (url.scheme_id() == urls::scheme::https)
                       || (url.scheme_id() == urls::scheme::wss);
 
-  auto host = url.encoded_host();
-
   if (!is_secure && options_.enforce_tls)
   {
     static constexpr auto loc((BOOST_CURRENT_LOCATION));
@@ -81,8 +79,8 @@ struct session::async_ropen_op : asio::coroutine
 
   http::verb method;
 
-  struct request_options opts;
   urls::url url;
+  struct request_options opts;
   core::string_view default_mime_type;
 
   system::error_code ec_;
@@ -168,7 +166,6 @@ session::async_ropen(urls::url_view url,
                      source & src,
                      CompletionToken && completion_token)
 {
-  using op_t = async_ropen_op;
   return detail::faux_run<async_ropen_op>(std::forward<CompletionToken>(completion_token),
                                         this, url, method, path, headers, src);
 }

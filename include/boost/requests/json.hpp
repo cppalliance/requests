@@ -720,11 +720,6 @@ struct async_read_optional_json_op : asio::coroutine
   }
 };
 
-#if !defined(BOOST_REQUESTS_HEADER_ONLY)
-extern template struct async_read_json_op<stream>;
-extern template struct async_read_optional_json_op<stream>;
-#endif
-
 }
 
 template<typename Value = value,
@@ -1161,8 +1156,5 @@ async_options(urls::url_view target,
 
 #include <boost/asio/unyield.hpp>
 
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/impl/json.ipp>
-#endif
 
 #endif // BOOST_REQUESTS_JSON_HPP

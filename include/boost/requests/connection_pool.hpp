@@ -215,8 +215,8 @@ struct connection_pool
     bool uses_ssl() const {return use_ssl_;}
 
   private:
-    asio::ssl::context & context_;
     bool use_ssl_{false};
+    asio::ssl::context & context_;
     detail::mutex mutex_;
     std::string host_;
     std::vector<endpoint_type> endpoints_;

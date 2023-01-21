@@ -84,4 +84,9 @@ BOOST_REQUESTS_DECL file_source tag_invoke(const make_source_tag&,       std::fi
 }
 }
 
+
+#if defined(BOOST_REQUESTS_HEADER_ONLY)
+#include <boost/requests/sources/impl/file.ipp>
+#endif
+
 #endif //BOOST_REQUESTS_SOURCES_FILE_HPP

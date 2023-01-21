@@ -49,7 +49,4 @@ struct ssl_context_service : asio::detail::execution_context_service_base<ssl_co
 }
 }
 
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/detail/impl/ssl.ipp>
-#endif
 #endif // BOOST_REQUESTS_DETAIL_SSL_HPP

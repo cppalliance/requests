@@ -9,6 +9,7 @@
 #define BOOST_REQUESTS_GRAMMAR_ALTERNATE_RULE_HPP
 
 #include <boost/system/result.hpp>
+#include <boost/url/grammar/parse.hpp>
 #include <tuple>
 
 namespace boost {
@@ -112,9 +113,9 @@ parse_alternate(
 {
   auto const it0 = it;
   auto rv = parse(
-      it, end, get<I>(rn));
+      it, end, std::get<I>(rn));
   if( rv )
-    return typename R0::value_type{*rv};
+    return typename R0::value_type(*rv);
   it = it0;
   return parse_alternate(
       it, end, rn,

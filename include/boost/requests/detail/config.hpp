@@ -19,7 +19,7 @@
 #if defined(BOOST_REQUESTS_HEADER_ONLY)
 # define BOOST_REQUESTS_DECL inline
 #else
-# define BOOST_REQUESTS_DECL
+# define BOOST_REQUESTS_DECL BOOST_SYMBOL_EXPORT
 #endif
 
 #define BOOST_REQUESTS_RETURN_EC(ev)                              \
@@ -44,6 +44,7 @@
 #include <filesystem>
 #else
 #include <boost/filesystem/path.hpp>
+#include <boost/filesystem/operations.hpp>
 #endif
 
 namespace boost

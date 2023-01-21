@@ -61,7 +61,7 @@ struct request_category_t final : system::error_category
   std::string message( int ev ) const override
   {
     using namespace beast::http;
-    return message(static_cast<error>(ev)).to_string();
+    return std::string(message(static_cast<error>(ev)));
   }
   char const * message( int ev, char * buffer, std::size_t len ) const BOOST_NOEXCEPT  override
   {
@@ -72,7 +72,7 @@ struct request_category_t final : system::error_category
     return buffer;
   }
 
-  string_view message( error ev ) const
+  core::string_view message( error ev ) const
   {
     if (ev == error{})
       return "success";

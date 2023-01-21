@@ -303,8 +303,8 @@ struct faux_runner<Implementation, void(system::error_code, Args...)>
 
     template<typename Handler_, typename ... Args_>
     impl_(Handler_ && h, Args_ && ... args)
-        : handler(std::forward<Handler_>(h))
-        , impl(std::forward<Args_>(args)...)
+        : impl(std::forward<Args_>(args)...)
+        , handler(std::forward<Handler_>(h))
     {
       this->token_type::base::slot      = asio::get_associated_cancellation_slot(handler);
     }

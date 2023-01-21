@@ -24,7 +24,6 @@
 #include <boost/requests/impl/connection_pool.ipp>
 #include <boost/requests/impl/cookie_jar.ipp>
 #include <boost/requests/impl/error.ipp>
-#include <boost/requests/impl/json.ipp>
 #include <boost/requests/impl/keep_alive.ipp>
 #include <boost/requests/impl/mime_types.ipp>
 #include <boost/requests/impl/public_suffix.ipp>

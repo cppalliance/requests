@@ -138,7 +138,7 @@ inline auto interpret_result(const T raw)
 
   const auto days = (std::chrono::duration_cast<std::chrono::hours>(time_).count() / 24u) % 7;
 
-  if (wd != days)
+  if (wd != static_cast<std::size_t>(days))
   {
     BOOST_URL_RETURN_EC(urls::grammar::error::mismatch);
   }

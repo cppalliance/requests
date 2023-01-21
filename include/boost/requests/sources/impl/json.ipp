@@ -33,6 +33,8 @@ std::pair<std::size_t, bool> json_source::read_some(void * data_, std::size_t si
   return {n.size(), !ser.done()};
 }
 
+json_source::~json_source() = default;
+
 
 }
 }

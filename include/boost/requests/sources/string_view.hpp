@@ -12,10 +12,6 @@
 #include <boost/core/detail/string_view.hpp>
 #include <boost/utility/string_view.hpp>
 
-#if defined(__cpp_lib_string_view)
-#include <string_view>
-#endif
-
 namespace boost
 {
 namespace requests
@@ -28,7 +24,7 @@ struct basic_string_view_source final : source
   core::basic_string_view<Char> data;
   std::size_t pos{0};
 
-  basic_string_view_source(std::basic_string_view<Char> data) : data(data) {}
+  basic_string_view_source(core::basic_string_view<Char> data) : data(data) {}
 
   optional<std::size_t> size() const final
   {

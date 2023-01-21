@@ -56,7 +56,7 @@ using string_view = boost::core::string_view;
   }
 
 
-struct user
+struct user_t
 {
   std::string avatar_url;
   optional<std::string> email;  // optional
@@ -81,7 +81,7 @@ struct user
   std::string url;
 };
 
-inline result<user> tag_invoke(boost::json::try_value_to_tag<user>, const boost::json::value & val)
+inline result<user_t> tag_invoke(boost::json::try_value_to_tag<user_t>, const boost::json::value & val)
 {
   if (!val.is_object())
   {
@@ -91,7 +91,7 @@ inline result<user> tag_invoke(boost::json::try_value_to_tag<user>, const boost:
 
   auto & obj = val.get_object();
 
-  user res;
+  user_t res;
 
   GET_MEMBER(avatar_url, std::string);
   GET_OPTIONAL_MEMBER(email, std::string);
@@ -176,7 +176,7 @@ BOOST_DEFINE_ENUM(author_association,
 
 
 
-BOOST_DEFINE_ENUM(state_reason, completed, not_planned, reopened);
+BOOST_DEFINE_ENUM(state_reason_t, completed, not_planned, reopened);
 BOOST_DEFINE_ENUM(issue_state, open, closed);
 
 struct milestone
@@ -191,7 +191,7 @@ struct milestone
   issue_state state;
   std::string title;
   boost::optional<std::string> description;
-  user creator;
+  user_t creator;
   int open_issues;
   int closed_issues;
   std::string created_at;
@@ -223,7 +223,7 @@ inline result<milestone> tag_invoke(boost::json::try_value_to_tag<milestone>, co
   GET_MEMBER(state, issue_state);
   GET_MEMBER(title, std::string);
   GET_OPTIONAL_MEMBER(description, std::string);
-  GET_MEMBER(creator, user);
+  GET_MEMBER(creator, user_t);
   GET_MEMBER(open_issues,   int);
   GET_MEMBER(closed_issues, int);
   GET_OPTIONAL_MEMBER(closed_at, std::string);
@@ -236,8 +236,8 @@ inline result<milestone> tag_invoke(boost::json::try_value_to_tag<milestone>, co
 struct issue
 {
   optional<std::string> active_lock_reason;
-  optional<user> assignee;
-  optional<std::vector<user>> users;
+  optional<user_t> assignee;
+  optional<std::vector<user_t>> users;
   /**
      * How the author is associated with the repository.
    */
@@ -249,7 +249,7 @@ struct issue
   optional<std::string> body_html;
   optional<std::string> body_text;
   optional<std::string> closed_at;
-  optional<user> closed_by;
+  optional<user_t> closed_by;
   int comments;
   std::string comments_url;
   std::string created_at;
@@ -290,7 +290,7 @@ struct issue
   /**
      * The reason for the current state
    */
-  optional<state_reason> state_reason;
+  optional<state_reason_t> state_reason;
   optional<std::string> timeline_url;
   /**
      * Title of the issue
@@ -301,7 +301,7 @@ struct issue
      * URL for the issue
    */
   std::string url;
-  optional<user> user;
+  optional<user_t> user;
 };
 
 
@@ -318,7 +318,7 @@ inline result<issue> tag_invoke(boost::json::try_value_to_tag<issue>, const boos
   issue res;
 
   GET_OPTIONAL_MEMBER(active_lock_reason, std::string);
-  GET_OPTIONAL_MEMBER(assignee, user);
+  GET_OPTIONAL_MEMBER(assignee, user_t);
   GET_OPTIONAL_MEMBER(author_association, author_association);
 
   GET_OPTIONAL_MEMBER(body, std::string);
@@ -326,7 +326,7 @@ inline result<issue> tag_invoke(boost::json::try_value_to_tag<issue>, const boos
   GET_OPTIONAL_MEMBER(body_text, std::string);
   GET_OPTIONAL_MEMBER(closed_at, std::string);
 
-  GET_OPTIONAL_MEMBER(closed_by, user);
+  GET_OPTIONAL_MEMBER(closed_by, user_t);
 
   GET_MEMBER(comments, int);
   GET_MEMBER(comments_url, std::string);
@@ -352,7 +352,7 @@ inline result<issue> tag_invoke(boost::json::try_value_to_tag<issue>, const boos
   GET_MEMBER(repository_url, std::string);
   GET_MEMBER(state, issue_state);
 
-  GET_OPTIONAL_MEMBER(state_reason, state_reason);
+  GET_OPTIONAL_MEMBER(state_reason, state_reason_t);
   GET_OPTIONAL_MEMBER(timeline_url, std::string);
 
   GET_MEMBER(title,      std::string);
@@ -360,7 +360,7 @@ inline result<issue> tag_invoke(boost::json::try_value_to_tag<issue>, const boos
 
   GET_MEMBER(url, std::string);
 
-  GET_OPTIONAL_MEMBER(user, user);
+  GET_OPTIONAL_MEMBER(user, user_t);
 
   return res;
 }
@@ -396,7 +396,7 @@ struct update_issue_options
   optional<std::string> body;
   optional<std::string> assignee;
   issue_state state = issue_state::open;
-  optional<state_reason> state_reason;
+  optional<state_reason_t> state_reason;
   variant<monostate, std::string, int> milestone;
   std::vector<std::string> labels;
   std::vector<std::string> assignees;
@@ -438,8 +438,8 @@ inline void tag_invoke(boost::json::value_from_tag, boost::json::value & res, lo
 }
 
 enum class issue_filter { assigned, created, mentioned, subscribed, repos, all };
-enum class sort         { created, updated, comments };
-enum class direction    { asc, desc };
+enum class sort_t         { created, updated, comments };
+enum class direction_t    { asc, desc };
 enum class query_state  { open, close, all };
 
 struct list_issues_query
@@ -447,8 +447,8 @@ struct list_issues_query
   issue_filter filter = issue_filter::assigned;
   query_state state = query_state::open;
   optional<string_view> label;
-  optional<sort> sort;
-  optional<direction> direction;
+  optional<sort_t> sort;
+  optional<direction_t> direction;
   optional<string_view> since;
   int per_page = 30;
   int page = 1;
@@ -476,16 +476,16 @@ struct list_issues_query
     if (sort)
       switch (*sort)
       {
-      case sort::created:   params.set("sort", "created");  break;
-      case sort::updated:   params.set("sort", "updated");  break;
-      case sort::comments:  params.set("sort", "comments"); break;
+      case sort_t::created:   params.set("sort", "created");  break;
+      case sort_t::updated:   params.set("sort", "updated");  break;
+      case sort_t::comments:  params.set("sort", "comments"); break;
       }
 
     if (direction)
       switch (*direction)
       {
-      case direction::asc:  params.set("direction", "asc");  break;
-      case direction::desc: params.set("direction", "desc");  break;
+      case direction_t::asc:  params.set("direction", "asc");  break;
+      case direction_t::desc: params.set("direction", "desc");  break;
       }
 
     if (since) params.set("since", *since);
@@ -497,10 +497,6 @@ struct list_issues_query
   }
 };
 
-#undef GET_URL
-#undef GET_MEMBER
-#undef GET_OPTIONAL_MEMBER
-
 struct issue_client
 {
   issue_client(
@@ -510,7 +506,7 @@ struct issue_client
   {
     conn_.set_host({host_name.begin(), host_name.end()});
     boost::asio::ip::tcp::resolver res{ctx};
-    conn_.connect(boost::asio::ip::tcp::endpoint(*res.resolve(host_name, "https")));
+    conn_.connect(boost::asio::ip::tcp::endpoint(*(res.resolve(host_name, "https").begin())));
     settings_.fields = boost::requests::headers({
         {boost::requests::http::field::content_type, "application/vnd.github+json"},
         boost::requests::bearer(auth_token)

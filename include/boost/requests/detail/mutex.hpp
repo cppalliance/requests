@@ -9,8 +9,8 @@
 #define BOOST_REQUESTS_DETAIL_MUTEX_HPP
 
 #include <boost/asio/any_io_executor.hpp>
-#include <boost/asio/experimental/channel.hpp>
 #include <boost/system/error_code.hpp>
+#include <boost/system/system_error.hpp>
 #include <boost/requests/detail/config.hpp>
 #include <boost/requests/detail/faux_coroutine.hpp>
 #include <list>
@@ -65,7 +65,7 @@ struct mutex
     system::error_code ec;
     lock(ec);
     if (ec)
-      throw system::system_error(ec, "lock");
+      boost::throw_exception(system::system_error(ec, "lock"));
   }
   BOOST_REQUESTS_DECL void unlock();
 
@@ -95,7 +95,7 @@ struct mutex
 }
 
 #if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/impl/mutex.ipp>
+#include <boost/requests/detail/impl/mutex.ipp>
 #endif
 
 #endif // BOOST_REQUESTS_MUTEX_HPP

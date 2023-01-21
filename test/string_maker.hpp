@@ -161,8 +161,8 @@ inline void check_ec(boost::system::error_code ec,
 template<typename Handler>
 struct tracker_t
 {
-  boost::source_location loc;
   Handler handler;
+  boost::source_location loc;
   bool called = false;
   tracker_t(
       Handler && handler,
@@ -176,7 +176,7 @@ struct tracker_t
     std::move(handler)(std::forward<Args>(args)...);
   }
 
-  tracker_t(tracker_t && lhs) : loc(lhs.loc), handler(std::move(lhs.handler)), called(lhs.called)
+  tracker_t(tracker_t && lhs) : handler(std::move(lhs.handler)), loc(lhs.loc), called(lhs.called)
   {
     lhs.called = true;
   }

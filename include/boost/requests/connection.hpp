@@ -296,7 +296,6 @@ struct connection::defaulted : connection
 {
   using default_token = Token;
   using connection::connection;
-  using stream = typename detail::defaulted_helper<stream, Token>::type;
   defaulted(connection && lhs) :  connection(std::move(lhs)) {}
   using connection::async_connect;
   using connection::async_close;
@@ -312,7 +311,7 @@ struct connection::defaulted : connection
 
   template<typename RequestBody,
             typename CompletionToken>
-  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, stream))
+  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, typename detail::defaulted_helper<stream, Token>::type))
   async_ropen(beast::http::verb method,
               urls::url_view path,
               RequestBody && body,
@@ -324,7 +323,7 @@ struct connection::defaulted : connection
   }
 
   template<typename CompletionToken>
-  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, stream))
+  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, typename detail::defaulted_helper<stream, Token>::type))
   async_ropen(beast::http::verb method,
               urls::pct_string_view path,
               http::fields & headers,

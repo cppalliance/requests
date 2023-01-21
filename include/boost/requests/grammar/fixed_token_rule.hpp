@@ -64,7 +64,7 @@ struct fixed_token_rule_t
     system::result<value_type>
     {
         const auto it0 = it;
-        if(std::distance(it, end) < Size)
+        if(static_cast<std::size_t>(std::distance(it, end)) < Size)
             BOOST_REQUESTS_RETURN_EC(
                     urls::grammar::error::need_more);
 

@@ -22,7 +22,7 @@ struct json_source : source
   BOOST_REQUESTS_DECL json_source(json::value data);
   json_source(const json_source & data);
 
-  ~json_source() = default;
+  BOOST_REQUESTS_DECL ~json_source();
   optional<std::size_t> size() const override {return none;};
   BOOST_REQUESTS_DECL void reset() override;
   BOOST_REQUESTS_DECL std::pair<std::size_t, bool> read_some(void * data, std::size_t size, system::error_code & ec) override;
@@ -43,5 +43,9 @@ auto tag_invoke(const make_source_tag&, Json && f)
 
 }
 }
+
+#if defined(BOOST_REQUESTS_HEADER_ONLY)
+#include <boost/requests/sources/impl/json.ipp>
+#endif
 
 #endif //BOOST_REQUESTS_SOURCES_JSON_HPP

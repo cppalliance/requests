@@ -108,7 +108,7 @@ void http_request_connection(bool https)
     auto bb = asio::dynamic_buffer(buf);
 
     error_code ec;
-    auto sz = str.read(bb, ec);
+    CHECK(str.read(bb, ec) > 0u);
 
     CHECK(ec == error_code{});
 

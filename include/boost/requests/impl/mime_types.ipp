@@ -14,7 +14,7 @@ namespace boost {
 namespace requests {
 
 
-BOOST_REQUESTS_DECL const mime_type_map & default_mime_type_map()
+const mime_type_map & default_mime_type_map()
 {
   // copied from https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
   const static mime_type_map mp

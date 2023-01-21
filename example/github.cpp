@@ -31,8 +31,6 @@ int main(int argc, char * argv[])
 
   boost::asio::io_context ctx;
   github::issue_client cl{ctx, token};
-  boost::core::string_view cmd = argv[1];
-
 
   for (const auto& issue : cl.list_issues().value)
     std::cout << issue.url << ": " << issue.title << std::endl;

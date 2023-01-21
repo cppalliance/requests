@@ -14,6 +14,7 @@
 #include <boost/requests/grammar/token_rule.hpp>
 #include <boost/requests/rfc/link.hpp>
 #include <boost/url/rfc/uri_reference_rule.hpp>
+#include <boost/url/grammar/delim_rule.hpp>
 #include <boost/url/parse.hpp>
 
 namespace boost {
@@ -36,7 +37,6 @@ system::result<urls::grammar::range<link>> parse_link_field(core::string_view in
 {
   namespace ug = urls::grammar;
 
-  constexpr auto spaces = ug::squelch(ug::token_rule(ug::lut_chars(" ")));
   auto res = urls::grammar::parse(
           input,
           ug::range_rule(

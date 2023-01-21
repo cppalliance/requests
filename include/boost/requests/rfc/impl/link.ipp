@@ -16,6 +16,7 @@
 #include <boost/requests/rfc/link.hpp>
 #include <boost/requests/rfc/quoted_string.hpp>
 #include <boost/url/grammar/hexdig_chars.hpp>
+#include <boost/url/rfc/uri_reference_rule.hpp>
 
 namespace boost {
 namespace requests {

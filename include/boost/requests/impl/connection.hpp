@@ -94,24 +94,6 @@ connection::async_close(CompletionToken && completion_token)
   return detail::faux_run<async_close_op>(
       std::forward<CompletionToken>(completion_token), this);
 }
-
-namespace detail
-{
-
-struct drop_size_t
-{
-  auto operator()(system::error_code ec, std::size_t n) -> asio::deferred_values<system::error_code>
-  {
-    return asio::deferred.values(std::move(ec));
-  }
-};
-static asio::deferred_function<drop_size_t> drop_size()
-{
-  return asio::deferred(drop_size_t{});
-}
-
-}
-
 namespace detail
 {
 

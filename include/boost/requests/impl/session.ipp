@@ -9,8 +9,6 @@
 #define BOOST_REQUESTS_IMPL_SESSION_IPP
 
 
-#if defined(BOOST_REQUESTS_SOURCE)
-
 #include <boost/requests/session.hpp>
 #include <boost/requests/detail/define.hpp>
 #include <boost/asio/yield.hpp>
@@ -178,12 +176,8 @@ session::get_pool(urls::url_view url, error_code & ec) -> std::shared_ptr<connec
   // can be optimized to ellide the string allocation, blabla (pmr?)
   char buf[1024];
   container::pmr::monotonic_buffer_resource res{buf, sizeof(buf)};
-  using alloc = container::pmr::polymorphic_allocator<char>;
-  using str = std::basic_string<char, std::char_traits<char>, alloc>;
   auto host_key = normalize_(url);
 
-  const auto is_https = (url.scheme_id() == urls::scheme::https)
-                        || (url.scheme_id() == urls::scheme::wss);
   auto lock = detail::lock(mutex_, ec);
   if (ec)
     return std::shared_ptr<connection_pool>();
@@ -340,8 +334,5 @@ auto session::async_ropen_op::resume(requests::detail::faux_token_t<step_signatu
 
 #include <boost/asio/unyield.hpp>
 #include <boost/requests/detail/undefine.hpp>
-
-#endif
-
 
 #endif // BOOST_REQUESTS_IMPL_SESSION_IPP
