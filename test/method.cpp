@@ -25,11 +25,13 @@ namespace json = boost::json;
 namespace urls = boost::urls;
 namespace core = boost::core;
 
-#if defined(BOOST_REQUESTS_USE_STD_FS)
 using boost::system::error_code;
+#if defined(BOOST_REQUESTS_USE_STD_FS)
+using fs_error_code = std::error_code;
 #else
-using std::error_code;
+using fs_error_code = boost::system::error_code;
 #endif
+
 
 inline std::string httpbin()
 {
@@ -128,7 +130,7 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
 
   // SUBCASE("too-many-redirects")
   {
-    error_code ec;
+    boost::system::error_code ec;
     requests::default_session().options().max_redirects = 3;
     auto res = requests::get(u("/redirect/10"), {}, ec);
     CHECK(res.history.size() == 3);
@@ -149,7 +151,7 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
     CHECK(res.headers.at(requests::http::field::content_type) == "image/png");
 
     CHECK(filesystem::exists(target));
-    error_code ec;
+    fs_error_code ec;
     filesystem::remove(target, ec);
   }
 
@@ -171,7 +173,7 @@ TEST_CASE_TEMPLATE("sync-request", u, http_maker, https_maker)
     CHECK(res.headers.at(requests::http::field::content_type) == "image/png");
 
     CHECK(filesystem::exists(target));
-    error_code ec;
+    fs_error_code ec;
     filesystem::remove(target, ec);
   }
 

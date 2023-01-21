@@ -6,7 +6,6 @@
 #ifndef BOOST_REQUESTS_HPP
 #define BOOST_REQUESTS_HPP
 
-#include <boost/requests/body_traits.hpp>
 #include <boost/requests/connection.hpp>
 #include <boost/requests/connection_pool.hpp>
 #include <boost/requests/cookie.hpp>

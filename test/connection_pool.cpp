@@ -22,11 +22,13 @@ namespace asio = boost::asio;
 namespace json = boost::json;
 namespace urls = boost::urls;
 
-#if defined(BOOST_REQUESTS_USE_STD_FS)
 using boost::system::error_code;
+#if defined(BOOST_REQUESTS_USE_STD_FS)
+using fs_error_code = std::error_code;
 #else
-using std::error_code;
+using fs_error_code = boost::system::error_code;
 #endif
+
 
 inline std::string httpbin()
 {
@@ -143,7 +145,7 @@ void http_request_connection_pool(bool https)
     CHECK(res.headers.at(requests::http::field::content_type) == "image/png");
 
     CHECK(filesystem::exists(target));
-    error_code ec;
+    fs_error_code ec;
     filesystem::remove(target, ec);
   }
 
@@ -164,7 +166,7 @@ void http_request_connection_pool(bool https)
     CHECK(res.headers.at(requests::http::field::content_type) == "image/png");
 
     CHECK(filesystem::exists(target));
-    error_code ec;
+    fs_error_code ec;
     filesystem::remove(target, ec);
   }
 
@@ -360,7 +362,8 @@ void run_tests(error_code ec,
                            CHECK(res.headers.at(requests::http::field::content_type) == "image/png");
 
                            CHECK(filesystem::exists(target));
-                           filesystem::remove(target, ec);
+                           fs_error_code ec_;
+                           filesystem::remove(target, ec_);
                          }
                        }));
   }
@@ -384,7 +387,8 @@ void run_tests(error_code ec,
                            CHECK(res.headers.at(requests::http::field::content_type) == "image/png");
 
                            CHECK(filesystem::exists(target));
-                           filesystem::remove(target, ec);
+                           fs_error_code ec_;
+                           filesystem::remove(target, ec_);
                          }
                        }));
 

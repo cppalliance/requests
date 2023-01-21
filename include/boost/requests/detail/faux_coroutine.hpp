@@ -39,10 +39,8 @@ struct faux_token_t<void()>
 {
   using cancellation_slot_type = asio::cancellation_slot;
   cancellation_slot_type get_cancellation_slot() const {BOOST_ASSERT(impl_ != nullptr); return impl_->slot;}
-  cancellation_slot_type get_cancellation_slot() const {BOOST_ASSERT(impl_ != nullptr); return impl_->slot;}
 
   using allocator_type = container::pmr::polymorphic_allocator<void>;
-  allocator_type get_allocator() const {BOOST_ASSERT(impl_ != nullptr); return impl_->get_allocator();}
   allocator_type get_allocator() const {BOOST_ASSERT(impl_ != nullptr); return impl_->get_allocator();}
 
   void operator()()

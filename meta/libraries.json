@@ -1,0 +1,16 @@
+{
+  "key": "requests",
+  "name": "Requests",
+  "authors": [
+    "Klemens Morgenstern"
+  ],
+  "description": "Simple http based on beast & asio.",
+  "category": [
+    "Concurrent",
+    "IO"
+  ],
+  "maintainers": [
+    "Klemens Morgenstern <klemens.morgenstern@gmx.net>"
+  ],
+  "cxxstd": "14"
+}

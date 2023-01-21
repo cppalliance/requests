@@ -22,11 +22,7 @@ namespace json = boost::json;
 namespace urls = boost::urls;
 namespace beast = boost::beast;
 
-#if defined(BOOST_REQUESTS_USE_STD_FS)
 using boost::system::error_code;
-#else
-using std::error_code;
-#endif
 
 inline std::string httpbin()
 {
