@@ -1,0 +1,80 @@
+[#source]
+## source.hpp
+
+
+[source,cpp]
+----
+struct source
+{
+  virtual ~source() = default;
+  virtual optional<std::size_t> size() const = 0;
+  virtual void reset() = 0;
+  virtual std::pair<std::size_t, bool> read_some(void * data, std::size_t size, system::error_code & ) = 0;
+  virtual core::string_view default_content_type() {return "";}
+};
+
+----
+
+The `source` class is used to write request bodies.
+
+
+The source can be implemented to add more types by adding a `tag_invoke` function.
+Below is an exemplary implementation.
+
+[source,cpp]
+----
+template<>
+struct meme_source
+{
+  my_type data;
+  my_type::buffer buffer{data.make_buffer();}
+
+  meme_source(const my_type &data) : data(data) {}
+
+  core::string_view default_content_type()
+  {
+    return "text/my-meme-type";
+  }
+
+// used to write again, useful for redirects
+  void reset() { buffer = data.make_buffer(); }
+  optional<std::size_t> size() const override {return buffer.size();};
+
+  std::pair<std::size_t, bool> read_some(void * data, std::size_t size, system::error_code & ec) override
+  {
+    if (buffer.done())
+        return {0u, false};
+    else
+        return {buffer.read_some(data, size, ec), true};
+  }
+};
+
+
+auto tag_invoke(const make_source_tag&, const my_type & data)
+{
+    return meme_source(data);
+}
+----
+
+[#request_body_traits]
+
+The following `tag_invoke`s  are provided out of the box
+(the `json` ones requires you to include `boost/requests/json.hpp` and
+ `form` ones requires you to include `boost/requests/form.hpp` ).
+
+[cols="1,1,1"]
+|===
+| `RequestBody` type | Default Mime-Type | `source` type
+| `std::basic_string<C>`       | "text/plain"                                         | `basic_string_source<C>`
+| `const char[N]`              | "text/plain; charset=utf-8"                          | `basic_string_view_source<char>`
+| `core::basic_string_view<C>` | "text/plain"                                         | `basic_string_view_source<C>`
+| `asio::const_buffer`         | "application/octet-stream"                           | `buffer_source`
+| `asio::mutable_buffer`       | "application/octet-stream"                           | `buffer_source`
+| `urls::params_encoded_view`  | "application/x-www-form-urlencoded"                  | `form_source`
+| `requests::form`             | "application/x-www-form-urlencoded"                  | `form_source`
+| `std::filesystem::path`      | Taken from <<default_mime_type_map>> or "text/plain" | `file_source`
+| `boost::filesystem::path`    | Taken from <<default_mime_type_map>> or "text/plain" | `file_source`
+| `json::value`                | "application/json"                                   | `json_source`
+| `json::object`               | "application/json"                                   | `json_source`
+| `json::array`                | "application/json"                                   | `json_source`
+|===

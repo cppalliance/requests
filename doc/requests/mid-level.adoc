@@ -11,9 +11,11 @@ http://www.boost.org/LICENSE_1_0.txt
 
 ## Connections, Pools & Sessions
 
-The basic building block is a <<connection>>, which usually represents a single socket; this can be a tcp socket, a tcp socket or a domain socket. As such, a <<connection>> works on a single endpoint.
+The basic building block is a <<connection>>, which usually represents a single socket; this can be a tcp socket, a tcp socket or a domain socket.
+As such, a <<connection>> works on a single endpoint.
 
-The pool is a dynamic collection of connections, working on a hostname & protocol pair, because they can provide multiple endpoints. THe pool will manage the amount of connections and distributing them over multiple endpoints.
+The pool is a dynamic collection of connections, working on a hostname & protocol pair, because a hostname can provide multiple endpoints.
+The pool will manage the amount of connections and distributing them over multiple endpoints.
 
 A session represents a map of pools & hostname-protocol pairs, exclusively for `http` and `https`. It owns the cookie_jar & request settings, such as the <<redirect_mode>>.
 
@@ -22,14 +24,10 @@ A session represents a map of pools & hostname-protocol pairs, exclusively for `
 /---------\
 | Session |
 \---------/
-   :   :
-   :   :  hostname   /------------\  list   /------------------\
-   :   \------------>| http_pool  |-------->| http_connection  |
-   :                 \------------/         \------------------/
-   :
-   :      hostname   /------------\  list   /------------------\
-   \---------------->| https_pool |-------->| https_connection |
-                     \------------/         \------------------/
+    :
+    :  hostname   /-------\  list   /------------\
+    \------------>| pool  |-------->| connection |
+                  \-------/         \------------/
 ....
 
 requests brings a <<default_session>>, which will be inserted into an `asio::execution_context` through `use_service`.
@@ -39,7 +37,8 @@ By default that means the `asio::system_executor` is used. The `async` versions 
 ## stream
 
 The fundamental building block used by high level functions is the <<stream>>, which is a response read that implements
-the asio concepts of https://www.boost.org/doc/libs/develop/doc/html/boost_asio/reference/SyncReadStream.html[SyncReadStream] and https://www.boost.org/doc/libs/develop/doc/html/boost_asio/reference/AsyncReadStream.html[AsyncReadStream].
+the asio concepts of https://www.boost.org/doc/libs/develop/doc/html/boost_asio/reference/SyncReadStream.html[SyncReadStream]
+and https://www.boost.org/doc/libs/develop/doc/html/boost_asio/reference/AsyncReadStream.html[AsyncReadStream].
 
 That means that any read algorithm that works on classes like `asio::ip::tcp::socket` will also work on the `requests::stream`.
 
@@ -78,14 +77,5 @@ auto s = requests::default_session().ropen(
 ## compile time optimization
 
 The library optimizes compile times as much as possible without to much overhead. 
-The most common executor is `asio::any_io_executor`, for which `requests` is provides
-`extern template` declarations. For other executors `extern template` declarations can be added like this:
-
-[source,cpp]
-----
-extern template struct basic_connection_pool<asio::ip::tcp::socket::rebind_executor<my_executor>::other>;
-extern template struct basic_connection_pool<asio::ssl::stream<asio::ip::tcp::socket::rebind_executor<my_executor>::other>>;
-extern template struct basic_connection<asio::ip::tcp::socket::rebind_executor<my_executor>::other>;
-extern template struct basic_connection<asio::ssl::stream<asio::ip::tcp::socket::rebind_executor<my_executor>::other>>;
-extern template struct basic_session<my_executor>;
-----
+Because of that, everything uses a `asio::generic::socket` with an `asio::any_io_executor`,
+to avoid templating everything.

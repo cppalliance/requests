@@ -10,7 +10,7 @@ namespace boost::requests
 struct session_service : asio::execution_context::service
 {
   using executor_type = asio::any_io_executor;
-  using session_type = basic_session<executor_type>;
+  using session_type = session;
 
   session_service(asio::execution_context & ctx);
   ~session_service();

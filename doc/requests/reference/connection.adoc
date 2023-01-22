@@ -1,18 +1,17 @@
 ## connection.hpp
 [#connection]
 
-A connection pool represents a single http connection to and endpoint.
+A connection pool represents a single http or domain socket connection to and endpoint.
 
 [source,cpp]
 ----
 namespace boost::requests
 {
 
-template<typename Stream>
-struct basic_connection
+struct connection
 {
     /// The type of the next layer.
-    typedef typename std::remove_reference<Stream>::type next_layer_type;
+    typedef asio::ssl::stream<asio::generic::stream_protocol::socket> next_layer_type;
 
     /// The type of the executor associated with the object.
     typedef typename next_layer_type::executor_type executor_type;
@@ -20,14 +19,9 @@ struct basic_connection
     /// The type of the executor associated with the object.
     typedef typename next_layer_type::lowest_layer_type lowest_layer_type;
 
-    /// Rebinds the socket type to another executor.
-    template<typename Executor1>
-    struct rebind_executor
-    {
-        /// The socket type when rebound to the specified executor.
-        typedef basic_connection<typename next_layer_type::
-                    template rebind_executor<Executor1>::other> other;
-    };
+    /// This helper type with a defaulted completion token.
+    template<typename Token>
+    struct defaulted;
 
     /// Get the executor
     executor_type get_executor() noexcept;
@@ -44,21 +38,20 @@ struct basic_connection
     /// The endpoint of the lowest lowest layer.
     using endpoint_type = typename protocol_type::endpoint;
 
-    /// Construct a stream.
-    /**
-     * @param args The arguments to be passed to initialise the underlying stream.
-     *
-     * Everything else will be default constructed
-     */
-    template<typename ... Args>
-    explicit basic_connection(Args && ... args);
+    /// Construct a stream that uses ssl
+    template<typename ExecutorOrContext>
+    explicit connection(ExecutorOrContext && exec_or_ctx, asio::ssl::context & ctx);
+
+    /// Construct a stream that doesn't use ssl
+    template<typename ExecutorOrContext>
+    explicit connection(ExecutorOrContext && exec_or_ctx);
 
     /// Move construct a connection
-    basic_connection(basic_connection && ) noexcept = default;
+    connection(connection && ) noexcept = default;
 
     /// Rebinding constructor;
     template<typename Other>
-    basic_connection(basic_connection<Other> && lhs);
+    connection(connection<Other> && lhs);
 
     /// Connect to an endpoint
     void connect(endpoint_type ep);
@@ -98,7 +91,7 @@ struct basic_connection
     core::string_view host() const;
 
     /// The stream type returned by ropen.
-    using stream = basic_stream<executor_type>;
+    using stream = stream<executor_type>;
 
     /// Build a request internally and initiate it.
     template<typename RequestBody>
@@ -114,9 +107,9 @@ struct basic_connection
                RequestBody && body,
                request_settings req) -> stream;
 
-   template<typename RequestBody,
-             typename CompletionToken
-                  = asio::default_token_t<executor_type>>
+    template<typename RequestBody,
+              typename CompletionToken
+                   = asio::default_token_t<executor_type>>
     auto async_ropen(beast::http::verb method,
                      urls::url_view path,
                      RequestBody && body,
@@ -137,7 +130,6 @@ struct basic_connection
                request_options opt,
                cookie_jar * jar) -> stream;
 
-
     template<typename RequestBody,
              typename CompletionToken
                   = asio::default_token_t<executor_type>>
@@ -147,16 +139,6 @@ struct basic_connection
                      CompletionToken && token = asio::default_token_t<executor_type>());
 };
 
-template<typename Executor = asio::any_io_executor>
-using basic_http_connection  = basic_connection<
-        asio::basic_stream_socket<asio::ip::tcp, Executor>>;
-
-template<typename Executor = asio::any_io_executor>
-using basic_https_connection = basic_connection<
-        asio::ssl::stream<asio::basic_stream_socket<asio::ip::tcp, Executor>>>;
-
-using http_connection  = basic_http_connection<>;
-using https_connection = basic_https_connection<>;
 
 }
 ----

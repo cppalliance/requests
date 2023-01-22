@@ -6,21 +6,20 @@ A connection pool represents a collection <<connection>> objects pointing to the
 [source,cpp]
 ----
 
-template<typename Stream>
-struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
+struct connection_pool
 {
     /// The type of the executor associated with the object.
     typedef typename Stream::executor_type executor_type;
 
     /// The type of the underlying connection.
-    typedef basic_connection<Stream> connection_type;
+    typedef connection<Stream> connection_type;
 
     /// Rebinds the socket type to another executor.
     template<typename Executor1>
     struct rebind_executor
     {
         /// The socket type when rebound to the specified executor.
-        typedef basic_connection_pool<typename Stream::template rebind_executor<Executor1>::other> other;
+        typedef connection_pool<typename Stream::template rebind_executor<Executor1>::other> other;
     };
 
     /// Get the executor
@@ -35,26 +34,24 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
     /// The reolver_type of the lower layer.
     using resolver_type = typename protocol_type::resolver::template rebind_executor<executor_type>::other;
 
-    /// The 
-    using stream = basic_stream<executor_type>;
 
     /// Construct a pool from an executor. 
     template<typename Exec, typename = std::enable_if_t<!detail::has_ssl_v<Stream>, Exec>>
-    explicit basic_connection_pool(Exec && exec,
+    explicit connection_pool(Exec && exec,
                                    std::size_t limit = BOOST_REQUESTS_DEFAULT_POOL_SIZE);
 
     /// Construct a pool from an executor and sslctx
     template<typename Exec>
-    explicit basic_connection_pool(Exec && exec,
+    explicit connection_pool(Exec && exec,
                                    asio::ssl::context & ctx,
                                    std::size_t limit = BOOST_REQUESTS_DEFAULT_POOL_SIZE);
 
     /// Move constructor
-    basic_connection_pool(basic_connection_pool && ) = default;
+    connection_pool(connection_pool && ) = default;
 
     /// rebind constructor.
     template<typename Exec>
-    basic_connection_pool(basic_connection_pool<Exec> && lhs);
+    connection_pool(connection_pool<Exec> && lhs);
     
     /// Lookup the endpoints for an authority and set the host.
     void lookup(urls::authority_view av);
@@ -127,15 +124,6 @@ struct basic_connection_pool : detail::ssl_base<detail::has_ssl_v<Stream>>
                      CompletionToken && token = asio::default_token_t<executor_type>());
 };
 
-template<typename Executor = asio::any_io_executor>
-using basic_http_connection_pool  = basic_connection_pool<asio::basic_stream_socket<asio::ip::tcp, Executor>>;
-
-template<typename Executor = asio::any_io_executor>
-using basic_https_connection_pool = basic_connection_pool<asio::ssl::stream<asio::basic_stream_socket<asio::ip::tcp, Executor>>>;
-
-
-using http_connection_pool  = basic_http_connection_pool<>;
-using https_connection_pool = basic_https_connection_pool<>;
 ----
 
 ### async_lookup
