@@ -80,7 +80,6 @@ struct connection
     , host_(std::move(lhs.host_))
     , buffer_(std::move(lhs.buffer_))
     , ongoing_requests_(std::move(lhs.ongoing_requests_.load()))
-    , keep_alive_set_(std::move(lhs.keep_alive_set_))
     , endpoint_(std::move(lhs.endpoint_))
     {}
 
@@ -93,7 +92,6 @@ struct connection
        host_ = std::move(lhs.host_);
        buffer_ = std::move(lhs.buffer_);
        ongoing_requests_ = std::move(lhs.ongoing_requests_.load());
-       keep_alive_set_ = std::move(lhs.keep_alive_set_);
        endpoint_ = std::move(lhs.endpoint_);
        return *this;
     }
@@ -159,12 +157,6 @@ struct connection
 
     // Endpoint
     endpoint_type endpoint() const {return endpoint_;}
-
-    // Timeout of the connection-alive
-    std::chrono::system_clock::time_point timeout() const
-    {
-      return keep_alive_set_.timeout;
-    }
 
     std::size_t working_requests() const { return ongoing_requests_; }
 
@@ -247,7 +239,6 @@ struct connection
     std::string host_;
     beast::flat_buffer buffer_;
     std::atomic<std::size_t> ongoing_requests_{0u};
-    keep_alive keep_alive_set_;
     endpoint_type endpoint_;
 
     struct async_close_op;

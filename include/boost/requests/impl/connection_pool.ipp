@@ -172,7 +172,7 @@ auto connection_pool::get_connection(error_code & ec) -> std::shared_ptr<connect
   auto itr = std::find_if(conns_.begin(), conns_.end(),
                           [](const std::pair<const endpoint_type, std::shared_ptr<connection>> & conn)
                           {
-                            return conn.second->working_requests() == 0u;
+                            return (conn.second->working_requests() == 0u) && conn.second->is_open();
                           });
 
   if (itr != conns_.end())
@@ -218,7 +218,7 @@ auto connection_pool::get_connection(error_code & ec) -> std::shared_ptr<connect
                             const std::pair<const endpoint_type, std::shared_ptr<connection>> & rhs)
                          {
                            return (lhs.second->working_requests() + (lhs.second->is_open() ? 0 : 1))
-                                  < (rhs.second->working_requests() + (rhs.second->is_open() ? 0 : 1));
+                                < (rhs.second->working_requests() + (rhs.second->is_open() ? 0 : 1));
                          });
   if (itr == conns_.end())
   {
@@ -249,7 +249,7 @@ auto connection_pool::async_get_connection_op::resume(
     itr = std::find_if(this_->conns_.begin(), this_->conns_.end(),
                        [](const std::pair<const endpoint_type, std::shared_ptr<connection>> & conn)
                        {
-                         return conn.second->working_requests() == 0u;
+                         return (conn.second->working_requests() == 0u) && conn.second->is_open();;
                        });
 
     if (itr != this_->conns_.end())

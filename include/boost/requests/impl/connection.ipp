@@ -142,32 +142,14 @@ auto connection::ropen(beast::http::verb method,
       lock_type wlock{write_mtx_, std::adopt_lock};
       boost::optional<lock_type> alock;
 
-      // disconnect first
-      if (!is_open() && keep_alive_set_.timeout < std::chrono::system_clock::now()) {
+      if (!is_open())
+      {
+      retry:
         read_mtx_.lock(ec);
         if (ec)
           return stream{get_executor(), nullptr};
 
         alock.emplace(read_mtx_, std::adopt_lock);
-        // if the close goes wrong - so what, unless it's still open
-        if (use_ssl_)
-          next_layer_.shutdown(ec);
-        if (!ec)
-          next_layer_.next_layer().close(ec);
-        ec.clear();
-      }
-
-      if (!is_open())
-      {
-      retry:
-        if (!alock)
-        {
-          read_mtx_.lock(ec);
-          if (ec)
-            return stream{get_executor(), nullptr};
-
-          alock.emplace(read_mtx_, std::adopt_lock);
-        }
 
         next_layer_.next_layer().connect(endpoint_, ec);
         if (use_ssl_ && !ec)
@@ -348,27 +330,10 @@ auto connection::async_ropen_op::resume(
     {
       BOOST_REQUESTS_AWAIT_LOCK(this_->write_mtx_, lock);
 
-      // disconnect first
-      if (!this_->is_open() && this_->keep_alive_set_.timeout < std::chrono::system_clock::now())
-      {
-        BOOST_REQUESTS_AWAIT_LOCK(this_->read_mtx_, alock);
-        // if the close goes wrong - so what, unless it's still open
-        if (!ec && this_->use_ssl_)
-        {
-          BOOST_ASIO_CORO_YIELD this_->next_layer_.async_shutdown(std::move(self));
-        }
-        if (!ec)
-          this_->next_layer_.next_layer().close(ec);
-        ec.clear();
-      }
-
       if (!this_->is_open())
       {
       retry:
-        if (!alock)
-        {
-          BOOST_REQUESTS_AWAIT_LOCK(this_->read_mtx_, alock);
-        }
+        BOOST_REQUESTS_AWAIT_LOCK(this_->read_mtx_, alock);
         BOOST_ASIO_CORO_YIELD this_->next_layer_.next_layer().async_connect(this_->endpoint_, std::move(self));
         if (!ec && this_->use_ssl_)
         {

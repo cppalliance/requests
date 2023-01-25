@@ -34,8 +34,7 @@ void stream::dump(system::error_code & ec)
       parser_->get().body().more = false;
   }
 
-  bool should_close = interpret_keep_alive_response(impl_->keep_alive_set_, parser_->get(), ec);
-  if (should_close)
+  if (!parser_->get().keep_alive())
   {
     boost::system::error_code ec_;
     impl_->do_close_(ec_);
@@ -88,7 +87,7 @@ std::size_t stream::async_read_some_op::resume(requests::detail::faux_token_t<st
     else
     {
       this_->parser_->get().body().more = false;
-      if (interpret_keep_alive_response(this_->impl_->keep_alive_set_, this_->parser_->get(), ec))
+      if (!this_->parser_->get().keep_alive())
       {
         ec_ = ec ;
         BOOST_ASIO_CORO_YIELD this_->impl_->do_async_close_(std::move(self));
@@ -121,7 +120,7 @@ void stream::async_dump_op::resume(requests::detail::faux_token_t<step_signature
       BOOST_ASIO_CORO_YIELD this_->impl_->do_async_read_some_(*this_->parser_, std::move(self));
     }
 
-    if (interpret_keep_alive_response(this_->impl_->keep_alive_set_, this_->parser_->get(), ec))
+    if (!this_->parser_->get().keep_alive())
     {
       ec_ = ec ;
       BOOST_ASIO_CORO_YIELD this_->impl_->do_async_close_(std::move(self));
