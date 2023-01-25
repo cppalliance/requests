@@ -10,7 +10,6 @@
 
 #include <boost/asio.hpp>
 #include <boost/asio/compose.hpp>
-#include <boost/asio/yield.hpp>
 #include <boost/asio/experimental/parallel_group.hpp>
 
 #include <thread>
@@ -70,12 +69,12 @@ struct basic_main
     void resume(requests::detail::faux_token_t<step_signature_type> self,
                     error_code & ec, lock_guard l = {})
     {
-      reenter(this)
+      BOOST_ASIO_CORO_REENTER(this)
       {
-        yield mtx.async_lock(std::move(self));
+        BOOST_ASIO_CORO_YIELD mtx.async_lock(std::move(self));
         v.push_back(i);
         tim = std::make_unique<asio::steady_timer>(mtx.get_executor(), std::chrono::milliseconds(10));
-        yield tim->async_wait(std::move(self));
+        BOOST_ASIO_CORO_YIELD tim->async_wait(std::move(self));
         v.push_back(i + 1);
       }
     }

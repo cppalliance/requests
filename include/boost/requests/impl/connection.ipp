@@ -12,7 +12,6 @@
 #include <boost/beast/version.hpp>
 #include <boost/beast/http/read.hpp>
 #include <boost/requests/detail/define.hpp>
-#include <boost/asio/yield.hpp>
 
 namespace boost
 {
@@ -320,11 +319,11 @@ auto connection::async_ropen_op::resume(
             requests::detail::faux_token_t<step_signature_type> self,
             system::error_code & ec, std::size_t res_) -> stream
 {
-  reenter(this)
+  BOOST_ASIO_CORO_REENTER(this)
   {
     if (ec_)
     {
-      yield asio::post(this_->get_executor(), std::move(self));
+      BOOST_ASIO_CORO_YIELD asio::post(this_->get_executor(), std::move(self));
       ec = ec_;
     }
 
@@ -347,16 +346,16 @@ auto connection::async_ropen_op::resume(
 
     while (!ec)
     {
-      await_lock(this_->write_mtx_, lock);
+      BOOST_REQUESTS_AWAIT_LOCK(this_->write_mtx_, lock);
 
       // disconnect first
       if (!this_->is_open() && this_->keep_alive_set_.timeout < std::chrono::system_clock::now())
       {
-        await_lock(this_->read_mtx_, alock);
+        BOOST_REQUESTS_AWAIT_LOCK(this_->read_mtx_, alock);
         // if the close goes wrong - so what, unless it's still open
         if (!ec && this_->use_ssl_)
         {
-          yield this_->next_layer_.async_shutdown(std::move(self));
+          BOOST_ASIO_CORO_YIELD this_->next_layer_.async_shutdown(std::move(self));
         }
         if (!ec)
           this_->next_layer_.next_layer().close(ec);
@@ -368,12 +367,12 @@ auto connection::async_ropen_op::resume(
       retry:
         if (!alock)
         {
-          await_lock(this_->read_mtx_, alock);
+          BOOST_REQUESTS_AWAIT_LOCK(this_->read_mtx_, alock);
         }
-        yield this_->next_layer_.next_layer().async_connect(this_->endpoint_, std::move(self));
+        BOOST_ASIO_CORO_YIELD this_->next_layer_.next_layer().async_connect(this_->endpoint_, std::move(self));
         if (!ec && this_->use_ssl_)
         {
-          yield this_->next_layer_.async_handshake(asio::ssl::stream_base::client, std::move(self));
+          BOOST_ASIO_CORO_YIELD this_->next_layer_.async_handshake(asio::ssl::stream_base::client, std::move(self));
         }
         if (ec)
           break;
@@ -382,11 +381,11 @@ auto connection::async_ropen_op::resume(
       alock.reset();
       if (this_->use_ssl_)
       {
-        yield async_write_request(this_->next_layer_, method, path, headers, src, std::move(self));
+        BOOST_ASIO_CORO_YIELD async_write_request(this_->next_layer_, method, path, headers, src, std::move(self));
       }
       else
       {
-        yield async_write_request(this_->next_layer_.next_layer(), method, path, headers, src, std::move(self));
+        BOOST_ASIO_CORO_YIELD async_write_request(this_->next_layer_.next_layer(), method, path, headers, src, std::move(self));
       }
 
       if (ec == asio::error::broken_pipe || ec == asio::error::connection_reset)
@@ -395,7 +394,7 @@ auto connection::async_ropen_op::resume(
         break;
 
       // release after acquire!
-      await_lock(this_->read_mtx_, lock);
+      BOOST_REQUESTS_AWAIT_LOCK(this_->read_mtx_, lock);
       // END OF write impl
 
       str.emplace(this_->get_executor(), this_); // , req.get_allocator().resource()
@@ -404,11 +403,11 @@ auto connection::async_ropen_op::resume(
 
       if (this_->use_ssl_)
       {
-        yield beast::http::async_read_header(this_->next_layer_, this_->buffer_, *str->parser_, std::move(self));
+        BOOST_ASIO_CORO_YIELD beast::http::async_read_header(this_->next_layer_, this_->buffer_, *str->parser_, std::move(self));
       }
       else
       {
-        yield beast::http::async_read_header(this_->next_layer_.next_layer(), this_->buffer_, *str->parser_, std::move(self));
+        BOOST_ASIO_CORO_YIELD beast::http::async_read_header(this_->next_layer_.next_layer(), this_->buffer_, *str->parser_, std::move(self));
       }
 
       if (ec)
@@ -446,7 +445,7 @@ auto connection::async_ropen_op::resume(
 
       if (method != http::verb::head)
       {
-        yield str->async_read(buf, std::move(self));
+        BOOST_ASIO_CORO_YIELD str->async_read(buf, std::move(self));
       }
       if (ec)
         break;
@@ -577,14 +576,14 @@ void connection::do_async_close_(detail::faux_token_t<void(system::error_code)> 
 void connection::async_connect_op::resume(requests::detail::faux_token_t<step_signature_type> self,
                                           system::error_code & ec)
 {
-  reenter(this)
+  BOOST_ASIO_CORO_REENTER(this)
   {
-    await_lock(this_->write_mtx_, write_lock);
-    await_lock(this_->read_mtx_,  read_lock);
-    yield this_->next_layer_.next_layer().async_connect(this_->endpoint_ = ep, std::move(self));
+    BOOST_REQUESTS_AWAIT_LOCK(this_->write_mtx_, write_lock);
+    BOOST_REQUESTS_AWAIT_LOCK(this_->read_mtx_,  read_lock);
+    BOOST_ASIO_CORO_YIELD this_->next_layer_.next_layer().async_connect(this_->endpoint_ = ep, std::move(self));
     if (!ec && this_->use_ssl_)
     {
-      yield this_->next_layer_.async_handshake(asio::ssl::stream_base::client, std::move(self));
+      BOOST_ASIO_CORO_YIELD this_->next_layer_.async_handshake(asio::ssl::stream_base::client, std::move(self));
     }
   }
 }
@@ -592,13 +591,13 @@ void connection::async_connect_op::resume(requests::detail::faux_token_t<step_si
 void connection::async_close_op::resume(requests::detail::faux_token_t<step_signature_type> self,
                                           system::error_code & ec)
 {
-  reenter(this)
+  BOOST_ASIO_CORO_REENTER(this)
   {
-    await_lock(this_->write_mtx_, write_lock);
-    await_lock(this_->read_mtx_,  read_lock);
+    BOOST_REQUESTS_AWAIT_LOCK(this_->write_mtx_, write_lock);
+    BOOST_REQUESTS_AWAIT_LOCK(this_->read_mtx_,  read_lock);
     if (!ec && this_->use_ssl_)
     {
-      yield this_->next_layer_.async_shutdown(std::move(self));
+      BOOST_ASIO_CORO_YIELD this_->next_layer_.async_shutdown(std::move(self));
     }
     if (this_->next_layer_.next_layer().is_open())
       this_->next_layer_.next_layer().close(ec);
@@ -623,6 +622,5 @@ void connection::do_close_(system::error_code & ec)
 }
 
 #include <boost/requests/detail/undefine.hpp>
-#include <boost/asio/unyield.hpp>
 
 #endif // BOOST_REQUESTS_REQUESTS_CONNECTION_IPP

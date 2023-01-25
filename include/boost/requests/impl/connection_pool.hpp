@@ -9,7 +9,6 @@
 #define BOOST_REQUESTS_IMPL_CONNECTION_POOL_HPP
 
 #include <boost/requests/connection_pool.hpp>
-#include <boost/asio/yield.hpp>
 
 namespace boost {
 namespace requests {
@@ -208,7 +207,6 @@ connection_pool::async_ropen(beast::http::verb method,
 }
 }
 
-#include <boost/asio/unyield.hpp>
 
 #if defined(BOOST_REQUESTS_HEADER_ONLY)
 #include <boost/requests/impl/connection_pool.ipp>

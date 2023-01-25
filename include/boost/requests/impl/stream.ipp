@@ -6,7 +6,6 @@
 #define BOOST_REQUESTS_STREAM_IPP
 
 #include <boost/requests/stream.hpp>
-#include <boost/asio/yield.hpp>
 
 namespace boost
 {
@@ -56,7 +55,7 @@ std::size_t stream::async_read_some_op::resume(requests::detail::faux_token_t<st
                                                system::error_code & ec, std::size_t res)
 {
 
-  reenter(this)
+  BOOST_ASIO_CORO_REENTER(this)
   {
     if (!this_->parser_)
     BOOST_REQUESTS_ASSIGN_EC(ec_, asio::error::not_connected)
@@ -65,21 +64,21 @@ std::size_t stream::async_read_some_op::resume(requests::detail::faux_token_t<st
 
     if (ec_)
     {
-      yield asio::post(this_->get_executor(), std::move(self));
+      BOOST_ASIO_CORO_YIELD asio::post(this_->get_executor(), std::move(self));
       ec = ec_;
       return 0u;
     }
 
     if (buffer.size() == 0u)
     {
-      yield asio::post(this_->get_executor(), asio::append(std::move(self), ec_));
+      BOOST_ASIO_CORO_YIELD asio::post(this_->get_executor(), asio::append(std::move(self), ec_));
       return 0u;
     }
 
     this_->parser_->get().body().data = buffer.data();
     this_->parser_->get().body().size = buffer.size();
 
-    yield this_->impl_->do_async_read_some_(*this_->parser_, std::move(self));
+    BOOST_ASIO_CORO_YIELD this_->impl_->do_async_read_some_(*this_->parser_, std::move(self));
     if (!this_->parser_->is_done())
     {
       this_->parser_->get().body().more = true;
@@ -92,7 +91,7 @@ std::size_t stream::async_read_some_op::resume(requests::detail::faux_token_t<st
       if (interpret_keep_alive_response(this_->impl_->keep_alive_set_, this_->parser_->get(), ec))
       {
         ec_ = ec ;
-        yield this_->impl_->do_async_close_(std::move(self));
+        BOOST_ASIO_CORO_YIELD this_->impl_->do_async_close_(std::move(self));
         ec = ec_;
       }
     }
@@ -105,11 +104,11 @@ std::size_t stream::async_read_some_op::resume(requests::detail::faux_token_t<st
 void stream::async_dump_op::resume(requests::detail::faux_token_t<step_signature_type> self,
                                    system::error_code ec, std::size_t n)
 {
-  reenter(this)
+  BOOST_ASIO_CORO_REENTER(this)
   {
     if (!this_->parser_ || !this_->parser_->is_done())
     {
-      yield asio::post(this_->get_executor(), std::move(self));
+      BOOST_ASIO_CORO_YIELD asio::post(this_->get_executor(), std::move(self));
       ec = ec_;
       return;
     }
@@ -119,13 +118,13 @@ void stream::async_dump_op::resume(requests::detail::faux_token_t<step_signature
       this_->parser_->get().body().data = buffer;
       this_->parser_->get().body().size = BOOST_REQUESTS_CHUNK_SIZE;
 
-      yield this_->impl_->do_async_read_some_(*this_->parser_, std::move(self));
+      BOOST_ASIO_CORO_YIELD this_->impl_->do_async_read_some_(*this_->parser_, std::move(self));
     }
 
     if (interpret_keep_alive_response(this_->impl_->keep_alive_set_, this_->parser_->get(), ec))
     {
       ec_ = ec ;
-      yield this_->impl_->do_async_close_(std::move(self));
+      BOOST_ASIO_CORO_YIELD this_->impl_->do_async_close_(std::move(self));
       ec = ec_;
     }
   }
@@ -135,6 +134,5 @@ void stream::async_dump_op::resume(requests::detail::faux_token_t<step_signature
 }
 }
 
-#include <boost/asio/unyield.hpp>
 
 #endif //BOOST_REQUESTS_STREAM_IPP

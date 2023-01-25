@@ -9,7 +9,6 @@
 #define BOOST_REQUESTS_IMPL_CONNECTION_POOL_IPP
 
 #include <boost/requests/connection_pool.hpp>
-#include <boost/asio/yield.hpp>
 
 namespace boost {
 namespace requests {
@@ -89,7 +88,7 @@ void connection_pool::lookup(urls::url_view sv, system::error_code & ec)
 void connection_pool::async_lookup_op::resume(requests::detail::faux_token_t<step_signature_type> self,
                                               system::error_code & ec, typename asio::ip::tcp::resolver::results_type eps)
 {
-  reenter(this)
+  BOOST_ASIO_CORO_REENTER(this)
   {
     if (sv.has_scheme())
       scheme = sv.scheme();
@@ -100,7 +99,7 @@ void connection_pool::async_lookup_op::resume(requests::detail::faux_token_t<ste
 
       if (!this_->mutex_.try_lock())
       {
-        yield this_->mutex_.async_lock(std::move(self));
+        BOOST_ASIO_CORO_YIELD this_->mutex_.async_lock(std::move(self));
       }
       if (ec)
         return;
@@ -115,7 +114,7 @@ void connection_pool::async_lookup_op::resume(requests::detail::faux_token_t<ste
     {
       resolver.emplace(get_executor());
       service = sv.has_port() ? sv.port() : scheme;
-      yield resolver->async_resolve(
+      BOOST_ASIO_CORO_YIELD resolver->async_resolve(
           asio::string_view(sv.encoded_host_name().data(), sv.encoded_host_name().size()),
           asio::string_view(service.data(), service.size()), std::move(self));
 
@@ -126,7 +125,7 @@ void connection_pool::async_lookup_op::resume(requests::detail::faux_token_t<ste
 
       if (!this_->mutex_.try_lock())
       {
-        yield this_->mutex_.async_lock(std::move(self));
+        BOOST_ASIO_CORO_YIELD this_->mutex_.async_lock(std::move(self));
       }
       if (ec)
         return;
@@ -235,11 +234,11 @@ auto connection_pool::async_get_connection_op::resume(
             requests::detail::faux_token_t<step_signature_type> self,
             system::error_code & ec) -> std::shared_ptr<connection>
 {
-  reenter (this)
+  BOOST_ASIO_CORO_REENTER (this)
   {
     if (!this_->mutex_.try_lock())
     {
-      yield this_->mutex_.async_lock(std::move(self));
+      BOOST_ASIO_CORO_YIELD this_->mutex_.async_lock(std::move(self));
     }
     if (ec)
       return nullptr;
@@ -276,7 +275,7 @@ auto connection_pool::async_get_connection_op::resume(
       nconn = this_->use_ssl_ ? std::make_shared<connection>(get_executor(), this_->context_)
                               : std::make_shared<connection>(get_executor());
       nconn->set_host(this_->host_);
-      yield nconn->async_connect(ep, std::move(self)); // don't unlock here.
+      BOOST_ASIO_CORO_YIELD nconn->async_connect(ep, std::move(self)); // don't unlock here.
       if (ec)
         return nullptr;
 
@@ -307,16 +306,16 @@ stream connection_pool::async_ropen_op::resume(
     system::error_code & ec,
     variant2::variant<variant2::monostate, std::shared_ptr<connection>, stream> res)
 {
-  reenter(this)
+  BOOST_ASIO_CORO_REENTER(this)
   {
-    yield this_->async_get_connection(std::move(self));
+    BOOST_ASIO_CORO_YIELD this_->async_get_connection(std::move(self));
     conn = variant2::get<1>(res);
     if (!ec && conn == nullptr)
       ec =  asio::error::not_found;
     if (ec)
       return stream{this_->get_executor(), nullptr};
 
-    yield conn->async_ropen(method, path, headers, src, std::move(opt), jar, std::move(self));
+    BOOST_ASIO_CORO_YIELD conn->async_ropen(method, path, headers, src, std::move(opt), jar, std::move(self));
     return variant2::get<2>(std::move(res));
   }
   return stream{get_executor(), nullptr};
@@ -325,6 +324,5 @@ stream connection_pool::async_ropen_op::resume(
 }
 }
 
-#include <boost/asio/unyield.hpp>
 
 #endif // BOOST_REQUESTS_IMPL_CONNECTION_POOL_IPP
