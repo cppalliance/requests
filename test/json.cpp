@@ -172,7 +172,7 @@ void run_json_tests(error_code ec,
 {
   requests::json::async_get(
       hc, urls::url_view("/get"),
-      requests::request_settings{requests::headers({{"Test-Header", "it works"}}), {false}},
+      requests::request_parameters{requests::headers({{"Test-Header", "it works"}}), {false}},
       tracker(
           [url](error_code ec, requests::json::response<> hdr)
           {
@@ -186,7 +186,7 @@ void run_json_tests(error_code ec,
 
   requests::json::async_get(
       hc, urls::url_view("/redirect-to?url=%2Fget"),
-      requests::request_settings{requests::headers({{"Test-Header", "it works"}}), {false}},
+      requests::request_parameters{requests::headers({{"Test-Header", "it works"}}), {false}},
       tracker(
         [url](error_code ec, requests::json::response<> hdr)
         {

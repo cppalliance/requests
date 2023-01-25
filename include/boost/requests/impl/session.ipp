@@ -136,9 +136,8 @@ auto session::ropen(
   return str;
 }
 
-auto session::make_request_(http::fields fields) -> requests::request_settings
-{
-  return requests::request_settings{
+auto session::make_request_(http::fields fields) -> requests::request_parameters {
+  return requests::request_parameters{
       std::move(fields),
       options_,
       &jar_

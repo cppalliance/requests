@@ -751,7 +751,7 @@ private:
   boost::container::pmr::unsynchronized_pool_resource memory_;
 
   boost::requests::cookie_jar jar_;
-  boost::requests::request_settings settings_{boost::requests::http::fields {&memory_},
+  boost::requests::request_parameters settings_{boost::requests::http::fields {&memory_},
                                               {true, boost::requests::redirect_mode::none, 0}, &jar_};
 
 

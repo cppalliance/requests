@@ -10,13 +10,13 @@
 #include <boost/asio/ssl/stream.hpp>
 #include <boost/beast/core/flat_buffer.hpp>
 #include <boost/requests/detail/defaulted.hpp>
-#include <boost/requests/detail/lock_guard.hpp>
 #include <boost/requests/detail/faux_coroutine.hpp>
+#include <boost/requests/detail/lock_guard.hpp>
 #include <boost/requests/detail/ssl.hpp>
 #include <boost/requests/fields/keep_alive.hpp>
 #include <boost/requests/redirect.hpp>
 #include <boost/requests/request_options.hpp>
-#include <boost/requests/request_settings.hpp>
+#include <boost/requests/request_parameters.hpp>
 #include <boost/requests/response.hpp>
 #include <boost/requests/source.hpp>
 #include <boost/url/url_view.hpp>
@@ -186,20 +186,18 @@ struct connection
     core::string_view host() const {return host_;}
     constexpr static redirect_mode supported_redirect_mode() {return redirect_mode::endpoint;}
 
-    using request_type = request_settings;
+    using request_type = request_parameters;
 
     template<typename RequestBody>
     auto ropen(beast::http::verb method,
                urls::url_view path,
-               RequestBody && body,
-               request_settings req,
+               RequestBody && body, request_parameters req,
                system::error_code & ec) -> stream;
 
     template<typename RequestBody>
     auto ropen(beast::http::verb method,
                urls::url_view path,
-               RequestBody && body,
-               request_settings req) -> stream;
+               RequestBody && body, request_parameters req) -> stream;
 
     BOOST_REQUESTS_DECL
     auto ropen(beast::http::verb method,
@@ -224,8 +222,7 @@ struct connection
                                        void (boost::system::error_code, stream))
     async_ropen(beast::http::verb method,
                 urls::url_view path,
-                RequestBody && body,
-                request_settings req,
+                RequestBody && body, request_parameters req,
                 CompletionToken && completion_token);
 
     template<typename CompletionToken>
@@ -314,8 +311,7 @@ struct connection::defaulted : connection
   BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, typename detail::defaulted_helper<stream, Token>::type))
   async_ropen(beast::http::verb method,
               urls::url_view path,
-              RequestBody && body,
-              request_settings req,
+              RequestBody && body, request_parameters req,
               CompletionToken && completion_token)
   {
     return connection::async_ropen(method, path, std::forward<RequestBody>(body), std::move(req),
@@ -339,8 +335,7 @@ struct connection::defaulted : connection
   template<typename RequestBody>
   auto async_ropen(beast::http::verb method,
                    urls::url_view path,
-                   RequestBody && body,
-                   request_settings req)
+                   RequestBody && body, request_parameters req)
   {
     return this->async_ropen(method, path, std::forward<RequestBody>(body), std::move(req), default_token());
   }

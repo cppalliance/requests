@@ -178,7 +178,7 @@ struct connection_pool::async_ropen_op_body : async_ropen_op_body_base<RequestSo
       beast::http::verb method,
       urls::url_view path,
       RequestBody && body,
-      request_settings req)
+                      request_parameters req)
       : async_ropen_op_body_base<RequestSource>{std::forward<RequestBody>(body), std::move(req.fields)},
         async_ropen_op{this_, method, path.encoded_resource(), async_ropen_op_body_base<RequestSource>::headers,
                        this->source_impl,
@@ -193,8 +193,7 @@ BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, stream))
 connection_pool::async_ropen(beast::http::verb method,
                              urls::url_view path,
-                             RequestBody && body,
-                             request_settings req,
+                             RequestBody && body, request_parameters req,
                              CompletionToken && completion_token)
 {
   using rp = async_ropen_op_body<std::decay_t<decltype(make_source(std::forward<RequestBody>(body)))>>;

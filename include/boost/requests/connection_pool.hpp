@@ -112,7 +112,7 @@ struct connection_pool
     std::size_t limit() const {return limit_;}
     std::size_t active() const {return conns_.size();}
 
-    using request_type = request_settings;
+    using request_type = request_parameters;
 
     BOOST_REQUESTS_DECL std::shared_ptr<connection> get_connection(error_code & ec);
     std::shared_ptr<connection> get_connection()
@@ -131,8 +131,7 @@ struct connection_pool
     template<typename RequestBody>
     auto ropen(beast::http::verb method,
                urls::url_view path,
-               RequestBody && body,
-               request_settings req,
+               RequestBody && body, request_parameters req,
                system::error_code & ec) -> stream
     {
       auto conn = get_connection(ec);
@@ -148,8 +147,7 @@ struct connection_pool
     template<typename RequestBody>
     auto ropen(beast::http::verb method,
                urls::url_view path,
-               RequestBody && body,
-               request_settings req) -> stream
+               RequestBody && body, request_parameters req) -> stream
     {
       boost::system::error_code ec;
       auto res = ropen(method, path, std::forward<RequestBody>(body), std::move(req), ec);
@@ -197,8 +195,7 @@ struct connection_pool
                                        void (boost::system::error_code, stream))
     async_ropen(beast::http::verb method,
                 urls::url_view path,
-                RequestBody && body,
-                request_settings req,
+                RequestBody && body, request_parameters req,
                 CompletionToken && completion_token);
 
     template<typename CompletionToken>
@@ -267,8 +264,7 @@ struct connection_pool::defaulted : connection_pool
   BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, stream))
   async_ropen(beast::http::verb method,
               urls::url_view path,
-              RequestBody && body,
-              request_settings req,
+              RequestBody && body, request_parameters req,
               CompletionToken && completion_token)
   {
     return connection_pool::async_ropen(method, path, std::forward<RequestBody>(body), std::move(req),
@@ -292,8 +288,7 @@ struct connection_pool::defaulted : connection_pool
   template<typename RequestBody>
   auto async_ropen(beast::http::verb method,
                    urls::url_view path,
-                   RequestBody && body,
-                   request_settings req)
+                   RequestBody && body, request_parameters req)
   {
     return async_ropen(method, path, std::forward<RequestBody>(body), std::move(req), default_token());
   }

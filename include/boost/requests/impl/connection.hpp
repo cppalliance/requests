@@ -15,7 +15,7 @@
 #include <boost/requests/detail/ssl.hpp>
 #include <boost/requests/detail/tracker.hpp>
 #include <boost/requests/fields/location.hpp>
-#include <boost/requests/request_settings.hpp>
+#include <boost/requests/request_parameters.hpp>
 #include <boost/requests/stream.hpp>
 
 #include <boost/asio/deferred.hpp>
@@ -123,8 +123,7 @@ BOOST_REQUESTS_DECL bool check_endpoint(
 template<typename RequestBody>
 auto connection::ropen(beast::http::verb method,
            urls::url_view path,
-           RequestBody && body,
-           request_settings req) -> stream
+           RequestBody && body, request_parameters req) -> stream
 {
   system::error_code ec;
   auto res = ropen(method, path, std::forward<RequestBody>(body), std::move(req), ec);
@@ -137,8 +136,7 @@ template<typename RequestBody>
 auto connection::ropen(
     beast::http::verb method,
     urls::url_view path,
-    RequestBody && body,
-    request_settings req,
+    RequestBody && body, request_parameters req,
     system::error_code & ec) -> stream
 {
   const auto is_secure = use_ssl_;
@@ -241,7 +239,7 @@ struct connection::async_ropen_op_body : async_ropen_op_body_base<RequestSource>
       beast::http::verb method,
       urls::url_view path,
       RequestBody && body,
-      request_settings req)
+                      request_parameters req)
       : async_ropen_op_body_base<RequestSource>{std::forward<RequestBody>(body), std::move(req.fields)},
         async_ropen_op(this_, method, path, async_ropen_op_body_base<RequestSource>::headers,
                        this->source_impl, std::move(req.opts), req.jar)
@@ -255,8 +253,7 @@ BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_c
 connection::async_ropen(
     beast::http::verb method,
     urls::url_view path,
-    RequestBody && body,
-    request_settings req,
+    RequestBody && body, request_parameters req,
     CompletionToken && completion_token)
 {
   using rp = async_ropen_op_body<std::decay_t<decltype(make_source(std::forward<RequestBody>(body)))>>;

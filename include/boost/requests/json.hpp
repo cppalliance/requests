@@ -17,7 +17,7 @@
 #include <boost/requests/fields/link.hpp>
 #include <boost/requests/http.hpp>
 #include <boost/requests/method.hpp>
-#include <boost/requests/request_settings.hpp>
+#include <boost/requests/request_parameters.hpp>
 #include <boost/requests/sources/json.hpp>
 #include <boost/system/result.hpp>
 
@@ -200,7 +200,7 @@ inline void set_accept_headers(http::fields & hd)
     hd.set(http::field::accept, "application/json");
 }
 
-inline void set_accept_headers(requests::request_settings & hd)
+inline void set_accept_headers(requests::request_parameters & hd)
 {
   set_accept_headers(hd.fields);
 }

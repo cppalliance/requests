@@ -22,7 +22,7 @@
 #include <boost/requests/redirect.hpp>
 #include <boost/requests/request.hpp>
 #include <boost/requests/request_options.hpp>
-#include <boost/requests/request_settings.hpp>
+#include <boost/requests/request_parameters.hpp>
 #include <boost/requests/response.hpp>
 #include <boost/requests/service.hpp>
 #include <boost/requests/session.hpp>

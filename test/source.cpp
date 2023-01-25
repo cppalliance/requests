@@ -4,8 +4,8 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <boost/requests/json.hpp>
+#include <boost/requests/request_parameters.hpp>
 #include <boost/requests/source.hpp>
-#include <boost/requests/request_settings.hpp>
 
 #include "doctest.h"
 #include "string_maker.hpp"
