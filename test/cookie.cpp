@@ -48,12 +48,12 @@ void http_request_cookie_connection(bool https)
   hc.connect(ep);
 
   requests::cookie_jar jar;
-  auto res = requests::json::get(hc, urls::url_view{"/cookies"}, {.opts={false}, .jar=&jar});
+  auto res = requests::json::get(hc, urls::url_view{"/cookies"}, {{}, /*.opts=*/{false}, /*.jar=*/&jar});
 
   CHECK(res.value.at("cookies").as_object().empty());
   CHECK(jar.content.empty());
 
-  res = requests::json::get(hc, urls::url_view{"/cookies/set?cookie-1=foo"}, {.opts={false}, .jar=&jar});
+  res = requests::json::get(hc, urls::url_view{"/cookies/set?cookie-1=foo"}, {{}, /*.opts=*/{false}, /*.jar=*/&jar});
 
   CHECK(res.value.at("cookies") == json::object{{"cookie-1", "foo"}});
   REQUIRE(!jar.content.empty());
@@ -63,7 +63,7 @@ void http_request_cookie_connection(bool https)
   CHECK(citr->secure_only_flag == false);
   CHECK(citr->path == "/");
 
-  res = requests::json::get(hc, urls::url_view{"/cookies/set/cookie-2/bar"}, {.opts={false}, .jar=&jar});
+  res = requests::json::get(hc, urls::url_view{"/cookies/set/cookie-2/bar"}, {{}, /*.opts=*/{false}, /*.jar=*/&jar});
 
   CHECK(res.value.at("cookies") == json::object{{"cookie-1", "foo"}, {"cookie-2", "bar"}});
   REQUIRE(jar.content.size() == 2u);
@@ -89,7 +89,7 @@ void http_request_cookie_connection(bool https)
     CHECK(citr->secure_only_flag == false);
     CHECK(citr->path == "/");
   }
-  res = requests::json::get(hc, urls::url_view{"/cookies/delete?cookie-1"}, {.opts={false}, .jar=&jar});
+  res = requests::json::get(hc, urls::url_view{"/cookies/delete?cookie-1"}, {{}, /*.opts=*/{false}, /*.jar=*/&jar});
 
   CHECK(!jar.content.empty());
   REQUIRE(jar.content.size() == 1u);
@@ -99,7 +99,7 @@ void http_request_cookie_connection(bool https)
   CHECK(citr->secure_only_flag == false);
   CHECK(citr->path == "/");
 
-  res = requests::json::get(hc, urls::url_view{"/cookies/delete?cookie-2"}, {.opts={false}, .jar=&jar});
+  res = requests::json::get(hc, urls::url_view{"/cookies/delete?cookie-2"}, {{}, /*.opts=*/{false}, /*.jar=*/&jar});
   CHECK(jar.content.empty());
 }
 

@@ -27,6 +27,7 @@
 #include <memory>
 #include <scoped_allocator>
 #include <string>
+#include <type_traits>
 
 namespace boost
 {
@@ -58,10 +59,15 @@ struct response_base
   ~response_base() = default;
 
   response_base(const response_base & ) = default;
-  response_base(response_base && ) noexcept = default;
+  response_base(response_base && )
+      noexcept(std::is_move_constructible<http::response_header>::value &&
+               std::is_move_constructible<history_type>::value) = default;
 
   response_base& operator=(const response_base & ) = default;
-  response_base& operator=(response_base && ) noexcept = default;
+  response_base& operator=(response_base && ) noexcept(
+          std::is_move_assignable<http::response_header>::value &&
+          std::is_move_assignable<history_type>::value
+      ) = default;
 
   bool ok () const
   {
@@ -136,10 +142,10 @@ struct response : response_base
   response(http::response_header header, history_type history, buffer_type buffer) : response_base(std::move(header), std::move(history)), buffer(std::move(buffer)) {}
 
   response(const response & ) = default;
-  response(response && ) noexcept = default;
+  response(response && ) noexcept(std::is_move_constructible<buffer_type>::value && std::is_move_constructible<response_base>::value) = default;
 
   response& operator=(const response & ) = default;
-  response& operator=(response && ) noexcept = default;
+  response& operator=(response && ) noexcept(std::is_move_assignable<buffer_type>::value && std::is_move_assignable<response_base>::value) = default;
 
   template<typename Char = char,
            typename CharTraits = std::char_traits<char>>
