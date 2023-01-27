@@ -61,7 +61,6 @@ auto session::ropen(
 
   if (!is_secure && options_.enforce_tls)
   {
-    static constexpr auto loc((BOOST_CURRENT_LOCATION));
     BOOST_REQUESTS_ASSIGN_EC(ec, error::insecure);
     return stream{get_executor(), nullptr};
   }

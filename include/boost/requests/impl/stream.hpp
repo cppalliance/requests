@@ -11,7 +11,6 @@
 #include <boost/asio/read_until.hpp>
 #include <boost/asio/redirect_error.hpp>
 #include <boost/beast/core/buffer_ref.hpp>
-#include <boost/requests/keep_alive.hpp>
 #include <boost/requests/stream.hpp>
 
 

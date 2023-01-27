@@ -15,7 +15,6 @@
 #include <boost/requests/form.hpp>
 #include <boost/requests/http.hpp>
 #include <boost/requests/json.hpp>
-#include <boost/requests/keep_alive.hpp>
 #include <boost/requests/method.hpp>
 #include <boost/requests/mime_types.hpp>
 #include <boost/requests/public_suffix.hpp>

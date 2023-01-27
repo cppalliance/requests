@@ -12,6 +12,7 @@
 #include <boost/asio/defer.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/thread_pool.hpp>
+#include <boost/core/ignore_unused.hpp>
 #include <boost/container/pmr/monotonic_buffer_resource.hpp>
 #include <condition_variable>
 

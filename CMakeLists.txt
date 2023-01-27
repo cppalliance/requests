@@ -80,6 +80,9 @@ if(BOOST_REQUESTS_INSTALL AND NOT BOOST_SUPERPROJECT_VERSION)
             )
 endif()
 
+if (OPENSSL_FOUND)
+    include_directories (${OPENSSL_INCLUDE_DIR})
+endif()
 
 if(BOOST_REQUESTS_BUILD_TESTS)
     add_subdirectory(test)

@@ -45,7 +45,6 @@ auto session::ropen(
 
   if (!is_secure && opts.enforce_tls)
   {
-    static constexpr auto loc((BOOST_CURRENT_LOCATION));
     BOOST_REQUESTS_ASSIGN_EC(ec, error::insecure);
     return stream{get_executor(), nullptr};
   }
@@ -231,7 +230,6 @@ auto session::async_ropen_op::resume(requests::detail::faux_token_t<step_signatu
 
     if (!is_secure && this_->options_.enforce_tls)
     {
-      static constexpr auto loc((BOOST_CURRENT_LOCATION));
       BOOST_REQUESTS_ASSIGN_EC(ec, error::insecure);
       return stream{get_executor(), nullptr};
     }
