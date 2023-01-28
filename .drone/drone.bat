@@ -9,6 +9,14 @@ git clone https://github.com/boostorg/boost-ci.git boost-ci-cloned --depth 1
 cp -prf boost-ci-cloned/ci .
 rm -rf boost-ci-cloned
 
+
+SET DRONE_BUILD_DIR=%CD: =%
+choco install --no-progress -y openssl --x64 --version 1.1.1.1000
+mklink /D "C:\OpenSSL" "C:\Program Files\OpenSSL-Win64"
+SET OPENSSL_ROOT=C:\OpenSSL
+SET BOOST_BRANCH=develop
+IF "%DRONE_BRANCH%" == "master" SET BOOST_BRANCH=master
+
 REM source ci/travis/install.sh
 REM The contents of install.sh below:
 
