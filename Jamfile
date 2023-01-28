@@ -10,11 +10,16 @@
 import feature ;
 import boost ;
 import os ;
+import path ;
 
 build-project example ;
 build-project test ;
 
 boost.use-project ;
+
+lib ssl ;
+lib crypto ;
+lib crypt32 ;
 
 # Microsoft Windows section. Refer to FAQ "Windows and OpenSSL"
 if [ os.name ] = NT
