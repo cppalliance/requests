@@ -218,7 +218,6 @@ struct connection_pool
     std::string host_;
     std::vector<endpoint_type> endpoints_;
     std::size_t limit_;
-    std::size_t connecting_{0u};
 
     boost::unordered_multimap<endpoint_type,
                               std::shared_ptr<connection>,

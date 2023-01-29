@@ -78,7 +78,6 @@ TEST_CASE("link")
     auto  val = *lst->begin();
     CHECK(val.attributes.begin() != val.attributes.end());
 
-    auto ext = val.extensions();
     std::vector<br::link::field> vec;
     vec.assign(val.attributes.begin(), val.attributes.end());
     CHECK(vec.size() == 1u);

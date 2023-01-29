@@ -562,7 +562,7 @@ TEST_CASE("async-connection-request")
     CHECK(!conn.uses_ssl());
     conn.set_host(url.encoded_host());
 
-    rslvr.async_resolve(asio::string_view(url.encoded_host().data(), url.encoded_host().size()),
+    rslvr.async_resolve(std::string(url.encoded_host().data(), url.encoded_host().size()),
                         "80", do_the_thing)
                        (asio::append(&run_tests, std::ref(conn), urls::url_view(url)));
     ctx.run();
@@ -575,7 +575,7 @@ TEST_CASE("async-connection-request")
     url.set_scheme("https");
     CHECK(conn.uses_ssl());
     conn.set_host(url.encoded_host());
-    rslvr.async_resolve(asio::string_view(url.encoded_host().data(), url.encoded_host().size()),
+    rslvr.async_resolve(std::string(url.encoded_host().data(), url.encoded_host().size()),
                         "443", do_the_thing)
                        (asio::append(&run_tests, std::ref(conn), urls::url_view(url)));
     ctx.run();

@@ -33,7 +33,7 @@ void connection_pool::lookup(urls::url_view sv, system::error_code & ec)
     use_ssl_ = false;
     host_ = "localhost";
     endpoints_ = {asio::local::stream_protocol::endpoint(
-                        asio::string_view(
+                        std::string(
                           sv.encoded_target().data(),
                           sv.encoded_target().size()
                         ))};
@@ -43,8 +43,8 @@ void connection_pool::lookup(urls::url_view sv, system::error_code & ec)
     asio::ip::tcp::resolver resolver{get_executor()};
     const auto service = sv.has_port() ? sv.port() : scheme;
     auto eps = resolver.resolve(
-        asio::string_view(sv.encoded_host_name().data(), sv.encoded_host_name().size()),
-        asio::string_view(service.data(), service.size()), ec);
+        std::string(sv.encoded_host_name().data(), sv.encoded_host_name().size()),
+        std::string(service.data(), service.size()), ec);
 
     if (!ec && eps.empty())
       BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::not_found)
@@ -108,15 +108,15 @@ void connection_pool::async_lookup_op::resume(requests::detail::faux_token_t<ste
       this_->use_ssl_ = false;
       this_->host_ = "localhost";
       this_->endpoints_ = {asio::local::stream_protocol::endpoint(
-          asio::string_view(sv.encoded_target().data(), sv.encoded_target().size()))};
+          std::string(sv.encoded_target().data(), sv.encoded_target().size()))};
     }
     else if (scheme == "http" || scheme == "https")
     {
       resolver.emplace(get_executor());
       service = sv.has_port() ? sv.port() : scheme;
       BOOST_ASIO_CORO_YIELD resolver->async_resolve(
-          asio::string_view(sv.encoded_host_name().data(), sv.encoded_host_name().size()),
-          asio::string_view(service.data(), service.size()), std::move(self));
+          std::string(sv.encoded_host_name().data(), sv.encoded_host_name().size()),
+          std::string(service.data(), service.size()), std::move(self));
 
       if (!ec && eps.empty())
       BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::not_found)

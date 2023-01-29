@@ -502,7 +502,7 @@ struct issue_client
   issue_client(
       boost::asio::io_context & ctx,
       const std::string & auth_token,
-      const boost::asio::string_view & host_name = "api.github.com") : conn_(ctx.get_executor(), sslctx_)
+      BOOST_ASIO_STRING_VIEW_PARAM host_name = "api.github.com") : conn_(ctx.get_executor(), sslctx_)
   {
     conn_.set_host({host_name.begin(), host_name.end()});
     boost::asio::ip::tcp::resolver res{ctx};

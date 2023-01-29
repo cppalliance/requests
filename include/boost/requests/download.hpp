@@ -8,11 +8,11 @@
 #ifndef BOOST_REQUESTS_DOWNLOAD_HPP
 #define BOOST_REQUESTS_DOWNLOAD_HPP
 
-#include <boost/asio/buffer.hpp>
 #include <boost/requests/detail/config.hpp>
 #include <boost/requests/detail/faux_coroutine.hpp>
 #include <boost/requests/http.hpp>
 #include <boost/requests/service.hpp>
+#include <boost/asio/buffer.hpp>
 #include <boost/url/url_view.hpp>
 
 #if defined(BOOST_ASIO_HAS_FILE)

@@ -91,9 +91,12 @@ python tools/boostdep/depinst/depinst.py ../tools/quickbook
 ./bootstrap.sh
 ./b2 headers
 
+cp libs/beast/tools/user-config.jam ~/user-config.jam
+echo "using $TOOLSET : : $COMPILER : $CXX_FLAGS ;" >> ~/user-config.jam
+
 echo '==================================> SCRIPT'
 
-echo "using doxygen ; using boostbook ; using saxonhe ;" > tools/build/src/user-config.jam
+echo "using doxygen ; using boostbook ; using saxonhe ;" >> tools/build/src/user-config.jam
 ./b2 -j3 libs/$SELF/doc//boostrelease
 
 elif [ "$DRONE_JOB_BUILDTYPE" == "codecov" ]; then
