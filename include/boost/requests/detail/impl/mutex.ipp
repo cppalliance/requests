@@ -127,9 +127,9 @@ mutex::~mutex()
   system::error_code ec;
   BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::operation_aborted);
 
-  for (auto & h : waiters_)
+  auto ww = std::move(waiters_);
+  for (auto & h : ww)
   {
-
     h.get_cancellation_slot().clear();
     asio::dispatch(exec_, asio::append(std::move(h), ec));
   }
