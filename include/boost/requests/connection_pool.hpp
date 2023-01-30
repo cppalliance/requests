@@ -2,8 +2,9 @@
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-#ifndef BOOST_REQUESTS_POOL_HPP
-#define BOOST_REQUESTS_POOL_HPP
+
+#ifndef BOOST_REQUESTS_CONNECTION_POOL_HPP
+#define BOOST_REQUESTS_CONNECTION_POOL_HPP
 
 #include <boost/requests/connection.hpp>
 
@@ -114,8 +115,8 @@ struct connection_pool
 
     using request_type = request_parameters;
 
-    BOOST_REQUESTS_DECL std::shared_ptr<connection> get_connection(error_code & ec);
-    std::shared_ptr<connection> get_connection()
+    BOOST_REQUESTS_DECL connection get_connection(error_code & ec);
+    connection get_connection()
     {
       boost::system::error_code ec;
       auto res = get_connection(ec);
@@ -135,13 +136,13 @@ struct connection_pool
                system::error_code & ec) -> stream
     {
       auto conn = get_connection(ec);
-      if (!ec && conn == nullptr)
+      if (!ec && !conn )
         BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::not_found);
       if (ec)
         return stream{get_executor(), nullptr};
 
-      BOOST_ASSERT(conn != nullptr);
-      return conn->ropen(method, path, std::forward<RequestBody>(body), std::move(req), ec);
+      BOOST_ASSERT(conn);
+      return conn.ropen(method, path, std::forward<RequestBody>(body), std::move(req), ec);
     }
 
     template<typename RequestBody>
@@ -165,13 +166,13 @@ struct connection_pool
                system::error_code & ec) -> stream
     {
       auto conn = get_connection(ec);
-      if (!ec && conn == nullptr)
+      if (!ec && !conn)
         BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::not_found);
       if (ec)
         return stream{get_executor(), nullptr};
 
-      BOOST_ASSERT(conn != nullptr);
-      return conn->ropen(method, path, headers, src, opt, jar, ec);
+      BOOST_ASSERT(conn);
+      return conn.ropen(method, path, headers, src, opt, jar, ec);
     }
 
     auto ropen(beast::http::verb method,
@@ -220,7 +221,7 @@ struct connection_pool
     std::size_t limit_;
 
     boost::unordered_multimap<endpoint_type,
-                              std::shared_ptr<connection>,
+                              std::shared_ptr<detail::connection_impl>,
                               detail::endpoint_hash> conns_;
 
     struct async_lookup_op;
@@ -308,4 +309,4 @@ struct connection_pool::defaulted : connection_pool
 
 #include <boost/requests/impl/connection_pool.hpp>
 
-#endif //BOOST_REQUESTS_POOL_HPP
+#endif //BOOST_REQUESTS_CONNECTION_POOL_HPP

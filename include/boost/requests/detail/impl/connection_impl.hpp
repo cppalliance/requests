@@ -8,7 +8,7 @@
 #ifndef BOOST_REQUESTS_IMPL_CONNECTION_HPP
 #define BOOST_REQUESTS_IMPL_CONNECTION_HPP
 
-#include <boost/requests/connection.hpp>
+#include <boost/requests/detail/connection_impl.hpp>
 #include <boost/requests/detail/config.hpp>
 #include <boost/requests/detail/defaulted.hpp>
 #include <boost/requests/detail/faux_coroutine.hpp>
@@ -31,18 +31,19 @@
 
 namespace boost {
 namespace requests {
+namespace detail {
 
-struct connection::async_connect_op : asio::coroutine
+struct connection_impl::async_connect_op : asio::coroutine
 {
   using executor_type = asio::any_io_executor;
   executor_type get_executor() {return this_->get_executor(); }
 
-  connection * this_;
+  connection_impl * this_;
   endpoint_type ep;
 
   asio::coroutine inner_coro;
 
-  async_connect_op(connection * this_, endpoint_type ep) : this_(this_), ep(ep) {}
+  async_connect_op(connection_impl * this_, endpoint_type ep) : this_(this_), ep(ep) {}
 
   using lock_type = detail::lock_guard;
 
@@ -58,16 +59,16 @@ struct connection::async_connect_op : asio::coroutine
 
 template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (system::error_code)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (system::error_code))
-connection::async_connect(endpoint_type ep, CompletionToken && completion_token)
+connection_impl::async_connect(endpoint_type ep, CompletionToken && completion_token)
 {
 
   return detail::faux_run<async_connect_op>(
       std::forward<CompletionToken>(completion_token), this, ep);
 }
 
-struct connection::async_close_op : asio::coroutine
+struct connection_impl::async_close_op : asio::coroutine
 {
-  connection * this_;
+  connection_impl * this_;
   detail::tracker t{this_->ongoing_requests_};
 
   using executor_type = asio::any_io_executor;
@@ -77,7 +78,7 @@ struct connection::async_close_op : asio::coroutine
   lock_type read_lock, write_lock;
 
 
-  async_close_op(connection * this_) : this_(this_) {}
+  async_close_op(connection_impl * this_) : this_(this_) {}
 
   using completion_signature_type = void(system::error_code);
   using step_signature_type       = void(system::error_code);
@@ -89,13 +90,11 @@ struct connection::async_close_op : asio::coroutine
 
 template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code))
-connection::async_close(CompletionToken && completion_token)
+connection_impl::async_close(CompletionToken && completion_token)
 {
   return detail::faux_run<async_close_op>(
       std::forward<CompletionToken>(completion_token), this);
 }
-namespace detail
-{
 
 BOOST_REQUESTS_DECL bool check_endpoint(
     urls::url_view path,
@@ -118,10 +117,9 @@ BOOST_REQUESTS_DECL bool check_endpoint(
     bool has_ssl,
     system::error_code & ec);
 
-}
 
 template<typename RequestBody>
-auto connection::ropen(beast::http::verb method,
+auto connection_impl::ropen(beast::http::verb method,
            urls::url_view path,
            RequestBody && body, request_parameters req) -> stream
 {
@@ -133,7 +131,7 @@ auto connection::ropen(beast::http::verb method,
 }
 
 template<typename RequestBody>
-auto connection::ropen(
+auto connection_impl::ropen(
     beast::http::verb method,
     urls::url_view path,
     RequestBody && body, request_parameters req,
@@ -157,7 +155,7 @@ auto connection::ropen(
 }
 
 
-struct connection::async_ropen_op
+struct connection_impl::async_ropen_op
     : boost::asio::coroutine
 {
   using executor_type = asio::any_io_executor;
@@ -165,7 +163,7 @@ struct connection::async_ropen_op
 
   using lock_type = detail::lock_guard;
 
-  connection * this_;
+  std::shared_ptr<connection_impl> this_;
   optional<stream> str;
 
   detail::tracker t{this_->ongoing_requests_};
@@ -184,19 +182,18 @@ struct connection::async_ropen_op
   response_base::history_type history;
   system::error_code ec_;
 
-  async_ropen_op(connection * this_,
+  async_ropen_op(std::shared_ptr<connection_impl> this_,
                  beast::http::verb method,
                  urls::pct_string_view path,
                  http::fields & headers,
                  source & src,
                  request_options opts,
                  cookie_jar * jar)
-      : this_(this_), method(method), path(path), headers(headers), src(src), opts(std::move(opts)), jar(jar)
+      : this_(std::move(this_)), method(method), path(path), headers(headers), src(src), opts(std::move(opts)), jar(jar)
   {
   }
 
-
-  async_ropen_op(connection * this_,
+  async_ropen_op(std::shared_ptr<connection_impl> this_,
                  beast::http::verb method,
                  urls::url_view path,
                  http::fields & headers,
@@ -218,7 +215,7 @@ struct connection::async_ropen_op
 };
 
 template<typename RequestSource>
-struct connection::async_ropen_op_body_base
+struct connection_impl::async_ropen_op_body_base
 {
   RequestSource source_impl;
   http::fields headers;
@@ -231,17 +228,16 @@ struct connection::async_ropen_op_body_base
 };
 
 template<typename RequestSource>
-struct connection::async_ropen_op_body : async_ropen_op_body_base<RequestSource>, async_ropen_op
+struct connection_impl::async_ropen_op_body : async_ropen_op_body_base<RequestSource>, async_ropen_op
 {
   template<typename RequestBody>
-  async_ropen_op_body(
-      connection * this_,
-      beast::http::verb method,
-      urls::url_view path,
-      RequestBody && body,
+  async_ropen_op_body(std::shared_ptr<connection_impl>  this_,
+                      beast::http::verb method,
+                      urls::url_view path,
+                      RequestBody && body,
                       request_parameters req)
       : async_ropen_op_body_base<RequestSource>{std::forward<RequestBody>(body), std::move(req.fields)},
-        async_ropen_op(this_, method, path, async_ropen_op_body_base<RequestSource>::headers,
+        async_ropen_op(std::move(this_), method, path, async_ropen_op_body_base<RequestSource>::headers,
                        this->source_impl, std::move(req.opts), req.jar)
   {}
 };
@@ -250,7 +246,7 @@ struct connection::async_ropen_op_body : async_ropen_op_body_base<RequestSource>
 template<typename RequestBody, typename CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code,
                                                          stream))
-connection::async_ropen(
+connection_impl::async_ropen(
     beast::http::verb method,
     urls::url_view path,
     RequestBody && body, request_parameters req,
@@ -259,7 +255,7 @@ connection::async_ropen(
   using rp = async_ropen_op_body<std::decay_t<decltype(make_source(std::forward<RequestBody>(body)))>>;
   return detail::faux_run<rp>(
       std::forward<CompletionToken>(completion_token),
-      this, method, path, std::forward<RequestBody>(body),
+      shared_from_this(), method, path, std::forward<RequestBody>(body),
       std::move(req));
 }
 
@@ -267,7 +263,7 @@ template<typename CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code,
                                         stream))
-connection::async_ropen(beast::http::verb method,
+connection_impl::async_ropen(beast::http::verb method,
                         urls::pct_string_view path,
                         http::fields & headers,
                         source & src,
@@ -276,7 +272,10 @@ connection::async_ropen(beast::http::verb method,
                         CompletionToken && completion_token)
 {
   return detail::faux_run<async_ropen_op>(std::forward<CompletionToken>(completion_token),
-                                        this, method, path, std::ref(headers), std::ref(src), std::move(opt), jar);
+                                          shared_from_this(), method, path,
+                                          std::ref(headers), std::ref(src), std::move(opt), jar);
+}
+
 }
 
 }
@@ -284,7 +283,7 @@ connection::async_ropen(beast::http::verb method,
 
 
 #if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/impl/connection.ipp>
+#include <boost/requests/detail/impl/connection.ipp>
 #endif
 
 #endif // BOOST_REQUESTS_IMPL_CONNECTION_HPP

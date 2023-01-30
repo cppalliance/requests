@@ -57,10 +57,7 @@ struct faux_token_t<void()>
   };
 
   faux_token_t(const faux_token_t & ) = delete;
-  faux_token_t(      faux_token_t && lhs) : impl_(std::move(lhs.impl_))
-  {
-    BOOST_ASSERT(impl_ != nullptr);
-  }
+  faux_token_t(      faux_token_t && lhs) : impl_(lhs.impl_) { }
 
   explicit faux_token_t(std::shared_ptr<base> impl) : impl_(std::move(impl)) {}
  private:
@@ -104,7 +101,7 @@ struct faux_token_t<void(T1)>
   };
 
   faux_token_t(const faux_token_t & ) = delete;
-  faux_token_t(      faux_token_t && lhs) = default;
+  faux_token_t(      faux_token_t && lhs) : impl_(lhs.impl_) { }
 
   explicit faux_token_t(std::shared_ptr<base> impl) : impl_(std::move(impl)) {}
 private:
@@ -121,10 +118,18 @@ template<typename T1, typename T2>
 struct faux_token_t<void(T1, T2)>
 {
   using cancellation_slot_type = asio::cancellation_slot;
-  cancellation_slot_type get_cancellation_slot() const {BOOST_ASSERT(impl_ != nullptr); return impl_->slot;}
+  cancellation_slot_type get_cancellation_slot() const
+  {
+    BOOST_ASSERT(impl_ != nullptr);
+    return impl_->slot;
+  }
 
   using allocator_type = container::pmr::polymorphic_allocator<void>;
-  allocator_type get_allocator() const {BOOST_ASSERT(impl_ != nullptr); return impl_->get_allocator();}
+  allocator_type get_allocator() const
+  {
+    BOOST_ASSERT(impl_ != nullptr);
+    return impl_->get_allocator();
+  }
 
   void operator()(T1 t1 = {}, T2 t2 = {})
   {
@@ -145,24 +150,17 @@ struct faux_token_t<void(T1, T2)>
     }
   };
 
-  faux_token_t(const faux_token_t & ) = delete;
-  faux_token_t(      faux_token_t && lhs) : impl_(std::move(lhs.impl_))
-  {
-    BOOST_ASSERT(impl_ != nullptr);
-  }
-  
+  faux_token_t(      faux_token_t && lhs) : impl_(lhs.impl_) { }
+
   operator faux_token_t<void(T1)> () &&
   {
-    return faux_token_t<void(T1)>{impl_};
+    return faux_token_t<void(T1)>{std::move(impl_)};
   }
 
   operator faux_token_t<void()> () &&
   {
-    return faux_token_t<void()>{impl_};
+    return faux_token_t<void()>{std::move(impl_)};
   }
-
-  std::size_t use_count() const {return impl_.use_count();}
-
   explicit faux_token_t(std::shared_ptr<base> impl) : impl_(std::move(impl)) {}
 
  private:
@@ -198,7 +196,7 @@ struct faux_runner<Implementation, void(system::error_code, Args...)>
         if (buf.use_count() == 0u)
           return ;
         auto h = std::move(handler);
-        //BOOST_ASSERT(buf.use_count() == 1);
+        BOOST_ASSERT(buf.use_count()  >= 1);
         auto exec = asio::get_associated_executor(h, impl.get_executor());
         buf = nullptr;
         asio::dispatch(exec, asio::append(std::move(h), ec));
@@ -214,8 +212,8 @@ struct faux_runner<Implementation, void(system::error_code, Args...)>
         if (buf.use_count() == 0u)
           return ;
         auto h = std::move(handler);
+        BOOST_ASSERT(buf.use_count() >= 1);
         auto tmp = std::move(res);
-        //BOOST_ASSERT(buf.use_count() == 1);
         auto exec = asio::get_associated_executor(h, impl.get_executor());
         buf = nullptr;
         asio::dispatch(exec, asio::append(std::move(h), ec, std::move(tmp)));
@@ -231,16 +229,17 @@ struct faux_runner<Implementation, void(system::error_code, Args...)>
 
     void initiate_impl(std::true_type, token_type tk, system::error_code ec, Args ... args)
     {
+      BOOST_ASSERT(tk.impl_.get() == this);
       auto buf = tk.impl_;
       impl.resume(std::move(tk), ec, std::move(args)...);
       if (impl.is_complete())
       {
         if (buf.use_count() == 0u)
           return ;
+
         auto h = std::move(handler);
-        // BOOST_ASSERT(buf.use_count() == 1);
         auto exec = asio::get_associated_executor(h, impl.get_executor());
-        buf = nullptr;
+        buf.reset();
         asio::post(exec, asio::append(std::move(h), ec));
       }
     }
@@ -258,8 +257,7 @@ struct faux_runner<Implementation, void(system::error_code, Args...)>
         auto h = std::move(handler);
         auto tmp = std::move(res);
         auto exec = asio::get_associated_executor(h, impl.get_executor());
-        buf = nullptr;
-        asio::post(exec, asio::append(std::move(h), ec, std::move(tmp)));
+        asio::post(exec,  asio::append(std::move(h), ec, std::move(tmp)));
       }
     }
 
@@ -311,7 +309,7 @@ struct faux_runner<Implementation, void(system::error_code, Args...)>
         : impl(std::forward<Args_>(args)...)
         , handler(std::forward<Handler_>(h))
     {
-      this->token_type::base::slot      = asio::get_associated_cancellation_slot(handler);
+      this->token_type::base::slot = asio::get_associated_cancellation_slot(handler);
     }
   };
 
@@ -320,9 +318,9 @@ struct faux_runner<Implementation, void(system::error_code, Args...)>
   {
     auto alloc = asio::get_associated_allocator(h, asio::recycling_allocator<void>());
     using impl_t = impl_<std::decay_t<Handler>>;
-    token_type tt{std::allocate_shared<impl_t>(alloc, std::forward<Handler>(h), std::forward<Args_>(args)...)};
-    auto * impl = static_cast<impl_t*>(tt.impl_.get());
-    impl->initiate(std::move(tt));
+    auto ptr = std::allocate_shared<impl_t>(alloc, std::forward<Handler>(h), std::forward<Args_>(args)...);
+    auto * impl = ptr.get();
+    impl->initiate(token_type{std::move(ptr)});
   }
 };
 

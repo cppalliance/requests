@@ -15,12 +15,12 @@
 #define BOOST_REQUESTS_SOURCE
 #endif
 
+#include <boost/requests/detail/impl/connection_impl.ipp>
 #include <boost/requests/detail/impl/mutex.ipp>
 #include <boost/requests/fields/impl/keep_alive.ipp>
 #include <boost/requests/fields/impl/link.ipp>
 #include <boost/requests/fields/impl/location.ipp>
 #include <boost/requests/fields/impl/set_cookie.ipp>
-#include <boost/requests/impl/connection.ipp>
 #include <boost/requests/impl/connection_pool.ipp>
 #include <boost/requests/impl/cookie_jar.ipp>
 #include <boost/requests/impl/error.ipp>

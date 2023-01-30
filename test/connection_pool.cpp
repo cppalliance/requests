@@ -145,7 +145,7 @@ void http_request_connection_pool(bool https)
     CHECK(std::stoull(res.headers.at(requests::http::field::content_length)) > 0u);
     CHECK(res.headers.at(requests::http::field::content_type) == "image/png");
 
-    CHECK(filesystem::exists(target));
+    CHECK_MESSAGE(filesystem::exists(target), target);
     fs_error_code ec;
     filesystem::remove(target, ec);
   }
@@ -166,7 +166,7 @@ void http_request_connection_pool(bool https)
     CHECK(std::stoull(res.headers.at(requests::http::field::content_length)) > 0u);
     CHECK(res.headers.at(requests::http::field::content_type) == "image/png");
 
-    CHECK(filesystem::exists(target));
+    CHECK_MESSAGE(filesystem::exists(target), target);
     fs_error_code ec;
     filesystem::remove(target, ec);
   }
@@ -362,7 +362,7 @@ void run_tests(error_code ec,
                            CHECK(std::stoull(res.headers.at(requests::http::field::content_length)) > 0u);
                            CHECK(res.headers.at(requests::http::field::content_type) == "image/png");
 
-                           CHECK(filesystem::exists(target));
+                           CHECK_MESSAGE(filesystem::exists(target), target);
                            fs_error_code ec_;
                            filesystem::remove(target, ec_);
                          }
@@ -387,7 +387,7 @@ void run_tests(error_code ec,
                            CHECK(std::stoull(res.headers.at(requests::http::field::content_length)) > 0u);
                            CHECK(res.headers.at(requests::http::field::content_type) == "image/png");
 
-                           CHECK(filesystem::exists(target));
+                           CHECK_MESSAGE(filesystem::exists(target), target);
                            fs_error_code ec_;
                            filesystem::remove(target, ec_);
                          }

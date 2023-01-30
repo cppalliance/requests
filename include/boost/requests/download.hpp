@@ -261,9 +261,9 @@ inline auto download(Connection & conn,
   if (ec)
     return download_response{std::move(ro).headers(), std::move(ro).history(), {}};
 
-  if (filesystem::exists(download_path, ec) && filesystem::is_directory(download_path) && !target.empty())
+  if (filesystem::exists(download_path, ec) && filesystem::is_directory(download_path, ec) && !target.empty())
     download_path /= target.segments().back(); // so we can download to a folder
-
+  ec.clear();
   if (!ec)
     write_to_file(ro, download_path, ec);
   return download_response{std::move(ro).headers(), std::move(ro).history(), std::move(download_path)};
@@ -344,7 +344,7 @@ struct async_download_op : asio::coroutine
         rb.download_path = download_path / target.segments().back(); // so we can download to a folder
       else
         rb.download_path = std::move(download_path);
-
+      ec.clear();
       if (!ec)
       {
         BOOST_ASIO_CORO_YIELD async_write_to_file(*str_, rb.download_path,

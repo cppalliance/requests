@@ -48,9 +48,10 @@ struct StringMaker<boost::system::error_code>
   static String convert(boost::system::error_code ec)
   {
     if (ec.has_location())
-        return toString(ec.location().to_string() + ": " + ec.message());
+        return toString(
+          ec.location().to_string() + " [" + std::to_string(ec.value()) + "/" + ec.category().name() + "]: " + ec.message());
     else
-        return toString(ec.message());
+        return toString("[" + std::to_string(ec.value()) + "/" + ec.category().name() + "]: " +  ec.message());
   }
 };
 
@@ -151,8 +152,6 @@ struct StringMaker<std::exception_ptr>
 inline void check_ec(boost::system::error_code ec,
                      boost::source_location loc = BOOST_CURRENT_LOCATION)
 {
-  if (ec.has_location())
-    loc = ec.location();
   doctest::detail::ResultBuilder rb(doctest::assertType::DT_REQUIRE, loc.file_name(), loc.line(), loc.function_name());
   rb.setResult(doctest::detail::Result{!ec, doctest::StringMaker< boost::system::error_code>::convert(ec)});
   DOCTEST_ASSERT_LOG_AND_REACT(rb);

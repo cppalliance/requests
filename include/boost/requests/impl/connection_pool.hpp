@@ -63,20 +63,20 @@ struct connection_pool::async_get_connection_op : asio::coroutine
 
   using lock_type = detail::lock_guard;
   using conn_t = boost::unordered_multimap<endpoint_type,
-                                           std::shared_ptr<connection>,
+                                           std::shared_ptr<detail::connection_impl>,
                                            detail::endpoint_hash>;
   typename conn_t::iterator itr;
 
 
-  std::shared_ptr<connection> nconn = nullptr;
+  std::shared_ptr<detail::connection_impl> nconn = nullptr;
   lock_type lock;
   endpoint_type ep;
 
-  using completion_signature_type = void(system::error_code, std::shared_ptr<connection>);
+  using completion_signature_type = void(system::error_code, connection);
   using step_signature_type       = void(system::error_code);
 
   BOOST_REQUESTS_DECL auto resume(requests::detail::faux_token_t<step_signature_type> self,
-                                  system::error_code & ec) -> std::shared_ptr<connection>;
+                                  system::error_code & ec) -> connection;
 };
 
 template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (system::error_code, std::shared_ptr<connection>)) CompletionToken>
@@ -103,7 +103,7 @@ struct connection_pool::async_ropen_op : asio::coroutine
   request_options opt;
   cookie_jar * jar;
 
-  std::shared_ptr<connection> conn;
+  connection conn;
 
   async_ropen_op(connection_pool * this_,
                  beast::http::verb method,
@@ -130,12 +130,12 @@ struct connection_pool::async_ropen_op : asio::coroutine
   }
 
   using completion_signature_type = void(system::error_code, stream);
-  using step_signature_type       = void(system::error_code, variant2::variant<variant2::monostate, std::shared_ptr<connection>, stream>);
+  using step_signature_type       = void(system::error_code, variant2::variant<variant2::monostate, connection, stream>);
 
   BOOST_REQUESTS_DECL
   auto resume(requests::detail::faux_token_t<step_signature_type> self,
               system::error_code & ec,
-              variant2::variant<variant2::monostate, std::shared_ptr<connection>, stream> res = variant2::monostate()) -> stream;
+              variant2::variant<variant2::monostate, connection, stream> res = variant2::monostate()) -> stream;
 };
 
 

@@ -7,7 +7,6 @@
 #define BOOST_REQUESTS_HPP
 
 #include <boost/requests/connection.hpp>
-#include <boost/requests/connection_pool.hpp>
 #include <boost/requests/cookie.hpp>
 #include <boost/requests/cookie_jar.hpp>
 #include <boost/requests/download.hpp>

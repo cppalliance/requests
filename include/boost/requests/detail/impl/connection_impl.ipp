@@ -8,10 +8,10 @@
 #ifndef BOOST_REQUESTS_IMPL_CONNECTION_IPP
 #define BOOST_REQUESTS_IMPL_CONNECTION_IPP
 
-#include <boost/requests/connection.hpp>
-#include <boost/beast/version.hpp>
-#include <boost/beast/http/read.hpp>
+#include <boost/requests/detail/connection_impl.hpp>
 #include <boost/requests/detail/define.hpp>
+#include <boost/beast/http/read.hpp>
+#include <boost/beast/version.hpp>
 
 namespace boost
 {
@@ -84,10 +84,8 @@ bool check_endpoint(
   }
 }
 
-}
 
-
-auto connection::ropen(beast::http::verb method,
+auto connection_impl::ropen(beast::http::verb method,
                        urls::pct_string_view path,
                        http::fields & headers,
                        source & src,
@@ -102,7 +100,7 @@ auto connection::ropen(beast::http::verb method,
 }
 
 
-auto connection::ropen(beast::http::verb method,
+auto connection_impl::ropen(beast::http::verb method,
                        urls::pct_string_view path,
                        http::fields & headers,
                        source & src,
@@ -182,7 +180,7 @@ auto connection::ropen(beast::http::verb method,
     if (ec)
       return stream{get_executor(), nullptr};
 
-    stream str{get_executor(), this};
+    stream str{get_executor(), shared_from_this()};
     str.parser_ = detail::make_pmr<http::response_parser<http::buffer_body>>(headers.get_allocator().resource(),
                                                                              http::response_header{http::fields(headers.get_allocator())});
 
@@ -239,8 +237,7 @@ auto connection::ropen(beast::http::verb method,
     auto loc_itr = res.find(http::field::location);
     if (loc_itr == res.end())
     {
-      static constexpr auto loc((BOOST_CURRENT_LOCATION));
-      ec.assign(error::invalid_redirect, &loc);
+      BOOST_REQUESTS_ASSIGN_EC(ec, error::invalid_redirect);
       break ;
     }
 
@@ -255,15 +252,13 @@ auto connection::ropen(beast::http::verb method,
         host_ == url->encoded_host() &&
         !same_endpoint_on_host(*url, endpoint()))
     {
-      static constexpr auto sloc((BOOST_CURRENT_LOCATION));
-      ec.assign(error::forbidden_redirect, &sloc);
+      BOOST_REQUESTS_ASSIGN_EC(ec, error::forbidden_redirect);
       break ;
     }
 
     if (--opt.max_redirects == 0)
     {
-      static constexpr auto sloc((BOOST_CURRENT_LOCATION));
-      ec.assign(error::too_many_redirects, &sloc);
+      BOOST_REQUESTS_ASSIGN_EC(ec, error::too_many_redirects);
       break ;
     }
 
@@ -284,20 +279,20 @@ auto connection::ropen(beast::http::verb method,
     read_lock = {};
   }
 
-  stream str{get_executor(), this};
+  stream str{get_executor(), shared_from_this()};
   str.history_ = std::move(history);
   return str;
 }
 
 
-void connection::set_host(core::string_view sv, system::error_code & ec)
+void connection_impl::set_host(core::string_view sv, system::error_code & ec)
 {
   next_layer_.set_verify_callback(asio::ssl::host_name_verification(host_ = sv), ec);
 }
 
 
 BOOST_REQUESTS_DECL
-auto connection::async_ropen_op::resume(
+auto connection_impl::async_ropen_op::resume(
             requests::detail::faux_token_t<step_signature_type> self,
             system::error_code & ec, std::size_t res_) -> stream
 {
@@ -474,7 +469,7 @@ auto connection::async_ropen_op::resume(
 }
 
 
-void connection::connect(endpoint_type ep, system::error_code & ec)
+void connection_impl::connect(endpoint_type ep, system::error_code & ec)
 {
   auto wlock = detail::lock(write_mtx_, ec);
   if (ec)
@@ -491,7 +486,7 @@ void connection::connect(endpoint_type ep, system::error_code & ec)
 }
 
 
-void connection::close(system::error_code & ec)
+void connection_impl::close(system::error_code & ec)
 {
   auto wlock = detail::lock(write_mtx_, ec);
   if (ec)
@@ -509,7 +504,7 @@ void connection::close(system::error_code & ec)
 }
 
 
-std::size_t connection::do_read_some_(beast::http::basic_parser<false> & parser)
+std::size_t connection_impl::do_read_some_(beast::http::basic_parser<false> & parser)
 {
   if (use_ssl_)
     return beast::http::read_some(next_layer_, buffer_, parser);
@@ -517,7 +512,7 @@ std::size_t connection::do_read_some_(beast::http::basic_parser<false> & parser)
     return beast::http::read_some(next_layer_.next_layer(), buffer_, parser);
 }
 
-std::size_t connection::do_read_some_(beast::http::basic_parser<false> & parser, system::error_code & ec)
+std::size_t connection_impl::do_read_some_(beast::http::basic_parser<false> & parser, system::error_code & ec)
 {
   if (use_ssl_)
     return beast::http::read_some(next_layer_, buffer_, parser, ec);
@@ -525,7 +520,7 @@ std::size_t connection::do_read_some_(beast::http::basic_parser<false> & parser,
     return beast::http::read_some(next_layer_.next_layer(), buffer_, parser, ec);
 }
 
-void connection::do_async_read_some_(beast::http::basic_parser<false> & parser, detail::faux_token_t<void(system::error_code, std::size_t)> tk)
+void connection_impl::do_async_read_some_(beast::http::basic_parser<false> & parser, detail::faux_token_t<void(system::error_code, std::size_t)> tk)
 {
   if (use_ssl_)
     beast::http::async_read_some(next_layer_, buffer_, parser, std::move(tk));
@@ -533,12 +528,12 @@ void connection::do_async_read_some_(beast::http::basic_parser<false> & parser, 
     beast::http::async_read_some(next_layer_.next_layer(), buffer_, parser, std::move(tk));
 }
 
-void connection::do_async_close_(detail::faux_token_t<void(system::error_code)> tk)
+void connection_impl::do_async_close_(detail::faux_token_t<void(system::error_code)> tk)
 {
   async_close(std::move(tk));
 }
 
-void connection::async_connect_op::resume(requests::detail::faux_token_t<step_signature_type> self,
+void connection_impl::async_connect_op::resume(requests::detail::faux_token_t<step_signature_type> self,
                                           system::error_code & ec)
 {
   BOOST_ASIO_CORO_REENTER(this)
@@ -553,7 +548,7 @@ void connection::async_connect_op::resume(requests::detail::faux_token_t<step_si
   }
 }
 
-void connection::async_close_op::resume(requests::detail::faux_token_t<step_signature_type> self,
+void connection_impl::async_close_op::resume(requests::detail::faux_token_t<step_signature_type> self,
                                           system::error_code & ec)
 {
   BOOST_ASIO_CORO_REENTER(this)
@@ -570,7 +565,7 @@ void connection::async_close_op::resume(requests::detail::faux_token_t<step_sign
 }
 
 
-void connection::do_close_(system::error_code & ec)
+void connection_impl::do_close_(system::error_code & ec)
 {
   auto wlock = detail::lock(write_mtx_, ec);
   if (ec)
@@ -583,6 +578,7 @@ void connection::do_close_(system::error_code & ec)
     next_layer_.next_layer().close(ec);
 }
 
+}
 }
 }
 

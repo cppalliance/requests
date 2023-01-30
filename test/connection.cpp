@@ -3,14 +3,14 @@
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-#include <boost/requests/download.hpp>
 #include <boost/requests/connection.hpp>
-#include <boost/requests/json.hpp>
-#include <boost/requests/method.hpp>
-#include <boost/requests/form.hpp>
-#include <boost/json.hpp>
 #include <boost/asio/detached.hpp>
 #include <boost/asio/redirect_error.hpp>
+#include <boost/json.hpp>
+#include <boost/requests/download.hpp>
+#include <boost/requests/form.hpp>
+#include <boost/requests/json.hpp>
+#include <boost/requests/method.hpp>
 
 #include "doctest.h"
 #include "string_maker.hpp"
@@ -169,13 +169,13 @@ void http_request_connection(bool https)
       filesystem::remove(target);
 
     CHECK(!filesystem::exists(target));
-    CHECK( filesystem::exists(tmp));
+    CHECK_MESSAGE( filesystem::exists(tmp), tmp);
     auto res = download(hc, urls::url_view("/image"), {{}, {false}}, target);
 
     CHECK(std::stoull(res.headers.at(requests::http::field::content_length)) > 0u);
     CHECK(res.headers.at(requests::http::field::content_type) == "image/png");
 
-    CHECK(filesystem::exists(target));
+    CHECK_MESSAGE(filesystem::exists(target), target);
     fs_error_code ec_;
     filesystem::remove(target, ec_);
   }
@@ -196,7 +196,7 @@ void http_request_connection(bool https)
     CHECK(std::stoull(res.headers.at(requests::http::field::content_length)) > 0u);
     CHECK(res.headers.at(requests::http::field::content_type) == "image/png");
 
-    CHECK(filesystem::exists(target));
+    CHECK_MESSAGE(filesystem::exists(target), target);
     fs_error_code ec;
     filesystem::remove(target, ec);
   }
@@ -392,7 +392,7 @@ void run_tests(error_code ec,
                              CHECK(std::stoull(res.headers.at(requests::http::field::content_length)) > 0u);
                              CHECK(res.headers.at(requests::http::field::content_type) == "image/png");
 
-                             CHECK(filesystem::exists(target));
+                             CHECK_MESSAGE(filesystem::exists(target), target);
                              fs_error_code ec_;
                              filesystem::remove(target, ec_);
                            }
@@ -417,7 +417,7 @@ void run_tests(error_code ec,
                            CHECK(std::stoull(res.headers.at(requests::http::field::content_length)) > 0u);
                            CHECK(res.headers.at(requests::http::field::content_type) == "image/png");
 
-                           CHECK(filesystem::exists(target));
+                           CHECK_MESSAGE(filesystem::exists(target), target);
                            fs_error_code ec_;
                            filesystem::remove(target, ec_);
                          }

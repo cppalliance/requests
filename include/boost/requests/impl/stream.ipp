@@ -18,13 +18,13 @@ void stream::dump(system::error_code & ec)
     return;
 
   char data[65535];
-  while (parser_->get().body().more)
+  while (!ec && parser_->get().body().more)
   {
     parser_->get().body().data = data;
     parser_->get().body().size = sizeof(data);
     impl_->do_read_some_(*parser_, ec);
 
-    if (!parser_->is_done())
+    if (!ec && !parser_->is_done())
     {
       parser_->get().body().more = true;
       if (ec == beast::http::error::need_buffer)
@@ -34,7 +34,7 @@ void stream::dump(system::error_code & ec)
       parser_->get().body().more = false;
   }
 
-  if (!parser_->get().keep_alive())
+  if (ec || !parser_->get().keep_alive())
   {
     boost::system::error_code ec_;
     impl_->do_close_(ec_);
@@ -57,28 +57,20 @@ std::size_t stream::async_read_some_op::resume(requests::detail::faux_token_t<st
   BOOST_ASIO_CORO_REENTER(this)
   {
     if (!this_->parser_)
-    BOOST_REQUESTS_ASSIGN_EC(ec_, asio::error::not_connected)
+      BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::not_connected)
     else if (!this_->parser_->get().body().more)
-    BOOST_REQUESTS_ASSIGN_EC(ec_, asio::error::eof)
+      BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::eof)
+    else if (buffer.size() == 0u)
+      BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::no_buffer_space)
 
-    if (ec_)
-    {
-      BOOST_ASIO_CORO_YIELD asio::post(this_->get_executor(), std::move(self));
-      ec = ec_;
-      return 0u;
-    }
-
-    if (buffer.size() == 0u)
-    {
-      BOOST_ASIO_CORO_YIELD asio::post(this_->get_executor(), asio::append(std::move(self), ec_));
-      return 0u;
-    }
+    if (ec)
+      return std::size_t(-1);
 
     this_->parser_->get().body().data = buffer.data();
     this_->parser_->get().body().size = buffer.size();
 
     BOOST_ASIO_CORO_YIELD this_->impl_->do_async_read_some_(*this_->parser_, std::move(self));
-    if (!this_->parser_->is_done())
+    if (!ec && !this_->parser_->is_done())
     {
       this_->parser_->get().body().more = true;
       if (ec == beast::http::error::need_buffer)
@@ -87,7 +79,7 @@ std::size_t stream::async_read_some_op::resume(requests::detail::faux_token_t<st
     else
     {
       this_->parser_->get().body().more = false;
-      if (!this_->parser_->get().keep_alive())
+      if (ec || !this_->parser_->get().keep_alive())
       {
         ec_ = ec ;
         BOOST_ASIO_CORO_YIELD this_->impl_->do_async_close_(std::move(self));
@@ -112,7 +104,7 @@ void stream::async_dump_op::resume(requests::detail::faux_token_t<step_signature
       return;
     }
 
-    while (!this_->parser_->is_done())
+    while (!ec && !this_->parser_->is_done())
     {
       this_->parser_->get().body().data = buffer;
       this_->parser_->get().body().size = BOOST_REQUESTS_CHUNK_SIZE;
@@ -120,7 +112,7 @@ void stream::async_dump_op::resume(requests::detail::faux_token_t<step_signature
       BOOST_ASIO_CORO_YIELD this_->impl_->do_async_read_some_(*this_->parser_, std::move(self));
     }
 
-    if (!this_->parser_->get().keep_alive())
+    if (ec || !this_->parser_->get().keep_alive())
     {
       ec_ = ec ;
       BOOST_ASIO_CORO_YIELD this_->impl_->do_async_close_(std::move(self));

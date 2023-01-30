@@ -5,7 +5,7 @@
 #ifndef BOOST_REQUESTS_COOKIES_IMPL_PUBLIC_SUFFIX_IPP
 #define BOOST_REQUESTS_COOKIES_IMPL_PUBLIC_SUFFIX_IPP
 
-#include "boost/requests/public_suffix.hpp"
+#include <boost/requests/public_suffix.hpp>
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/core/detail/string_view.hpp>
 #include <boost/url/grammar/alnum_chars.hpp>

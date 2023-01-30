@@ -3,14 +3,14 @@
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-#include <boost/requests/download.hpp>
 #include <boost/requests/connection.hpp>
-#include <boost/requests/json.hpp>
-#include <boost/requests/method.hpp>
-#include <boost/requests/form.hpp>
-#include <boost/json.hpp>
 #include <boost/asio/detached.hpp>
 #include <boost/asio/redirect_error.hpp>
+#include <boost/json.hpp>
+#include <boost/requests/download.hpp>
+#include <boost/requests/form.hpp>
+#include <boost/requests/json.hpp>
+#include <boost/requests/method.hpp>
 
 #include "doctest.h"
 #include "string_maker.hpp"
