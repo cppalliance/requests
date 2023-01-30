@@ -135,6 +135,7 @@ void http_request_connection_pool(bool https)
   // SUBCASE("download")
   {
     const auto target = filesystem::temp_directory_path() / "requests-test.png";
+     MESSAGE(target);
     if (filesystem::exists(target))
       filesystem::remove(target);
 

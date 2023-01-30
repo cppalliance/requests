@@ -188,7 +188,7 @@ struct async_write_to_file_op : asio::coroutine
       if (ec)
         return 0u;
 
-      while (!str.done() && !ec)
+      while (!ec && !str.done())
       {
         BOOST_ASIO_CORO_YIELD str.async_read_some(asio::buffer(buffer), std::move(self));
 

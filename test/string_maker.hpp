@@ -164,6 +164,7 @@ struct tracker_t
   Handler handler;
   boost::source_location loc;
   bool called = false;
+  bool moved_from = false;
   tracker_t(
       Handler && handler,
       const boost::source_location & loc = BOOST_CURRENT_LOCATION)
@@ -178,14 +179,17 @@ struct tracker_t
 
   tracker_t(tracker_t && lhs) : handler(std::move(lhs.handler)), loc(lhs.loc), called(lhs.called)
   {
-    lhs.called = true;
+    lhs.moved_from = true;
   }
 
   ~tracker_t()
   {
-    doctest::detail::ResultBuilder rb(doctest::assertType::DT_CHECK, loc.file_name(), loc.line(), loc.function_name());
-    rb.setResult(doctest::detail::Result{called, "called"});
-    DOCTEST_ASSERT_LOG_AND_REACT(rb);
+    if (!moved_from)
+    {
+      doctest::detail::ResultBuilder rb(doctest::assertType::DT_CHECK, loc.file_name(), loc.line(), loc.function_name());
+      rb.setResult(doctest::detail::Result{called, "called"});
+      DOCTEST_ASSERT_LOG_AND_REACT(rb);
+    }
   }
 };
 

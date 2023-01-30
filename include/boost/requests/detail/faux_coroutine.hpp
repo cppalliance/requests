@@ -104,10 +104,7 @@ struct faux_token_t<void(T1)>
   };
 
   faux_token_t(const faux_token_t & ) = delete;
-  faux_token_t(      faux_token_t && lhs) : impl_(std::move(lhs.impl_))
-  {
-    BOOST_ASSERT(impl_ != nullptr);
-  }
+  faux_token_t(      faux_token_t && lhs) = default;
 
   explicit faux_token_t(std::shared_ptr<base> impl) : impl_(std::move(impl)) {}
 private:

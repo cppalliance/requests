@@ -119,7 +119,7 @@ void connection_pool::async_lookup_op::resume(requests::detail::faux_token_t<ste
           std::string(service.data(), service.size()), std::move(self));
 
       if (!ec && eps.empty())
-      BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::not_found)
+        BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::not_found)
       if (ec)
         return;
 

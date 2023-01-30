@@ -698,7 +698,7 @@ struct async_read_optional_json_op : asio::coroutine
     BOOST_ASIO_CORO_REENTER(this)
     {
       BOOST_ASIO_CORO_YIELD str.async_read_some(asio::buffer(buffer), std::move(self));
-      if (n == 0  && str.done())
+      if (ec || (n == 0  && str.done()))
         return boost::none;
       sp.write_some(buffer, n, ec);
 
@@ -808,6 +808,8 @@ struct async_request_json_op : asio::coroutine
         rb.headers = std::move(*str_).headers();
         rb.history = std::move(*str_).history();
         BOOST_ASIO_CORO_YIELD async_read_json(*str_, ptr, std::move(self));
+        if (ec)
+          return rb;
       }
       else
       {
