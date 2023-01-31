@@ -26,7 +26,6 @@ struct form
 
   form(form && ) = default;
   form(const form & ) = default;
-  form(form & rhs) : storage(rhs.storage) {}
 
   template<typename Container>
   form(Container && ct)
