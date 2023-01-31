@@ -502,9 +502,9 @@ struct issue_client
   issue_client(
       boost::asio::io_context & ctx,
       const std::string & auth_token,
-      BOOST_ASIO_STRING_VIEW_PARAM host_name = "api.github.com") : conn_(ctx.get_executor(), sslctx_)
+      const std::string & host_name = "api.github.com") : conn_(ctx.get_executor(), sslctx_)
   {
-    conn_.set_host({host_name.begin(), host_name.end()});
+    conn_.set_host(host_name);
     boost::asio::ip::tcp::resolver res{ctx};
     conn_.connect(boost::asio::ip::tcp::endpoint(*(res.resolve(host_name, "https").begin())));
     settings_.fields = boost::requests::headers({

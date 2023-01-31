@@ -363,6 +363,7 @@ void async_http_pool_request(asio::any_io_executor exec,
     if (filesystem::exists(target))
       filesystem::remove(target);
 
+    CHECK_MESSAGE(filesystem::exists(pt), pt);
     CHECK(!filesystem::exists(target));
     requests::async_download(u("/image"), {}, target,
                    tracker(exec,
