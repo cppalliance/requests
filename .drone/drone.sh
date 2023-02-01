@@ -91,7 +91,7 @@ python tools/boostdep/depinst/depinst.py ../tools/quickbook
 ./bootstrap.sh
 ./b2 headers
 
-cp libs/beast/tools/user-config.jam ~/user-config.jam
+cp libs/requests/tools/user-config.jam ~/user-config.jam
 echo "using $TOOLSET : : $COMPILER : $CXX_FLAGS ;" >> ~/user-config.jam
 
 echo '==================================> SCRIPT'

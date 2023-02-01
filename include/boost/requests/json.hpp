@@ -8,10 +8,7 @@
 #ifndef BOOST_REQUESTS_JSON_HPP
 #define BOOST_REQUESTS_JSON_HPP
 
-#include <boost/container/pmr/polymorphic_allocator.hpp>
-#include <boost/json.hpp>
-#include <boost/json/parser.hpp>
-#include <boost/json/value.hpp>
+
 #include <boost/requests/detail/faux_coroutine.hpp>
 #include <boost/requests/error.hpp>
 #include <boost/requests/fields/link.hpp>
@@ -19,6 +16,10 @@
 #include <boost/requests/method.hpp>
 #include <boost/requests/request_parameters.hpp>
 #include <boost/requests/sources/json.hpp>
+#include <boost/container/pmr/polymorphic_allocator.hpp>
+#include <boost/json.hpp>
+#include <boost/json/parser.hpp>
+#include <boost/json/value.hpp>
 #include <boost/system/result.hpp>
 
 #include <boost/range.hpp>

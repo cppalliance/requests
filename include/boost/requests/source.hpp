@@ -27,14 +27,6 @@ struct source
   virtual core::string_view default_content_type() {return "";}
 };
 
-struct make_source_tag {};
-
-template<typename Source>
-auto make_source(Source && source) -> decltype(tag_invoke(make_source_tag{}, std::declval<Source>()))
-{
-  return tag_invoke(make_source_tag{}, std::forward<Source>(source));
-}
-
 template<typename Source>
 auto tag_invoke(const make_source_tag&, Source && s)
     -> std::enable_if_t<
@@ -42,6 +34,14 @@ auto tag_invoke(const make_source_tag&, Source && s)
         Source>
 {
   return std::forward<Source>(s);
+}
+
+struct make_source_tag {};
+
+template<typename Source>
+auto make_source(Source && source) -> decltype(tag_invoke(make_source_tag{}, std::declval<Source>()))
+{
+  return tag_invoke(make_source_tag{}, std::forward<Source>(source));
 }
 
 template<typename Stream>

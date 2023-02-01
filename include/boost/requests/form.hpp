@@ -28,7 +28,7 @@ struct form
   form(const form & ) = default;
 
   template<typename Container>
-  form(Container && ct)
+  form(Container && ct, decltype(std::begin(ct)) * = nullptr)
   {
     storage.params().assign(std::begin(ct), std::end(ct));
   }
