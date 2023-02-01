@@ -19,5 +19,6 @@ requirements <include>../../..
 alias asio     : ../../beast//lib-asio ;
 alias asio-ssl : ../../beast//lib-asio-ssl ;
 alias beast    : ../../beast//lib-beast ;
+alias ssl      : ../../beast//ssl ;
 
-run [ glob-tree *.cpp ] /boost//json /boost//url asio asio-ssl beast ;
+run [ glob-tree *.cpp ] /boost//json /boost//url asio asio-ssl beast ssl ;
