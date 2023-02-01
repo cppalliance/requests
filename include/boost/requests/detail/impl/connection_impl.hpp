@@ -17,6 +17,7 @@
 #include <boost/requests/fields/location.hpp>
 #include <boost/requests/request_parameters.hpp>
 #include <boost/requests/stream.hpp>
+#include <boost/requests/source.hpp>
 
 #include <boost/asio/deferred.hpp>
 #include <boost/asio/redirect_error.hpp>
