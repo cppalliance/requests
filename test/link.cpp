@@ -12,7 +12,7 @@
 #include "string_maker.hpp"
 
 
-TEST_SUITE_BEGIN("rfc");
+TEST_SUITE_BEGIN("rfc.link");
 
 TEST_CASE("link")
 {
