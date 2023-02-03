@@ -26,6 +26,8 @@ alias requests_sources
 explicit requests_deps requests_sources ;
 
 import os ;
+import path ;
+
 lib ssl ;
 lib crypto ;
 lib crypt32 ;
