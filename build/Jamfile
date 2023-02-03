@@ -127,7 +127,7 @@ if [ os.name ] = NT
 
 
 lib boost_requests
-   : requests_sources ssl /boost//url /boost//json
+   : requests_sources crypto ssl /boost//url /boost//json
    : usage-requirements
       <library>/boost//container/<warnings-as-errors>off
 
