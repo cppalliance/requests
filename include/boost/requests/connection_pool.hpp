@@ -125,8 +125,8 @@ struct connection_pool
       return res;
     }
 
-    template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (system::error_code, std::shared_ptr<connection>)) CompletionToken>
-    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (system::error_code, std::shared_ptr<connection_type>))
+    template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, connection)) CompletionToken>
+    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, connection))
       async_get_connection(CompletionToken && completion_token);
 
     template<typename RequestBody>

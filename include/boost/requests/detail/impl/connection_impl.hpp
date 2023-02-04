@@ -22,7 +22,6 @@
 #include <boost/asio/deferred.hpp>
 #include <boost/asio/redirect_error.hpp>
 #include <boost/asio/ssl/host_name_verification.hpp>
-#include <boost/beast/core/buffer_ref.hpp>
 #include <boost/container/pmr/monotonic_buffer_resource.hpp>
 #include <boost/core/exchange.hpp>
 #include <boost/optional.hpp>
@@ -58,8 +57,8 @@ struct connection_impl::async_connect_op : asio::coroutine
               system::error_code & ec);
 };
 
-template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (system::error_code)) CompletionToken>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (system::error_code))
+template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code)) CompletionToken>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code))
 connection_impl::async_connect(endpoint_type ep, CompletionToken && completion_token)
 {
 

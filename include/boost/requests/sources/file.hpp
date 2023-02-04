@@ -5,6 +5,7 @@
 #ifndef BOOST_REQUESTS_SOURCES_FILE_HPP
 #define BOOST_REQUESTS_SOURCES_FILE_HPP
 
+#include <boost/requests/detail/config.hpp>
 #include <boost/requests/source.hpp>
 #include <boost/requests/mime_types.hpp>
 #include <boost/beast/core/file.hpp>
@@ -26,7 +27,7 @@ namespace requests
 
 struct file_source : source
 {
-  filesystem::path path;
+  requests::filesystem::path path;
   beast::file file;
   system::error_code ec;
 

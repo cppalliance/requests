@@ -79,8 +79,8 @@ struct connection_pool::async_get_connection_op : asio::coroutine
                                   system::error_code & ec) -> connection;
 };
 
-template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (system::error_code, std::shared_ptr<connection>)) CompletionToken>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (system::error_code, std::shared_ptr<basic_connection<Stream>>))
+template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, connection)) CompletionToken>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, connection))
 connection_pool::async_get_connection(CompletionToken && completion_token)
 {
   // async_get_connection_op
@@ -129,12 +129,12 @@ struct connection_pool::async_ropen_op : asio::coroutine
   {
   }
 
-  using completion_signature_type = void(system::error_code, stream);
-  using step_signature_type       = void(system::error_code, variant2::variant<variant2::monostate, connection, stream>);
+  using completion_signature_type = void(boost::system::error_code, stream);
+  using step_signature_type       = void(boost::system::error_code, variant2::variant<variant2::monostate, connection, stream>);
 
   BOOST_REQUESTS_DECL
   auto resume(requests::detail::faux_token_t<step_signature_type> self,
-              system::error_code & ec,
+              boost::system::error_code & ec,
               variant2::variant<variant2::monostate, connection, stream> res = variant2::monostate()) -> stream;
 };
 

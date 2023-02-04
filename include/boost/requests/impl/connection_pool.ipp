@@ -303,7 +303,7 @@ auto connection_pool::async_get_connection_op::resume(
 
 stream connection_pool::async_ropen_op::resume(
     requests::detail::faux_token_t<step_signature_type> self,
-    system::error_code & ec,
+    boost::system::error_code & ec,
     variant2::variant<variant2::monostate, connection, stream> res)
 {
   BOOST_ASIO_CORO_REENTER(this)

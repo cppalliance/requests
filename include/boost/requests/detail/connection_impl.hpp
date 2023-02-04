@@ -86,8 +86,7 @@ struct connection_impl : std::enable_shared_from_this<connection_impl>
                                      system::error_code & ec);
 
     template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code)) CompletionToken>
-    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                       void (boost::system::error_code))
+    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,  void (boost::system::error_code))
     async_connect(endpoint_type ep,
                   CompletionToken && completion_token);
 
