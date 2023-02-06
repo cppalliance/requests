@@ -226,6 +226,7 @@ struct connection
     return impl_->async_ropen(method, path, headers, src, std::move(opt), jar, std::forward<CompletionToken>(completion_token));
   }
   bool uses_ssl() const {return impl_->uses_ssl();}
+  void use_ssl(bool use_ssl = true) {impl_->use_ssl(use_ssl);}
 
   operator bool() const {return impl_ != nullptr;}
 private:

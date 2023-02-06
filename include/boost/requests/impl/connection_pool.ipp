@@ -16,7 +16,7 @@ namespace requests {
 
 void connection_pool::lookup(urls::url_view sv, system::error_code & ec)
 {
-  urls::string_view scheme = use_ssl_ ? "https" : "http";
+  urls::string_view scheme = "https";
   if (sv.has_scheme())
     scheme = sv.scheme();
 
@@ -196,9 +196,8 @@ auto connection_pool::get_connection(error_code & ec) -> connection
               });
     const auto ep = endpoints_.front();
 
-    std::shared_ptr<detail::connection_impl> nconn =
-        use_ssl_ ? std::make_shared<detail::connection_impl>(get_executor(), context_)
-                 : std::make_shared<detail::connection_impl>(get_executor());
+    std::shared_ptr<detail::connection_impl> nconn = std::make_shared<detail::connection_impl>(get_executor(), context_);
+    nconn->use_ssl(use_ssl_);
     nconn->set_host(host_);
     nconn->connect(ep, ec);
     if (ec)
@@ -272,8 +271,8 @@ auto connection_pool::async_get_connection_op::resume(
                   return this_->conns_.count(a) < this_->conns_.count(b);
                 });
       ep = this_->endpoints_.front();
-      nconn = this_->use_ssl_ ? std::make_shared<detail::connection_impl>(get_executor(), this_->context_)
-                              : std::make_shared<detail::connection_impl>(get_executor());
+      nconn = std::make_shared<detail::connection_impl>(get_executor(), this_->context_);
+      nconn->use_ssl(this_->use_ssl_);
       nconn->set_host(this_->host_);
       BOOST_ASIO_CORO_YIELD nconn->async_connect(ep, std::move(self)); // don't unlock here.
       if (ec)

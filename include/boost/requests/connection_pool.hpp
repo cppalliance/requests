@@ -62,8 +62,7 @@ struct connection_pool
      */
     explicit connection_pool(asio::any_io_executor exec,
                              std::size_t limit = BOOST_REQUESTS_DEFAULT_POOL_SIZE)
-        : use_ssl_(false),
-          context_(
+        : context_(
               asio::use_service<detail::ssl_context_service>(
                   asio::query(exec, asio::execution::context)
               ).get()), mutex_(exec), limit_(limit) {}
@@ -74,8 +73,7 @@ struct connection_pool
                                  asio::is_convertible<ExecutionContext &, asio::execution_context &>::value,
                                  std::size_t
                              >::type limit = BOOST_REQUESTS_DEFAULT_POOL_SIZE)
-        : use_ssl_(false),
-          context_(
+        : context_(
               asio::use_service<detail::ssl_context_service>(context).get()),
               mutex_(context), limit_(limit) {}
 
@@ -89,7 +87,7 @@ struct connection_pool
     explicit connection_pool(Exec && exec,
                              asio::ssl::context & ctx,
                              std::size_t limit = BOOST_REQUESTS_DEFAULT_POOL_SIZE)
-        : use_ssl_(true), context_(ctx), mutex_(std::forward<Exec>(exec)), limit_(limit) {}
+        : context_(ctx), mutex_(std::forward<Exec>(exec)), limit_(limit) {}
 
     /// Move constructor
     connection_pool(connection_pool && ) = default;
@@ -211,9 +209,8 @@ struct connection_pool
                 CompletionToken && completion_token);
 
     bool uses_ssl() const {return use_ssl_;}
-
   private:
-    bool use_ssl_{false};
+    bool use_ssl_{true};
     asio::ssl::context & context_;
     detail::mutex mutex_;
     std::string host_;

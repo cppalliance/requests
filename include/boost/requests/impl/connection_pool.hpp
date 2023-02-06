@@ -23,7 +23,7 @@ struct connection_pool::async_lookup_op : asio::coroutine
   const urls::url_view sv;
   optional<asio::ip::tcp::resolver> resolver;
 
-  urls::string_view scheme = this_->use_ssl_ ? "https" : "http";
+  urls::string_view scheme = "https";
   urls::string_view service;
 
   using mutex_type = detail::mutex;

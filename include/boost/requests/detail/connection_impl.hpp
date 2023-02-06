@@ -64,15 +64,14 @@ struct connection_impl : std::enable_shared_from_this<connection_impl>
                         >::type = 0)
         : next_layer_(
             context,
-            asio::use_service<detail::ssl_context_service>(context).get()),
-          use_ssl_{false} {}
+            asio::use_service<detail::ssl_context_service>(context).get()) {}
 
     explicit connection_impl(asio::any_io_executor exec)
       : next_layer_(
       exec,
       asio::use_service<detail::ssl_context_service>(
           asio::query(exec, asio::execution::context)
-          ).get()), use_ssl_{false} {}
+          ).get()) {}
 
     void connect(endpoint_type ep)
     {
@@ -184,11 +183,11 @@ struct connection_impl : std::enable_shared_from_this<connection_impl>
                 cookie_jar * jar,
                 CompletionToken && completion_token);
     bool uses_ssl() const {return use_ssl_;}
-
+    void use_ssl(bool use_ssl = true) {use_ssl_ = true;}
   private:
 
     next_layer_type next_layer_;
-    bool use_ssl_{false};
+    bool use_ssl_{true};
     detail::mutex read_mtx_{next_layer_.get_executor()},
                  write_mtx_{next_layer_.get_executor()};
 
