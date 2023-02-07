@@ -23,4 +23,4 @@ alias asio-ssl : ../../beast//lib-asio-ssl ;
 alias beast    : ../../beast//lib-beast ;
 alias ssl      : ../../beast//ssl ;
 
-run [ glob-tree *.cpp ] /boost//json /boost//url ssl ;
+run [ glob-tree *.cpp ] /boost//json /boost//url ssl asio asio-ssl beast ssl ;
