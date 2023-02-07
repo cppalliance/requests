@@ -18,7 +18,7 @@ build-project test ;
 boost.use-project ;
 
 feature.feature boost.requests.separate-compilation : on off : propagated composite ;
-feature.compose <boost.requests.separate-compilation>on : <define>BOOST_REQUESTS_SEPARATE_COMPILATION=1 ;
+feature.compose <boost.requests.separate-compilation>on : <define>BOOST_REQUESTS_SEPARATE_COMPILATION ;
 
 feature.feature boost.requests.use-std-fs : off on : propagated composite ;
-feature.compose <boost.requests.use-std-fs>on : <define>BOOST_REQUESTS_USE_STD_FS=1 ;
+feature.compose <boost.requests.use-std-fs>on : <define>BOOST_REQUESTS_USE_STD_FS ;

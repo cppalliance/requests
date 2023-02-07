@@ -211,11 +211,11 @@ auto connection_impl::ropen(beast::http::verb method,
 
     auto rc = str.parser_->get().base().result();
 
-    if ((opt.redirect < redirect_mode::endpoint)
+    if ((opt.redirect == redirect_mode::none)
         || ((rc != http::status::moved_permanently)
-            && (rc != http::status::found)
-            && (rc != http::status::temporary_redirect)
-            && (rc != http::status::permanent_redirect)))
+         && (rc != http::status::found)
+         && (rc != http::status::temporary_redirect)
+         && (rc != http::status::permanent_redirect)))
     {
       // GO
       str.t_ = std::move(t);
