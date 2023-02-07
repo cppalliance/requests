@@ -4,7 +4,7 @@ project boost/requests
       <define>BOOST_FILESYSTEM_NO_DEPRECATED=1
       <link>shared:<define>BOOST_REQUESTS_DYN_LINK=1
       <link>static:<define>BOOST_REQUESTS_STATIC_LINK=1
-      <define>BOOST_REQUESTS_SOURCE
+      <define>BOOST_REQUESTS_SOURCE=1
       <define>BOOST_FILESYSTEM_NO_DEPRECATED=1
     : usage-requirements
       <link>shared:<define>BOOST_REQUESTS_DYN_LINK=1
