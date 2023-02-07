@@ -42,6 +42,8 @@ void http_request_cookie_connection(bool https)
   sslctx.set_default_verify_paths();
   auto hc = https ? requests::connection(ctx.get_executor(), sslctx) : requests::connection(ctx.get_executor());
   hc.set_host(url);
+  hc.use_ssl(https);
+
   asio::ip::tcp::resolver rslvr{ctx};
   asio::ip::tcp::endpoint ep = *rslvr.resolve(url, https ? "https" : "http").begin();
 

@@ -207,4 +207,8 @@ auto tracker(boost::asio::any_io_executor exec, Handler && handler,
   return boost::asio::bind_executor(exec, tracker_t<std::decay_t<Handler>>(std::forward<Handler>(handler), loc));
 }
 
+#define CHECK_HTTP_RESULT(Response) \
+  CHECK_MESSAGE(boost::requests::http::to_status_class(Response.result()) == requests::http::status_class::successful, Response)
+
+
 #endif
