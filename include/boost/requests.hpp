@@ -26,5 +26,6 @@
 #include <boost/requests/session.hpp>
 #include <boost/requests/source.hpp>
 #include <boost/requests/stream.hpp>
+#include <boost/requests/ssl.hpp>
 
 #endif //BOOST_REQUESTS_HPP

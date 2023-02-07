@@ -183,7 +183,7 @@ struct connection_impl : std::enable_shared_from_this<connection_impl>
                 cookie_jar * jar,
                 CompletionToken && completion_token);
     bool uses_ssl() const {return use_ssl_;}
-    void use_ssl(bool use_ssl = true) {use_ssl_ = true;}
+    void use_ssl(bool use_ssl = true) {use_ssl_ = use_ssl;}
   private:
 
     next_layer_type next_layer_;
