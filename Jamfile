@@ -9,11 +9,7 @@
 
 import feature ;
 import boost ;
-import os ;
-import path ;
 
-build-project example ;
-build-project test ;
 
 boost.use-project ;
 
