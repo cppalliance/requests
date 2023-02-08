@@ -83,7 +83,6 @@ lib boost_requests
         <link>static
         [ ac.check-library ssl    : <library>ssl/<link>shared : <build>no ]
         [ ac.check-library crypto : <library>crypto/<link>shared : <build>no ]
-    <boost.requests.use-std-fs>off:<library>/boost//filesystem
    : usage-requirements
       <library>/boost//container/<warnings-as-errors>off
 
