@@ -6,11 +6,9 @@
 #define BOOST_REQUESTS_SOURCES_FORM_HPP
 
 #include <boost/requests/source.hpp>
+#include <boost/requests/form.hpp>
 #include <boost/beast/core/file.hpp>
 
-#if defined(__cpp_lib_filesystem)
-#include <filesystem>
-#endif
 
 
 namespace boost
@@ -58,20 +56,14 @@ struct form_source : source
   core::string_view default_content_type() override { return "application/x-www-form-urlencoded"; }
 };
 
-inline form_source tag_invoke(const make_source_tag&, urls::params_encoded_view pev)
-{
-  return form_source(pev);
-
-}
-
-template<typename Form>
-inline auto tag_invoke(const make_source_tag&, Form && f)
-    -> std::enable_if_t<std::is_same<std::decay_t<Form>, form>::value, form_source>
-{
-  return form_source(std::forward<Form>(f));
-}
+BOOST_REQUESTS_DECL
+source_ptr tag_invoke(make_source_tag, form form_, container::pmr::memory_resource * res);
 
 }
 }
+
+#if defined(BOOST_REQUESTS_HEADER_ONLY)
+#include <boost/requests/sources/impl/form.ipp>
+#endif
 
 #endif //BOOST_REQUESTS_SOURCES_FILE_HPP

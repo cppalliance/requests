@@ -28,5 +28,5 @@ import regex ;
 for local src in [ glob *.cpp : xml.cpp ]
 {
     local name = [ regex.match "([^.]*)\\..*" : $(src) ] ;
-    exe $(name) : $(src) /boost//json /boost//url asio asio-ssl beast ssl ;
+    exe $(name) : $(src) /boost//json /boost//url /boost//program_options asio asio-ssl beast ssl ;
 }

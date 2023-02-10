@@ -201,10 +201,8 @@ struct connection_impl : std::enable_shared_from_this<connection_impl>
 
     struct async_ropen_op;
 
-    template<typename RequestSource>
     struct async_ropen_op_body;
 
-    template<typename RequestSource>
     struct async_ropen_op_body_base;
 
     BOOST_REQUESTS_DECL std::size_t do_read_some_(beast::http::basic_parser<false> & parser);

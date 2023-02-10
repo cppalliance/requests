@@ -151,7 +151,7 @@ auto connection_impl::ropen(
   }
 
   auto src = requests::make_source(std::forward<RequestBody>(body));
-  return ropen(method, path.encoded_target(), req.fields, src, std::move(req.opts), req.jar, ec);
+  return ropen(method, path.encoded_target(), req.fields, *src, std::move(req.opts), req.jar, ec);
 }
 
 
@@ -214,31 +214,32 @@ struct connection_impl::async_ropen_op
               system::error_code & ec, std::size_t res_ = 0u) -> stream;
 };
 
-template<typename RequestSource>
 struct connection_impl::async_ropen_op_body_base
 {
-  RequestSource source_impl;
+  source_ptr source_impl;
   http::fields headers;
 
   template<typename RequestBody>
-  async_ropen_op_body_base(RequestBody && body, http::fields headers)
-      : source_impl(requests::make_source(std::forward<RequestBody>(body))), headers(std::move(headers))
+  async_ropen_op_body_base(
+      container::pmr::polymorphic_allocator<void> alloc,
+      RequestBody && body, http::fields headers)
+      : source_impl(requests::make_source(std::forward<RequestBody>(body), alloc.resource())), headers(std::move(headers))
   {
   }
 };
 
-template<typename RequestSource>
-struct connection_impl::async_ropen_op_body : async_ropen_op_body_base<RequestSource>, async_ropen_op
+struct connection_impl::async_ropen_op_body : async_ropen_op_body_base, async_ropen_op
 {
   template<typename RequestBody>
-  async_ropen_op_body(std::shared_ptr<connection_impl>  this_,
+  async_ropen_op_body(container::pmr::polymorphic_allocator<void> alloc,
+                      std::shared_ptr<connection_impl>  this_,
                       beast::http::verb method,
                       urls::url_view path,
                       RequestBody && body,
                       request_parameters req)
-      : async_ropen_op_body_base<RequestSource>{std::forward<RequestBody>(body), std::move(req.fields)},
-        async_ropen_op(std::move(this_), method, path, async_ropen_op_body_base<RequestSource>::headers,
-                       this->source_impl, std::move(req.opts), req.jar)
+      : async_ropen_op_body_base{alloc, std::forward<RequestBody>(body), std::move(req.fields)},
+        async_ropen_op(std::move(this_), method, path, async_ropen_op_body_base::headers,
+                       *this->source_impl, std::move(req.opts), req.jar)
   {}
 };
 
@@ -252,8 +253,7 @@ connection_impl::async_ropen(
     RequestBody && body, request_parameters req,
     CompletionToken && completion_token)
 {
-  using rp = async_ropen_op_body<std::decay_t<decltype(make_source(std::forward<RequestBody>(body)))>>;
-  return detail::faux_run<rp>(
+  return detail::faux_run_with_allocator<async_ropen_op_body>(
       std::forward<CompletionToken>(completion_token),
       shared_from_this(), method, path, std::forward<RequestBody>(body),
       std::move(req));

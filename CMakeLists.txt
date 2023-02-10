@@ -76,6 +76,7 @@ target_include_directories(boost_requests PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/in
 target_link_libraries(
         boost_requests
             PUBLIC
+                Boost::beast
                 Boost::container
                 Boost::filesystem
                 Boost::json

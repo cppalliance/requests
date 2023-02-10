@@ -31,18 +31,19 @@ TEST_CASE("sync")
   std::thread thr{
       [&]{
         system::error_code ec;
-        auto sp = tag_invoke(requests::make_source_tag{}, json::value{"foobaria"});
+        auto sp = tag_invoke(requests::make_source_tag{}, json::value{"foobaria"},
+                             container::pmr::get_default_resource());
         requests::http::fields hd;
         write_request(wp,
                       requests::http::verb::post, "/test", hd,
-                      sp,
+                      *sp,
                       ec);
         CHECK(ec == system::error_code{});
         hd.clear();
         auto ep = requests::make_source(requests::empty());
         write_request(wp,
                       requests::http::verb::get, "/test2", hd,
-                      ep,
+                      *ep,
                       ec);
         CHECK(ec == system::error_code{});
       }};

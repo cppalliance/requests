@@ -19,7 +19,7 @@ struct form
 {
   urls::url storage;
 
-  form(std::initializer_list<urls::param_view> params)
+  explicit form(std::initializer_list<urls::param_view> params)
   {
     storage.params().assign(std::move(params));
   }
@@ -28,7 +28,7 @@ struct form
   form(const form & ) = default;
 
   template<typename Container>
-  form(Container && ct, decltype(std::begin(ct)) * = nullptr)
+  explicit form(Container && ct, decltype(std::begin(ct)) * = nullptr)
   {
     storage.params().assign(std::begin(ct), std::end(ct));
   }
