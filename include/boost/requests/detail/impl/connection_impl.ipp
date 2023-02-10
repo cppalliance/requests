@@ -459,7 +459,7 @@ auto connection_impl::async_ropen_op::resume(
 
     }
 
-    stream str_{this_->get_executor(), this_};
+    stream str_{this_->get_executor(), nullptr};
     str_.history_ = std::move(history);
     return str_;
 

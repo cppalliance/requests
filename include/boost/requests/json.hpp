@@ -659,7 +659,7 @@ struct async_read_json_op : asio::coroutine
   {
     BOOST_ASIO_CORO_REENTER(this)
     {
-      while (!sp.done() && !str.done())
+      while (!sp.done() && !str.done() && !ec)
       {
         BOOST_ASIO_CORO_YIELD str.async_read_some(asio::buffer(buffer), std::move(self));
         if (ec)
