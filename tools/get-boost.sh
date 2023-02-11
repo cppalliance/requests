@@ -27,6 +27,7 @@ git submodule update --init --depth 20 --jobs 4 \
     libs/align \
     libs/asio \
     libs/assert \
+    libs/beast \
     libs/config \
     libs/core \
     libs/describe \
@@ -84,10 +85,11 @@ git submodule update --init --depth 20 --jobs 4 \
     libs/type_index \
     libs/typeof \
     libs/unordered \
+    libs/url \
     libs/variant2 \
     libs/json
 
 echo Submodule update complete
 
-rm -rf libs/beast
-cp -r $build_dir libs/beast
+rm -rf libs/requests
+cp -r $build_dir libs/requests

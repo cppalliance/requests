@@ -61,7 +61,7 @@ struct form_source : source
   core::string_view default_content_type() override { return "application/x-www-form-urlencoded"; }
 };
 
-struct multi_part_form_source : source
+struct multi_part_form_source final : source
 {
   std::array<char, 62> boundary_and_type{detail::make_boundary_value()};
   multi_part_form mpf;
@@ -70,8 +70,15 @@ struct multi_part_form_source : source
   boost::optional<asio::coroutine> coro_state;
   std::size_t remaining = 0;
 
-  multi_part_form_source(multi_part_form && mpf) : mpf(std::move(mpf)) {}
-  multi_part_form_source(const multi_part_form & mpf) : mpf(mpf) {}
+  BOOST_REQUESTS_DECL
+  ~multi_part_form_source();
+  BOOST_REQUESTS_DECL
+  multi_part_form_source(const multi_part_form_source & rhs);
+
+  BOOST_REQUESTS_DECL
+  multi_part_form_source(multi_part_form && mpf);
+  BOOST_REQUESTS_DECL
+  multi_part_form_source(const multi_part_form & mpf);
 
   BOOST_REQUESTS_DECL
   optional<std::size_t> size() const override;

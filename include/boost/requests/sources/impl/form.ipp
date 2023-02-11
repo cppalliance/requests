@@ -183,6 +183,12 @@ std::pair<std::size_t, bool> multi_part_form_source::read_some(void * data, std:
 
 #undef BOOST_REQUESTS_CORO_PUTS
 
+multi_part_form_source::~multi_part_form_source() = default;
+multi_part_form_source::multi_part_form_source(const multi_part_form_source & rhs)= default;
+
+multi_part_form_source::multi_part_form_source(multi_part_form && mpf) : mpf(std::move(mpf)) {}
+multi_part_form_source::multi_part_form_source(const multi_part_form & mpf) : mpf(mpf) {}
+
 }
 }
 

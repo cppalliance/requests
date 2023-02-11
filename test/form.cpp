@@ -46,7 +46,7 @@ TEST_CASE("multi-part")
 
   requests::multi_part_form mpf{{"text-field", "Test"}, {"box", "on"}, {"my-file", pt}};
   requests::multi_part_form_source bd{mpf};
-  std::copy(std::begin(boundary), std::end(boundary) - 1, bd.boundary_and_type.begin() + 32);
+  std::copy(std::begin(boundary), std::end(boundary) - 1, bd.boundary_and_type.begin() + 30);
 
   REQUIRE(bd.current == bd.mpf.storage.cbegin());
   auto sz = bd.size();
