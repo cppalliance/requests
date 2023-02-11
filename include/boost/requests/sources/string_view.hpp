@@ -61,41 +61,40 @@ struct basic_string_view_source final : source
 };
 
 template<std::size_t N>
-basic_string_view_source<char> tag_invoke(make_source_tag, const char (&data)[N],
-                                          container::pmr::memory_resource * res)
+source_ptr tag_invoke(make_source_tag, const char (&data)[N], container::pmr::memory_resource * res)
 {
   return std::allocate_shared<basic_string_view_source<char>>(
       container::pmr::polymorphic_allocator<void>(res), data);
 }
 
 template<typename Char>
-basic_string_view_source<Char> tag_invoke(make_source_tag, const core::basic_string_view<Char> & data,
-                                          container::pmr::memory_resource * res)
+source_ptr tag_invoke(make_source_tag, const core::basic_string_view<Char> & data,
+                      container::pmr::memory_resource * res)
 {
   return std::allocate_shared<basic_string_view_source<Char>>(
       container::pmr::polymorphic_allocator<void>(res), std::move(data));
 }
 
 template<typename Char>
-basic_string_view_source<Char> tag_invoke(make_source_tag, core::basic_string_view<Char> && data,
-                                          container::pmr::memory_resource * res) = delete;
+source_ptr tag_invoke(make_source_tag, core::basic_string_view<Char> && data,
+                      container::pmr::memory_resource * res) = delete;
 
 template<typename Char, typename Traits>
-basic_string_view_source<Char> tag_invoke(make_source_tag, const boost::basic_string_view<Char, Traits> & data,
-                                          container::pmr::memory_resource * res)
+source_ptr tag_invoke(make_source_tag, const boost::basic_string_view<Char, Traits> & data,
+                      container::pmr::memory_resource * res)
 {
   return std::allocate_shared<basic_string_view_source<Char>>(
       container::pmr::polymorphic_allocator<void>(res), std::move(data));
 }
 
 template<typename Char, typename Traits>
-basic_string_view_source<Char> tag_invoke(make_source_tag, boost::basic_string_view<Char, Traits> && data,
-                                          container::pmr::memory_resource * res) = delete;
+source_ptr tag_invoke(make_source_tag, boost::basic_string_view<Char, Traits> && data,
+                      container::pmr::memory_resource * res) = delete;
 
 #if defined(__cpp_lib_string_view)
 template<typename Char, typename Traits>
-basic_string_view_source<Char> tag_invoke(make_source_tag, const std::basic_string_view<Char, Traits> & data,
-                                          container::pmr::memory_resource * res)
+source_ptr  tag_invoke(make_source_tag, const std::basic_string_view<Char, Traits> & data,
+                       container::pmr::memory_resource * res)
 {
   return std::allocate_shared<basic_string_view_source<Char>>(
       container::pmr::polymorphic_allocator<void>(res),
@@ -103,8 +102,8 @@ basic_string_view_source<Char> tag_invoke(make_source_tag, const std::basic_stri
 }
 
 template<typename Char, typename Traits>
-basic_string_view_source<Char> tag_invoke(make_source_tag, std::basic_string_view<Char, Traits> && data,
-                                          container::pmr::memory_resource * res) = delete;
+source_ptr tag_invoke(make_source_tag, std::basic_string_view<Char, Traits> && data,
+                      container::pmr::memory_resource * res) = delete;
 #endif
 
 }

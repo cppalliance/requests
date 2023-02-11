@@ -310,6 +310,21 @@ void http_request_connection(bool https)
     CHECK(js.at("headers").at("Content-Type") == "application/x-www-form-urlencoded");
     CHECK(js.at("form") == json::value{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}});
   }
+
+  // post-multipart-form
+  {
+    boost::system::error_code ec;
+    auto hdr = post(hc, urls::url_view("/post"),
+                    requests::multi_part_form{{"foo", "data 1"}, {"bar", "data 2"}, {"foobar", "data 3"}},
+                    {{}, {false}}, ec);
+    check_ec(ec);
+    CHECK_HTTP_RESULT(hdr.headers);
+    auto js = as_json(hdr);
+    CHECK_MESSAGE(hdr.headers.result() == requests::http::status::ok, hdr.headers);
+    CHECK_MESSAGE(js.at("headers").at("Content-Type").as_string().starts_with("multipart/form-data"),
+                  js.at("headers").at("Content-Type"));
+    CHECK(js.at("form") == json::value{{"foo", "data 1"}, {"bar", "data 2"}, {"foobar" , "data 3"}});
+  }
 }
 
 TEST_CASE("sync-connection-request")

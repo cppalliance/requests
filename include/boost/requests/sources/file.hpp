@@ -58,9 +58,8 @@ struct file_source : source
       ec = this->ec;
       return {0u, true};
     }
-
     auto n = file.read(data, size, ec);
-    return {n, file.pos(ec) == file.size(ec)};
+    return {n, file.pos(ec) != file.size(ec)};
   }
   core::string_view default_content_type() override
   {

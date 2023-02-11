@@ -122,6 +122,8 @@ source_ptr tag_invoke(const make_source_tag&,       std::filesystem::path &&,   
 
 BOOST_REQUESTS_DECL
 source_ptr tag_invoke(make_source_tag, struct form form_, container::pmr::memory_resource * res);
+BOOST_REQUESTS_DECL
+source_ptr tag_invoke(make_source_tag, struct multi_part_form mpf, container::pmr::memory_resource * res);
 
 BOOST_REQUESTS_DECL
 source_ptr tag_invoke(make_source_tag, boost::json::value value, container::pmr::memory_resource * res);

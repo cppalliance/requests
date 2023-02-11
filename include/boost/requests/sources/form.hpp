@@ -9,12 +9,17 @@
 #include <boost/requests/form.hpp>
 #include <boost/beast/core/file.hpp>
 
-
-
 namespace boost
 {
 namespace requests
 {
+namespace detail
+{
+
+BOOST_REQUESTS_DECL
+std::array<char, 62> make_boundary_value();
+
+}
 
 struct form_source : source
 {
@@ -56,8 +61,34 @@ struct form_source : source
   core::string_view default_content_type() override { return "application/x-www-form-urlencoded"; }
 };
 
+struct multi_part_form_source : source
+{
+  std::array<char, 62> boundary_and_type{detail::make_boundary_value()};
+  multi_part_form mpf;
+  typename std::vector<multi_part_form::form_data>::const_iterator current = mpf.storage.cbegin();
+
+  boost::optional<asio::coroutine> coro_state;
+  std::size_t remaining = 0;
+
+  multi_part_form_source(multi_part_form && mpf) : mpf(std::move(mpf)) {}
+  multi_part_form_source(const multi_part_form & mpf) : mpf(mpf) {}
+
+  BOOST_REQUESTS_DECL
+  optional<std::size_t> size() const override;
+  BOOST_REQUESTS_DECL
+  void reset() override;
+  BOOST_REQUESTS_DECL
+  std::pair<std::size_t, bool> read_some(void * data, std::size_t size, system::error_code & ec) override;
+  BOOST_REQUESTS_DECL
+  core::string_view default_content_type() override;
+};
+
 BOOST_REQUESTS_DECL
 source_ptr tag_invoke(make_source_tag, form form_, container::pmr::memory_resource * res);
+
+BOOST_REQUESTS_DECL
+source_ptr tag_invoke(make_source_tag, multi_part_form mpf, container::pmr::memory_resource * res);
+
 
 }
 }

@@ -59,7 +59,7 @@ struct basic_string_source final : source
 };
 
 template<typename Char, typename Traits, typename Allocator>
-inline basic_string_source<Char, Traits, Allocator> tag_invoke(
+inline source_ptr tag_invoke(
     make_source_tag, std::basic_string<Char, Traits, Allocator> data,
     container::pmr::memory_resource * res)
 {
