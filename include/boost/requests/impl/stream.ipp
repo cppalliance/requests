@@ -70,7 +70,7 @@ std::size_t stream::async_read_some_op::resume(requests::detail::faux_token_t<st
     this_->parser_->get().body().size = buffer.size();
 
     BOOST_ASIO_CORO_YIELD this_->impl_->do_async_read_some_(*this_->parser_, std::move(self));
-    if (!ec && !this_->parser_->is_done())
+    if (!this_->parser_->is_done())
     {
       this_->parser_->get().body().more = true;
       if (ec == beast::http::error::need_buffer)
@@ -79,7 +79,7 @@ std::size_t stream::async_read_some_op::resume(requests::detail::faux_token_t<st
     else
     {
       this_->parser_->get().body().more = false;
-      if (ec || !this_->parser_->get().keep_alive())
+      if (!this_->parser_->get().keep_alive())
       {
         ec_ = ec ;
         BOOST_ASIO_CORO_YIELD this_->impl_->do_async_close_(std::move(self));
