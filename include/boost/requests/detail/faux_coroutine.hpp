@@ -309,6 +309,14 @@ struct faux_runner<Implementation, void(system::error_code, Args...)>
     {
       this->token_type::base::slot = asio::get_associated_cancellation_slot(handler);
     }
+
+    template<typename Handler_, typename ... Args_>
+    impl_(Handler_ && h, with_allocator_t &&, Args_ && ... args)
+        : handler(std::forward<Handler_>(h))
+        , impl(get_allocator(), std::forward<Args_>(args)...)
+    {
+      this->token_type::base::slot = asio::get_associated_cancellation_slot(handler);
+    }
   };
 
   template<typename Handler, typename ... Args_>
