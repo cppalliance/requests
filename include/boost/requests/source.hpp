@@ -14,9 +14,6 @@
 #include <boost/optional.hpp>
 #include <boost/json/fwd.hpp>
 
-#if defined(__cpp_lib_filesystem)
-#include <filesystem>
-#endif
 
 namespace boost
 {
@@ -111,14 +108,9 @@ BOOST_REQUESTS_DECL
 source_ptr tag_invoke(const make_source_tag&, const none_t &);
 
 BOOST_REQUESTS_DECL
-source_ptr tag_invoke(const make_source_tag&, const boost::filesystem::path & path, container::pmr::memory_resource * res);
-source_ptr tag_invoke(const make_source_tag&,       boost::filesystem::path &&,     container::pmr::memory_resource * res) = delete;
+source_ptr tag_invoke(const make_source_tag&, const filesystem::path & path, container::pmr::memory_resource * res);
+source_ptr tag_invoke(const make_source_tag&,       filesystem::path &&,     container::pmr::memory_resource * res) = delete;
 
-#if defined(__cpp_lib_filesystem)
-BOOST_REQUESTS_DECL
-source_ptr tag_invoke(const make_source_tag&, const std::filesystem::path & path, container::pmr::memory_resource * res);
-source_ptr tag_invoke(const make_source_tag&,       std::filesystem::path &&,     container::pmr::memory_resource * res) = delete;
-#endif
 
 BOOST_REQUESTS_DECL
 source_ptr tag_invoke(make_source_tag, struct form form_, container::pmr::memory_resource * res);
