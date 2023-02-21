@@ -14,5 +14,5 @@ project boost/requests
 
 
 alias requests_sources : src.cpp ;
-lib boost_requests : requests_sources  ;
+lib boost_requests : requests_sources /openssl//ssl ;
 boost-install boost_requests ;
