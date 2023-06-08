@@ -90,7 +90,7 @@ struct connection_pool
         : context_(ctx), mutex_(std::forward<Exec>(exec)), limit_(limit) {}
 
     /// Move constructor
-    connection_pool(connection_pool && ) = default;
+    connection_pool(connection_pool && lhs) ;
 
     void lookup(urls::url_view av)
     {
@@ -223,11 +223,8 @@ struct connection_pool
 
     struct async_lookup_op;
     struct async_get_connection_op;
-
     struct async_ropen_op_body;
-
     struct async_ropen_op_body_base;
-
     struct async_ropen_op;
 };
 

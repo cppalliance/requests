@@ -320,6 +320,19 @@ stream connection_pool::async_ropen_op::resume(
   return stream{get_executor(), nullptr};
 }
 
+connection_pool::connection_pool(connection_pool && lhs)
+  : use_ssl_(lhs.use_ssl_), context_(lhs.context_), mutex_(std::move(lhs.mutex_)), host_(std::move(lhs.host_)),
+    endpoints_(std::move(lhs.endpoints_)), limit_(lhs.limit_)
+{
+  BOOST_ASSERT(std::count_if(
+      conns_.begin(), conns_.end(),
+      [](const std::pair<endpoint_type, std::shared_ptr<detail::connection_impl>> & p)
+      {
+        return !p.second.unique();
+      }) == 0u);
+
+}
+
 }
 }
 
