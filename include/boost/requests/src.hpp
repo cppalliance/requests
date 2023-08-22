@@ -16,6 +16,7 @@
 #endif
 
 #include <boost/requests/detail/impl/connection_impl.ipp>
+#include <boost/requests/detail/impl/condition_variable.ipp>
 #include <boost/requests/detail/impl/mutex.ipp>
 #include <boost/requests/fields/impl/keep_alive.ipp>
 #include <boost/requests/fields/impl/link.ipp>
