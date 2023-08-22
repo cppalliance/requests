@@ -73,18 +73,26 @@ endif()
 
 add_library(boost_requests src/src.cpp)
 target_include_directories(boost_requests PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
-target_link_libraries(
+
+if (BOOST_ASYNC_BUILD_INLINE)
+    target_link_libraries(
         boost_requests
             PUBLIC
-                Boost::beast
-                Boost::container
-                Boost::filesystem
-                Boost::json
-                Boost::system
-                Boost::url
-                OpenSSL::SSL
-                OpenSSL::Crypto
-                Threads::Threads)
+                Boost::beast)
+endif()
+
+target_link_libraries(
+        boost_requests
+        PUBLIC
+        Boost::container
+        Boost::filesystem
+        Boost::json
+        Boost::system
+        Boost::url
+        OpenSSL::SSL
+        OpenSSL::Crypto
+        Threads::Threads)
+
 
 target_compile_definitions(boost_requests PUBLIC BOOST_REQUESTS_SEPARATE_COMPILATION=1 BOOST_FILESYSTEM_NO_DEPRECATED=1)
 add_library(Boost::requests ALIAS boost_requests)
@@ -104,7 +112,7 @@ if(BOOST_REQUESTS_INSTALL AND NOT BOOST_SUPERPROJECT_VERSION)
 endif()
 
 if (OPENSSL_FOUND)
-    include_directories (${OPENSSL_INCLUDE_DIR})
+    include_directories(${OPENSSL_INCLUDE_DIR})
 endif()
 
 if(BOOST_REQUESTS_BUILD_TESTS)
