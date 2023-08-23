@@ -26,10 +26,7 @@ struct connection_pool::async_lookup_op : asio::coroutine
   urls::string_view scheme = "https";
   urls::string_view service;
 
-  using mutex_type = detail::mutex;
-  using lock_type = detail::lock_guard;
-
-  lock_type lock;
+  std::unique_lock<std::mutex> lock{this_->mtx_, std::defer_lock};
 
   async_lookup_op(connection_pool * this_, urls::url_view sv, executor_type exec)
       : this_(this_), sv(sv), resolver(exec) {}
@@ -61,7 +58,6 @@ struct connection_pool::async_get_connection_op : asio::coroutine
   connection_pool * this_;
   async_get_connection_op(connection_pool * this_) : this_(this_) {}
 
-  using lock_type = detail::lock_guard;
   using conn_t = boost::unordered_multimap<endpoint_type,
                                            std::shared_ptr<detail::connection_impl>,
                                            detail::endpoint_hash>;
@@ -69,7 +65,7 @@ struct connection_pool::async_get_connection_op : asio::coroutine
 
 
   std::shared_ptr<detail::connection_impl> nconn = nullptr;
-  lock_type lock;
+  std::unique_lock<std::mutex> lock{this_->mtx_, std::defer_lock};
   endpoint_type ep;
 
   using completion_signature_type = void(system::error_code, connection);
