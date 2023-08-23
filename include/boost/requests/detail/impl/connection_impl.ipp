@@ -110,7 +110,6 @@ auto connection_impl::ropen(beast::http::verb method,
 {
   const auto is_secure = use_ssl_;
   using lock_type = detail::lock_guard;
-  detail::tracker t{this->ongoing_requests_};
   lock_type read_lock;
   if (jar)
   {
@@ -218,7 +217,6 @@ auto connection_impl::ropen(beast::http::verb method,
          && (rc != http::status::permanent_redirect)))
     {
       // GO
-      str.t_ = std::move(t);
       str.lock_ = std::move(read_lock);
       str.history_ = std::move(history);
       return str;
@@ -396,7 +394,6 @@ auto connection_impl::async_ropen_op::resume(
              (rc != http::status::temporary_redirect) && (rc != http::status::permanent_redirect)))
         {
           // GO
-          str->t_ = std::move(t);
           str->lock_ = std::move(lock);
           str->history_ = std::move(history);
           return *std::move(str);
