@@ -134,8 +134,6 @@ struct connection
   bool is_open() const { return impl_ && impl_->is_open(); }
   endpoint_type endpoint() const { return impl_->endpoint(); }
 
-
-  std::size_t working_requests() const { return impl_->working_requests(); }
   void reserve(std::size_t size) { impl_->reserve(size); }
 
   void set_host(core::string_view sv)

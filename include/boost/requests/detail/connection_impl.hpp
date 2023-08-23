@@ -112,8 +112,6 @@ struct connection_impl : std::enable_shared_from_this<connection_impl>
     // Endpoint
     endpoint_type endpoint() const {return endpoint_;}
 
-    std::size_t working_requests() const { return ongoing_requests_; }
-
     // Reserve memory for the internal buffer.
     void reserve(std::size_t size)
     {
@@ -193,7 +191,6 @@ struct connection_impl : std::enable_shared_from_this<connection_impl>
 
     std::string host_;
     beast::flat_buffer buffer_;
-    std::atomic<std::size_t> ongoing_requests_{0u};
     endpoint_type endpoint_;
 
     struct async_close_op;

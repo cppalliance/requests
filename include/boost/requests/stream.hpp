@@ -17,7 +17,6 @@
 #include <boost/requests/detail/config.hpp>
 #include <boost/requests/detail/faux_coroutine.hpp>
 #include <boost/requests/detail/pmr.hpp>
-#include <boost/requests/detail/tracker.hpp>
 #include <boost/requests/fields/keep_alive.hpp>
 #include <boost/requests/http.hpp>
 
@@ -146,10 +145,9 @@ struct stream
 
   bool done() const {return !parser_ ||  parser_->is_done();}
   explicit stream(executor_type executor, std::nullptr_t ) : executor_{executor}, impl_(nullptr) {}
-  explicit stream(executor_type executor, std::shared_ptr<detail::connection_impl> impl, detail::tracker t = {})
+  explicit stream(executor_type executor, std::shared_ptr<detail::connection_impl> impl)
       : executor_{executor},
-        impl_(std::move(impl)),
-        t_(std::move(t))
+        impl_(std::move(impl))
   {}
 
   http::response_header &&headers() &&
@@ -179,7 +177,6 @@ struct stream
   std::unique_ptr<http::response_parser<http::buffer_body>,
                   detail::pmr_deleter> parser_;
   history_type history_;
-  detail::tracker t_;
 
   template<typename DynamicBuffer>
   struct async_read_op;

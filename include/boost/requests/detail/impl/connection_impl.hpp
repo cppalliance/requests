@@ -13,7 +13,6 @@
 #include <boost/requests/detail/defaulted.hpp>
 #include <boost/requests/detail/faux_coroutine.hpp>
 #include <boost/requests/detail/ssl.hpp>
-#include <boost/requests/detail/tracker.hpp>
 #include <boost/requests/fields/location.hpp>
 #include <boost/requests/request_parameters.hpp>
 #include <boost/requests/stream.hpp>
@@ -69,7 +68,6 @@ connection_impl::async_connect(endpoint_type ep, CompletionToken && completion_t
 struct connection_impl::async_close_op : asio::coroutine
 {
   connection_impl * this_;
-  detail::tracker t{this_->ongoing_requests_};
 
   using executor_type = asio::any_io_executor;
   executor_type get_executor() const {return this_->get_executor();}
@@ -165,8 +163,6 @@ struct connection_impl::async_ropen_op
 
   std::shared_ptr<connection_impl> this_;
   optional<stream> str;
-
-  detail::tracker t{this_->ongoing_requests_};
 
   beast::http::verb method;
   urls::pct_string_view path;
