@@ -7,11 +7,13 @@
 #define BOOST_REQUESTS_CONNECTION_POOL_HPP
 
 #include <boost/requests/connection.hpp>
+#include <boost/requests/detail/condition_variable.hpp>
 
 namespace boost {
 namespace requests {
 
-namespace detail {
+namespace detail
+{
 
 struct endpoint_hash
 {
@@ -21,7 +23,6 @@ struct endpoint_hash
                       reinterpret_cast<const char*>(be.data()) + be.size());
   }
 };
-
 
 }
 
@@ -45,7 +46,7 @@ struct connection_pool
     /// Get the executor
     executor_type get_executor() noexcept
     {
-        return mutex_.get_executor();
+        return cv_.get_executor();
     }
 
     /// The protocol-type of the lowest layer.
@@ -65,7 +66,7 @@ struct connection_pool
         : context_(
               asio::use_service<detail::ssl_context_service>(
                   asio::query(exec, asio::execution::context)
-              ).get()), mutex_(exec), limit_(limit) {}
+              ).get()), cv_(exec), limit_(limit) {}
 
     template<typename ExecutionContext>
     explicit connection_pool(ExecutionContext &context,
@@ -75,7 +76,7 @@ struct connection_pool
                              >::type limit = BOOST_REQUESTS_DEFAULT_POOL_SIZE)
         : context_(
               asio::use_service<detail::ssl_context_service>(context).get()),
-              mutex_(context), limit_(limit) {}
+              cv_(context), limit_(limit) {}
 
     /// Construct a stream.
     /**
@@ -87,7 +88,7 @@ struct connection_pool
     explicit connection_pool(Exec && exec,
                              asio::ssl::context & ctx,
                              std::size_t limit = BOOST_REQUESTS_DEFAULT_POOL_SIZE)
-        : context_(ctx), mutex_(std::forward<Exec>(exec)), limit_(limit) {}
+        : context_(ctx), cv_(std::forward<Exec>(exec)), limit_(limit) {}
 
     /// Move constructor
     connection_pool(connection_pool && lhs) ;
@@ -212,7 +213,8 @@ struct connection_pool
   private:
     bool use_ssl_{true};
     asio::ssl::context & context_;
-    detail::mutex mutex_;
+    std::mutex mtx_;
+    detail::condition_variable cv_;
     std::string host_;
     std::vector<endpoint_type> endpoints_;
     std::size_t limit_;
@@ -221,11 +223,37 @@ struct connection_pool
                               std::shared_ptr<detail::connection_impl>,
                               detail::endpoint_hash> conns_;
 
+    std::vector<std::shared_ptr<detail::connection_impl>> free_conns_;
+
     struct async_lookup_op;
     struct async_get_connection_op;
     struct async_ropen_op_body;
     struct async_ropen_op_body_base;
     struct async_ropen_op;
+
+    void return_connection_(std::shared_ptr<detail::connection_impl> conn)
+    {
+      std::lock_guard<std::mutex> lock{mtx_};
+      free_conns_.push_back(std::move(conn));
+      cv_.notify_all();
+    }
+
+    void drop_connection_(const std::shared_ptr<detail::connection_impl> & conn)
+    {
+      std::lock_guard<std::mutex> lock{mtx_};
+      auto itr = std::find_if(conns_.begin(), conns_.end(),
+                   [&](const std::pair<endpoint_type, std::shared_ptr<detail::connection_impl>> & e)
+                   {
+                     return e.second == conn;
+                   });
+      if (itr != conns_.end())
+      {
+        conns_.erase(itr);
+        cv_.notify_all();
+      }
+    }
+
+    friend struct stream;
 };
 
 template<typename Token>
