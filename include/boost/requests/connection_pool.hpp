@@ -233,6 +233,9 @@ struct connection_pool
 
     void return_connection_(std::shared_ptr<detail::connection_impl> conn)
     {
+      if (!conn->is_open())
+        return drop_connection_(conn);
+
       std::lock_guard<std::mutex> lock{mtx_};
       free_conns_.push_back(std::move(conn));
       cv_.notify_all();
@@ -252,7 +255,7 @@ struct connection_pool
         cv_.notify_all();
       }
     }
-
+    friend struct connection;
     friend struct stream;
 };
 
