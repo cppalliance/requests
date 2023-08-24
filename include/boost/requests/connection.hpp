@@ -63,9 +63,6 @@ struct connection
   /// The endpoint of the lowest lowest layer.
   using endpoint_type = typename protocol_type::endpoint;
 
-
-  explicit connection(std::shared_ptr<detail::connection_impl> impl) : impl_(std::move(impl)) {}
-
   connection() = default;
   connection(const connection & lhs) = default;
   connection & operator=(const connection & lhs) = default;
@@ -227,9 +224,22 @@ struct connection
   void use_ssl(bool use_ssl = true) {impl_->use_ssl(use_ssl);}
 
   operator bool() const {return impl_ != nullptr;}
+
+  struct connection_pool * pool() {return borrowed_from_; }
+
+  BOOST_REQUESTS_DECL void return_to_pool();
+  BOOST_REQUESTS_DECL void remove_from_pool();
+
 private:
+
+
+  explicit connection(std::shared_ptr<detail::connection_impl> impl,
+                      struct connection_pool * borrowed_from) : impl_(std::move(impl)), borrowed_from_(borrowed_from) {}
+
   std::shared_ptr<detail::connection_impl> impl_;
 
+  struct connection_pool * borrowed_from_ = nullptr;
+  friend struct connection_pool;
   friend struct stream;
 };
 

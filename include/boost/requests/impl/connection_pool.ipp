@@ -154,7 +154,7 @@ auto connection_pool::get_connection(error_code & ec) -> connection
     {
       auto pp = std::move(free_conns_.front());
       free_conns_.erase(free_conns_.begin());
-      return connection(pp);
+      return connection(std::move(pp), this);
     }
     // check if we can make more connections. -> open another connection.
     // the race here is that we might open one too many
@@ -182,7 +182,7 @@ auto connection_pool::get_connection(error_code & ec) -> connection
       if (ec)
         return connection();
 
-      return connection(nconn);
+      return connection(std::move(nconn), this);
     }
     cv_.wait(lock);
   }
@@ -205,7 +205,7 @@ auto connection_pool::async_get_connection_op::resume(
       {
         auto pp = std::move(this_->free_conns_.front());
         this_->free_conns_.erase(this_->free_conns_.begin());
-        return connection(pp);
+        return connection(std::move(pp), this_);
       }
       // check if we can make more connections. -> open another connection.
       // the race here is that we might open one too many
@@ -233,7 +233,7 @@ auto connection_pool::async_get_connection_op::resume(
         if (ec)
           return connection();
 
-        return connection(nconn);
+        return connection(std::move(nconn), this_);
       }
       this_->cv_.async_wait(lock, std::move(self));
     }
@@ -273,6 +273,18 @@ connection_pool::connection_pool(connection_pool && lhs)
         return !p.second.unique();
       }) == 0u);
 
+}
+
+void connection::return_to_pool()
+{
+  if (borrowed_from_)
+    borrowed_from_->return_connection_(std::move(impl_));
+}
+
+void connection::remove_from_pool()
+{
+  if (borrowed_from_)
+    borrowed_from_->drop_connection_(impl_);
 }
 
 }

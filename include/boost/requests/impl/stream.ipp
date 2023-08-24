@@ -39,6 +39,8 @@ void stream::dump(system::error_code & ec)
     boost::system::error_code ec_;
     impl_->do_close_(ec_);
   }
+  /*else
+    impl_->do_return_();*/
 }
 
 
