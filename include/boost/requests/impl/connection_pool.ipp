@@ -40,7 +40,7 @@ void connection_pool::lookup(urls::url_view sv, system::error_code & ec)
     asio::ip::tcp::resolver resolver{get_executor()};
     const auto service = sv.has_port() ? sv.port() : scheme;
     auto eps = resolver.resolve(
-        std::string(sv.encoded_host_name().data(), sv.encoded_host_name().size()),
+        std::string(sv.encoded_host_address().data(), sv.encoded_host_address().size()),
         std::string(service.data(), service.size()), ec);
 
     if (!ec && eps.empty())
@@ -105,7 +105,7 @@ void connection_pool::async_lookup_op::resume(requests::detail::faux_token_t<ste
       resolver.emplace(get_executor());
       service = sv.has_port() ? sv.port() : scheme;
       BOOST_ASIO_CORO_YIELD resolver->async_resolve(
-          std::string(sv.encoded_host_name().data(), sv.encoded_host_name().size()),
+          std::string(sv.encoded_host_address().data(), sv.encoded_host_address().size()),
           std::string(service.data(), service.size()), std::move(self));
 
       if (!ec && eps.empty())
