@@ -225,20 +225,22 @@ struct connection
 
   operator bool() const {return impl_ != nullptr;}
 
-  struct connection_pool * pool() {return borrowed_from_; }
-
-  BOOST_REQUESTS_DECL void return_to_pool();
-  BOOST_REQUESTS_DECL void remove_from_pool();
-
+  struct connection_pool * pool() {return impl_ ? impl_->pool() : nullptr; }
+  ~connection()
+  {
+    if (impl_.use_count() == 2u && impl_->pool() != nullptr)
+    {
+      if (impl_->is_open())
+        impl_->return_to_pool();
+      else
+        impl_->remove_from_pool();
+    }
+  }
 private:
-
-
-  explicit connection(std::shared_ptr<detail::connection_impl> impl,
-                      struct connection_pool * borrowed_from) : impl_(std::move(impl)), borrowed_from_(borrowed_from) {}
+  explicit connection(std::shared_ptr<detail::connection_impl> impl) : impl_(std::move(impl)) {}
 
   std::shared_ptr<detail::connection_impl> impl_;
 
-  struct connection_pool * borrowed_from_ = nullptr;
   friend struct connection_pool;
   friend struct stream;
 };

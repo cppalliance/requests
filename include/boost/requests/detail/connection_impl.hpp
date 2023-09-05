@@ -25,6 +25,7 @@ namespace boost {
 namespace requests {
 
 struct stream;
+struct connection_pool;
 
 namespace detail {
 
@@ -54,8 +55,10 @@ struct connection_impl : std::enable_shared_from_this<connection_impl>
     connection_impl(connection_impl && lhs) = delete;
     connection_impl & operator=(connection_impl && lhs) = delete;
     template<typename ExecutorOrContext>
-    explicit connection_impl(ExecutorOrContext && exec_or_ctx, asio::ssl::context & ctx)
-        : next_layer_(std::forward<ExecutorOrContext>(exec_or_ctx), ctx), use_ssl_{true} {}
+    explicit connection_impl(ExecutorOrContext && exec_or_ctx, asio::ssl::context & ctx,
+                             connection_pool * borrowed_from = nullptr)
+        : next_layer_(std::forward<ExecutorOrContext>(exec_or_ctx), ctx), use_ssl_{true},
+          borrowed_from_{borrowed_from} {}
 
     template<typename ExecutionContext>
     explicit connection_impl(ExecutionContext &context,
@@ -182,6 +185,11 @@ struct connection_impl : std::enable_shared_from_this<connection_impl>
                 CompletionToken && completion_token);
     bool uses_ssl() const {return use_ssl_;}
     void use_ssl(bool use_ssl = true) {use_ssl_ = use_ssl;}
+
+    BOOST_REQUESTS_DECL void return_to_pool();
+    BOOST_REQUESTS_DECL void remove_from_pool();
+
+    struct connection_pool * pool() const {return borrowed_from_; }
   private:
 
     next_layer_type next_layer_;
@@ -192,6 +200,8 @@ struct connection_impl : std::enable_shared_from_this<connection_impl>
     std::string host_;
     beast::flat_buffer buffer_;
     endpoint_type endpoint_;
+
+    connection_pool * borrowed_from_{nullptr};
 
     struct async_close_op;
     struct async_connect_op;
@@ -208,7 +218,9 @@ struct connection_impl : std::enable_shared_from_this<connection_impl>
     BOOST_REQUESTS_DECL void do_async_close_(detail::faux_token_t<void(system::error_code)>);
     BOOST_REQUESTS_DECL void do_close_(system::error_code & ec);
 
+
     friend struct boost::requests::stream;
+    friend struct requests::connection_pool;
 };
 
 

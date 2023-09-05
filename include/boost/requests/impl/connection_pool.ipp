@@ -154,7 +154,7 @@ auto connection_pool::get_connection(error_code & ec) -> connection
     {
       auto pp = std::move(free_conns_.front());
       free_conns_.erase(free_conns_.begin());
-      return connection(std::move(pp), this);
+      return connection(pp->shared_from_this());
     }
     // check if we can make more connections. -> open another connection.
     // the race here is that we might open one too many
@@ -170,7 +170,7 @@ auto connection_pool::get_connection(error_code & ec) -> connection
                 [this](const endpoint_type &a, const endpoint_type &b) { return conns_.count(a) < conns_.count(b); });
       const auto ep = endpoints_.front();
 
-      auto nconn = conns_.emplace(ep, std::make_shared<detail::connection_impl>(get_executor(), context_))->second;
+      auto nconn = conns_.emplace(ep, std::make_shared<detail::connection_impl>(get_executor(), context_, this))->second;
       // no one else will grab it from there, bc it's not in free_conns_
       lock.unlock();
       nconn->use_ssl(use_ssl_);
@@ -182,7 +182,7 @@ auto connection_pool::get_connection(error_code & ec) -> connection
       if (ec)
         return connection();
 
-      return connection(std::move(nconn), this);
+      return connection(std::move(nconn));
     }
     cv_.wait(lock);
   }
@@ -205,7 +205,7 @@ auto connection_pool::async_get_connection_op::resume(
       {
         auto pp = std::move(this_->free_conns_.front());
         this_->free_conns_.erase(this_->free_conns_.begin());
-        return connection(std::move(pp), this_);
+        return connection(pp->shared_from_this());
       }
       // check if we can make more connections. -> open another connection.
       // the race here is that we might open one too many
@@ -221,7 +221,7 @@ auto connection_pool::async_get_connection_op::resume(
                   [this](const endpoint_type &a, const endpoint_type &b) { return this_->conns_.count(a) < this_->conns_.count(b); });
         ep = this_->endpoints_.front();
 
-        nconn = this_->conns_.emplace(ep, std::make_shared<detail::connection_impl>(get_executor(), this_->context_))->second;
+        nconn = this_->conns_.emplace(ep, std::make_shared<detail::connection_impl>(get_executor(), this_->context_, this_))->second;
         // no one else will grab it from there, bc it's not in free_conns_
         lock.unlock();
         nconn->use_ssl(this_->use_ssl_);
@@ -233,7 +233,7 @@ auto connection_pool::async_get_connection_op::resume(
         if (ec)
           return connection();
 
-        return connection(std::move(nconn), this_);
+        return connection(std::move(nconn));
       }
       this_->cv_.async_wait(lock, std::move(self));
     }
@@ -264,7 +264,8 @@ stream connection_pool::async_ropen_op::resume(
 
 connection_pool::connection_pool(connection_pool && lhs)
   : use_ssl_(lhs.use_ssl_), context_(lhs.context_), cv_(lhs.cv_.get_executor()), host_(std::move(lhs.host_)),
-    endpoints_(std::move(lhs.endpoints_)), limit_(lhs.limit_)
+    endpoints_(std::move(lhs.endpoints_)), limit_(lhs.limit_),
+    conns_(std::move(lhs.conns_)), free_conns_(std::move(lhs.free_conns_))
 {
   BOOST_ASSERT(std::count_if(
       conns_.begin(), conns_.end(),
@@ -273,19 +274,16 @@ connection_pool::connection_pool(connection_pool && lhs)
         return !p.second.unique();
       }) == 0u);
 
+  for (auto & p : conns_)
+    p.second->borrowed_from_ = this;
 }
 
-void connection::return_to_pool()
+connection_pool::~connection_pool()
 {
-  if (borrowed_from_)
-    borrowed_from_->return_connection_(std::move(impl_));
+  for (auto & p : conns_)
+    p.second->borrowed_from_ = nullptr;
 }
 
-void connection::remove_from_pool()
-{
-  if (borrowed_from_)
-    borrowed_from_->drop_connection_(impl_);
-}
 
 }
 }

@@ -23,8 +23,8 @@ void condition_variable::wait(std::unique_lock<std::mutex> & lock, system::error
   cv_.wait(lock);
   if (indicator.expired())
     ec = asio::error::operation_aborted;
-
 }
+
 void condition_variable::async_wait(std::unique_lock<std::mutex> & lock,
                                     faux_token_t<void(system::error_code)> tk)
 {
@@ -42,15 +42,13 @@ void condition_variable::async_wait(std::unique_lock<std::mutex> & lock,
           (std::move(tk));
 }
 
-
-
 condition_variable::~condition_variable()
 {
   shutdown_indicator_.reset();
   timer_.cancel();
   cv_.notify_all();
-
 }
+
 }
 }
 }
