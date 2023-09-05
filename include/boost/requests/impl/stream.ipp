@@ -49,6 +49,14 @@ stream::~stream()
   if (parser_ && parser_->is_header_done() && !parser_->is_done()
       && parser_->get().body().more && impl_ && impl_->is_open())
     dump();
+
+  if (impl_.use_count() == 2u && impl_->pool() != nullptr)
+  {
+    if (impl_->is_open())
+      impl_->return_to_pool();
+    else
+      impl_->remove_from_pool();
+  }
 }
 
 

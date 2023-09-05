@@ -166,8 +166,8 @@ struct stream
   void prepend_history(history_type && pre_history)
   {
     history_.insert(history_.begin(),
-                    std::make_move_iterator(history_.begin()),
-                    std::make_move_iterator(history_.end()));
+                    std::make_move_iterator(pre_history.begin()),
+                    std::make_move_iterator(pre_history.end()));
   }
  private:
   executor_type executor_;
@@ -184,6 +184,7 @@ struct stream
   struct async_read_some_op;
 
   friend struct detail::connection_impl;
+  friend struct connection;
 };
 
 template <typename Executor1>

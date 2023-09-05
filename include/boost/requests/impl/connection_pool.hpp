@@ -132,6 +132,7 @@ struct connection_pool::async_ropen_op : asio::coroutine
   auto resume(requests::detail::faux_token_t<step_signature_type> self,
               boost::system::error_code & ec,
               variant2::variant<variant2::monostate, connection, stream> res = variant2::monostate()) -> stream;
+
 };
 
 

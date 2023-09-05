@@ -10,6 +10,7 @@
 
 #include <boost/requests/detail/connection_impl.hpp>
 #include <boost/requests/detail/define.hpp>
+#include <boost/requests/connection_pool.hpp>
 #include <boost/beast/http/read.hpp>
 #include <boost/beast/version.hpp>
 
@@ -574,6 +575,19 @@ void connection_impl::do_close_(system::error_code & ec)
   if (next_layer_.next_layer().is_open())
     next_layer_.next_layer().close(ec);
 }
+
+void connection_impl::return_to_pool()
+{
+  if (borrowed_from_)
+    borrowed_from_->return_connection_(this);
+}
+
+void connection_impl::remove_from_pool()
+{
+  if (borrowed_from_)
+    borrowed_from_->drop_connection_(this);
+}
+
 
 }
 }

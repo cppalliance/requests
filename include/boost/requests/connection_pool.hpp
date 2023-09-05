@@ -15,6 +15,8 @@ namespace requests {
 namespace detail
 {
 
+struct connection_impl;
+
 struct endpoint_hash
 {
   std::size_t operator()(const asio::generic::stream_protocol::endpoint & be) const
@@ -91,8 +93,10 @@ struct connection_pool
         : context_(ctx), cv_(std::forward<Exec>(exec)), limit_(limit) {}
 
     /// Move constructor
+    BOOST_REQUESTS_DECL
     connection_pool(connection_pool && lhs) ;
-
+    BOOST_REQUESTS_DECL
+    ~connection_pool();
     void lookup(urls::url_view av)
     {
       boost::system::error_code ec;
@@ -223,7 +227,7 @@ struct connection_pool
                               std::shared_ptr<detail::connection_impl>,
                               detail::endpoint_hash> conns_;
 
-    std::vector<std::shared_ptr<detail::connection_impl>> free_conns_;
+    std::vector<detail::connection_impl*> free_conns_;
 
     struct async_lookup_op;
     struct async_get_connection_op;
@@ -231,7 +235,7 @@ struct connection_pool
     struct async_ropen_op_body_base;
     struct async_ropen_op;
 
-    void return_connection_(std::shared_ptr<detail::connection_impl> conn)
+    void return_connection_(detail::connection_impl * conn)
     {
       if (!conn->is_open())
         return drop_connection_(conn);
@@ -241,13 +245,13 @@ struct connection_pool
       cv_.notify_all();
     }
 
-    void drop_connection_(const std::shared_ptr<detail::connection_impl> & conn)
+    void drop_connection_(const detail::connection_impl * conn)
     {
       std::lock_guard<std::mutex> lock{mtx_};
       auto itr = std::find_if(conns_.begin(), conns_.end(),
                    [&](const std::pair<endpoint_type, std::shared_ptr<detail::connection_impl>> & e)
                    {
-                     return e.second == conn;
+                     return e.second.get() == conn;
                    });
       if (itr != conns_.end())
       {
@@ -257,6 +261,7 @@ struct connection_pool
     }
     friend struct connection;
     friend struct stream;
+    friend struct detail::connection_impl;
 };
 
 template<typename Token>
