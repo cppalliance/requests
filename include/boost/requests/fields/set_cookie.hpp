@@ -54,8 +54,4 @@ system::result<set_cookie> parse_set_cookie_field(core::string_view value);
 }
 }
 
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/fields/impl/set_cookie.ipp>
-#endif
-
 #endif //BOOST_REQUESTS_COOKIES_SET_COOKIE_HPP

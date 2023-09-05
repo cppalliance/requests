@@ -5,9 +5,6 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#ifndef BOOST_REQUESTS_IMPL_KEEP_ALIVE_IPP
-#define BOOST_REQUESTS_IMPL_KEEP_ALIVE_IPP
-
 #include <boost/requests/fields/keep_alive.hpp>
 
 #include <boost/url/grammar/parse.hpp>
@@ -89,5 +86,3 @@ system::result<keep_alive>  parse_keep_alive_field(
 
 }
 }
-
-#endif //BOOST_REQUESTS_IMPL_KEEP_ALIVE_IPP

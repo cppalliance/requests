@@ -5,8 +5,6 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#ifndef BOOST_REQUESTS_SOURCES_IMPL_JSON_IPP
-#define BOOST_REQUESTS_SOURCES_IMPL_JSON_IPP
 
 #include <boost/requests/json.hpp>
 #include <boost/requests/sources/json.hpp>
@@ -63,5 +61,3 @@ source_ptr tag_invoke(make_source_tag, const boost::json::string & arr, containe
 
 }
 }
-
-#endif // BOOST_REQUESTS_SOURCES_IMPL_JSON_IPP

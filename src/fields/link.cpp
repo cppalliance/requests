@@ -5,17 +5,19 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#ifndef BOOST_REQUESTS_FIELDS_IMPL_LINK_IPP
-#define BOOST_REQUESTS_FIELDS_IMPL_LINK_IPP
-
-#include <boost/requests/grammar/alternate_rule.hpp>
 #include <boost/requests/fields/link.hpp>
+#include <boost/requests/grammar/alternate_rule.hpp>
 #include <boost/requests/grammar/raw_string.hpp>
 #include <boost/requests/grammar/token_rule.hpp>
 #include <boost/requests/rfc/link.hpp>
-#include <boost/url/rfc/uri_reference_rule.hpp>
+#include <boost/url/grammar/alnum_chars.hpp>
+#include <boost/url/grammar/alpha_chars.hpp>
 #include <boost/url/grammar/delim_rule.hpp>
+#include <boost/url/grammar/lut_chars.hpp>
+#include <boost/url/grammar/tuple_rule.hpp>
+#include <boost/url/grammar/variant_rule.hpp>
 #include <boost/url/parse.hpp>
+#include <boost/url/rfc/uri_reference_rule.hpp>
 
 namespace boost {
 namespace requests {
@@ -139,4 +141,3 @@ system::result<urls::url_view> link::anchor() const
 }
 }
 
-#endif // BOOST_REQUESTS_FIELDS_IMPL_LINK_IPP

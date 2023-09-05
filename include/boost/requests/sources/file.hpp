@@ -77,9 +77,4 @@ struct file_source : source
 }
 }
 
-
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/sources/impl/file.ipp>
-#endif
-
 #endif //BOOST_REQUESTS_SOURCES_FILE_HPP

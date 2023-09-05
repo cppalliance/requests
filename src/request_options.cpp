@@ -5,21 +5,16 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#ifndef BOOST_REQUESTS_IMPL_RESPONSE_IPP
-#define BOOST_REQUESTS_IMPL_RESPONSE_IPP
-
-
-#if defined(BOOST_REQUESTS_SOURCE)
-
-#include <boost/requests/response.hpp>
+#include <boost/requests/request_options.hpp>
 
 namespace boost {
 namespace requests {
 
+request_options & default_options()
+{
+  static request_options opt;
+  return opt;
+}
+
 }
 }
-
-#endif
-
-
-#endif // BOOST_REQUESTS_IMPL_RESPONSE_IPP

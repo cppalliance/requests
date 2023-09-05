@@ -5,10 +5,6 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#ifndef BOOST_REQUESTS_IMPL_COOKIE_JAR_IPP
-#define BOOST_REQUESTS_IMPL_COOKIE_JAR_IPP
-
-
 #include <boost/requests/cookie_jar.hpp>
 
 namespace boost {
@@ -155,4 +151,3 @@ void cookie_jar::drop_expired(const std::chrono::system_clock::time_point nw)
 }
 }
 
-#endif // BOOST_REQUESTS_COOKIE_JAR_IPP

@@ -5,11 +5,8 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#ifndef BOOST_REQUESTS_SOURCE_IMPL_FORM_IPP
-#define BOOST_REQUESTS_SOURCE_IMPL_FORM_IPP
-
-#include <boost/requests/sources/form.hpp>
-#include <boost/requests/sources/file.hpp>
+#include "boost/requests/sources/file.hpp"
+#include "boost/requests/sources/form.hpp"
 #include <random>
 
 namespace boost
@@ -191,5 +188,3 @@ multi_part_form_source::multi_part_form_source(const multi_part_form & mpf) : mp
 
 }
 }
-
-#endif // BOOST_REQUESTS_SOURCE_IMPL_FORM_IPP

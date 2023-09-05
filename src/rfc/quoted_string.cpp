@@ -5,9 +5,6 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#ifndef BOOST_REQUESTS_RFC_IMPL_QUOTED_STRING_IPP
-#define BOOST_REQUESTS_RFC_IMPL_QUOTED_STRING_IPP
-
 #include <boost/requests/grammar/ptokenchar.hpp>
 #include <boost/requests/rfc/link.hpp>
 #include <boost/requests/rfc/quoted_string.hpp>
@@ -78,4 +75,3 @@ bool unquoted_size(core::string_view sv)
 }
 }
 }
-#endif // BOOST_REQUESTS_RFC_IMPL_QUOTED_STRING_IPP

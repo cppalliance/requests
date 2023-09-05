@@ -183,8 +183,4 @@ constexpr http_date_t http_date;
 }
 }
 
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/rfc/impl/dates.ipp>
-#endif
-
 #endif //BOOST_REQUESTS_RFC_DATES_HPP

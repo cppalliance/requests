@@ -10,16 +10,14 @@
 
 #include <boost/config.hpp>
 
-#ifndef BOOST_REQUESTS_HEADER_ONLY
-# ifndef BOOST_REQUESTS_SEPARATE_COMPILATION
-#   define BOOST_REQUESTS_HEADER_ONLY 1
+# if (defined(BOOST_REQUESTS_DYN_LINK) || defined(BOOST_ALL_DYN_LINK)) && !defined(BOOST_JSON_STATIC_LINK)
+# if defined(BOOST_REQUESTS_SOURCE)
+#  define BOOST_REQUESTS_DECL BOOST_SYMBOL_EXPORT
+# else
+#  define BOOST_REQUESTS_DECL BOOST_SYMBOL_IMPORT
 # endif
-#endif
-
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-# define BOOST_REQUESTS_DECL inline
 #else
-# define BOOST_REQUESTS_DECL BOOST_SYMBOL_EXPORT
+# define BOOST_REQUESTS_DECL
 #endif
 
 #define BOOST_REQUESTS_RETURN_EC(ev)                              \

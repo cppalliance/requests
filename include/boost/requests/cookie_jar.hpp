@@ -91,9 +91,4 @@ struct cookie_jar final
 }
 }
 
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/impl/cookie_jar.ipp>
-#endif
-
-
 #endif //BOOST_REQUESTS_COOKIES_JAR_HPP

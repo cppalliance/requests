@@ -278,9 +278,5 @@ connection_impl::async_ropen(beast::http::verb method,
 }
 
 
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/detail/impl/connection.ipp>
-#endif
-
 #endif // BOOST_REQUESTS_IMPL_CONNECTION_HPP
 

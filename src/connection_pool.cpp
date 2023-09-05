@@ -5,9 +5,6 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#ifndef BOOST_REQUESTS_IMPL_CONNECTION_POOL_IPP
-#define BOOST_REQUESTS_IMPL_CONNECTION_POOL_IPP
-
 #include <boost/requests/connection_pool.hpp>
 
 namespace boost {
@@ -290,5 +287,3 @@ connection_pool::~connection_pool()
 }
 }
 
-
-#endif // BOOST_REQUESTS_IMPL_CONNECTION_POOL_IPP

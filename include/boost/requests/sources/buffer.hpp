@@ -44,8 +44,4 @@ source_ptr tag_invoke(make_source_tag, asio::const_buffer cb, container::pmr::me
 }
 }
 
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/sources/impl/buffer.ipp>
-#endif
-
 #endif //BOOST_REQUESTS_SOURCES_BUFFER_HPP

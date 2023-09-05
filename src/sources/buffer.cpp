@@ -5,9 +5,6 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#ifndef BOOST_REQUESTS_SOURCES_IMPL_BUFFER_IPP
-#define BOOST_REQUESTS_SOURCES_IMPL_BUFFER_IPP
-
 #include <boost/requests/sources/buffer.hpp>
 
 namespace boost
@@ -26,5 +23,3 @@ source_ptr tag_invoke(make_source_tag, asio::const_buffer cb, container::pmr::me
 }
 }
 }
-
-#endif // BOOST_REQUESTS_SOURCES_IMPL_BUFFER_IPP

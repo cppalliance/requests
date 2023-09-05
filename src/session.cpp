@@ -5,12 +5,10 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#ifndef BOOST_REQUESTS_IMPL_SESSION_IPP
-#define BOOST_REQUESTS_IMPL_SESSION_IPP
 
-
-#include <boost/requests/session.hpp>
 #include <boost/requests/detail/define.hpp>
+#include <boost/requests/session.hpp>
+#include <boost/beast/version.hpp>
 
 namespace boost {
 namespace requests {
@@ -330,4 +328,3 @@ auto session::async_ropen_op::resume(requests::detail::faux_token_t<step_signatu
 
 #include <boost/requests/detail/undefine.hpp>
 
-#endif // BOOST_REQUESTS_IMPL_SESSION_IPP

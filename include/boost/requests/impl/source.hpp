@@ -5,12 +5,14 @@
 #ifndef BOOST_REQUESTS_IMPL_SOURCE_HPP
 #define BOOST_REQUESTS_IMPL_SOURCE_HPP
 
-#include <boost/asio/consign.hpp>
-#include <boost/asio/prepend.hpp>
-#include <boost/beast/http/write.hpp>
 #include <boost/requests/detail/faux_coroutine.hpp>
 #include <boost/requests/detail/pmr.hpp>
 #include <boost/requests/source.hpp>
+
+#include <boost/asio/consign.hpp>
+#include <boost/asio/prepend.hpp>
+#include <boost/beast/http/write.hpp>
+#include <boost/variant2/variant.hpp>
 
 namespace boost
 {

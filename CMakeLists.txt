@@ -71,8 +71,33 @@ if (NOT MSVC)
     link_libraries(${OPENSSL_LIBRARIES})
 endif()
 
-add_library(boost_requests src/src.cpp)
+add_library(boost_requests
+        src/detail/condition_variable.cpp
+        src/detail/connection_impl.cpp
+        src/detail/mutex.cpp
+        src/fields/keep_alive.cpp
+        src/fields/link.cpp
+        src/fields/location.cpp
+        src/fields/set_cookie.cpp
+        src/rfc/dates.cpp
+        src/rfc/link.cpp
+        src/rfc/quoted_string.cpp
+        src/sources/buffer.cpp
+        src/sources/empty.cpp
+        src/sources/file.cpp
+        src/sources/form.cpp
+        src/sources/json.cpp
+        src/connection_pool.cpp
+        src/cookie_jar.cpp
+        src/error.cpp
+        src/mime_types.cpp
+        src/public_suffix.cpp
+        src/redirect.cpp
+        src/request_options.cpp
+        src/session.cpp
+        src/stream.cpp)
 target_include_directories(boost_requests PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+
 
 if (BOOST_ASYNC_BUILD_INLINE)
     target_link_libraries(
@@ -94,6 +119,7 @@ target_link_libraries(
         Threads::Threads)
 
 
+target_compile_definitions(boost_requests PRIVATE BOOST_REQUESTS_SOURCE=1)
 target_compile_definitions(boost_requests PUBLIC BOOST_REQUESTS_SEPARATE_COMPILATION=1 BOOST_FILESYSTEM_NO_DEPRECATED=1)
 add_library(Boost::requests ALIAS boost_requests)
 

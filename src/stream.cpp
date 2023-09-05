@@ -2,10 +2,10 @@
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-#ifndef BOOST_REQUESTS_STREAM_IPP
-#define BOOST_REQUESTS_STREAM_IPP
 
 #include <boost/requests/stream.hpp>
+#include <boost/requests/detail/connection_impl.hpp>
+#include <boost/requests/detail/define.hpp>
 
 namespace boost
 {
@@ -131,9 +131,12 @@ void stream::async_dump_op::resume(requests::detail::faux_token_t<step_signature
   }
 }
 
+bool stream::is_open() const
+{
+  return impl_ && impl_->is_open() && !done();
+}
+
 
 }
 }
 
-
-#endif //BOOST_REQUESTS_STREAM_IPP

@@ -70,8 +70,4 @@ struct is_error_code_enum<::boost::requests::error>
 } // system
 } // boost
 
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/impl/error.ipp>
-#endif
-
 #endif // BOOST_REQUESTS_ERROR_HPP

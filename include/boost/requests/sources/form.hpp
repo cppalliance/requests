@@ -100,8 +100,4 @@ source_ptr tag_invoke(make_source_tag, multi_part_form mpf, container::pmr::memo
 }
 }
 
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/sources/impl/form.ipp>
-#endif
-
 #endif //BOOST_REQUESTS_SOURCES_FILE_HPP

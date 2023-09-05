@@ -2,8 +2,6 @@
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-#ifndef BOOST_REQUESTS_COOKIES_IMPL_PUBLIC_SUFFIX_IPP
-#define BOOST_REQUESTS_COOKIES_IMPL_PUBLIC_SUFFIX_IPP
 
 #include <boost/requests/public_suffix.hpp>
 #include <boost/algorithm/string/trim.hpp>
@@ -20,7 +18,7 @@ const public_suffix_list & default_public_suffix_list()
 {
     const static public_suffix_list def_list = {
 #include "public_suffix.inc"
-    };
+  };
     return def_list;
 }
 
@@ -90,4 +88,3 @@ bool is_public_suffix(core::string_view value,
 }
 }
 
-#endif //BOOST_REQUESTS_COOKIES_IMPL_PUBLIC_SUFFIX_IPP

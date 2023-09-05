@@ -173,9 +173,4 @@ session::async_ropen(urls::url_view url,
 
 }
 }
-
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/impl/session.ipp>
-#endif
-
 #endif // BOOST_REQUESTS_IMPL_SESSION_HPP

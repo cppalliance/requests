@@ -6,6 +6,7 @@ project boost/requests
       <link>static:<define>BOOST_REQUESTS_STATIC_LINK=1
       <define>BOOST_REQUESTS_SOURCE=1
       <define>BOOST_FILESYSTEM_NO_DEPRECATED=1
+      <define>BOOST_JSON_SOURCE
     : usage-requirements
       <link>shared:<define>BOOST_REQUESTS_DYN_LINK=1
       <link>static:<define>BOOST_REQUESTS_STATIC_LINK=1
@@ -13,6 +14,31 @@ project boost/requests
     ;
 
 
-alias requests_sources : src.cpp ;
+alias requests_sources :
+            detail/condition_variable.cpp
+            detail/connection_impl.cpp
+            detail/mutex.cpp
+            fields/keep_alive.cpp
+            fields/link.cpp
+            fields/location.cpp
+            fields/set_cookie.cpp
+            rfc/dates.cpp
+            rfc/link.cpp
+            rfc/quoted_string.cpp
+            sources/buffer.cpp
+            sources/empty.cpp
+            sources/file.cpp
+            sources/form.cpp
+            sources/json.cpp
+            connection_pool.cpp
+            cookie_jar.cpp
+            error.cpp
+            mime_types.cpp
+            public_suffix.cpp
+            redirect.cpp
+            request_options.cpp
+            session.cpp
+            stream.cpp
+            ;
 lib boost_requests : requests_sources /openssl//ssl ;
 boost-install boost_requests ;

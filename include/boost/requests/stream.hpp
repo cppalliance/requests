@@ -5,12 +5,9 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-// this is on purpose
 #ifndef BOOST_REQUESTS_STREAM_HPP
-
 #define BOOST_REQUESTS_STREAM_HPP
 
-#include <boost/requests/detail/connection_impl.hpp>
 #include <boost/requests/detail/lock_guard.hpp>
 #include <boost/asio/execution/bad_executor.hpp>
 #include <boost/beast/http/basic_parser.hpp>
@@ -19,11 +16,16 @@
 #include <boost/requests/detail/pmr.hpp>
 #include <boost/requests/fields/keep_alive.hpp>
 #include <boost/requests/http.hpp>
+#include <boost/requests/response.hpp>
 
 namespace boost
 {
 namespace requests
 {
+namespace detail
+{
+struct connection_impl;
+}
 
 struct stream
 {
@@ -50,10 +52,7 @@ struct stream
 
 
   /// Check if the underlying connection is open.
-  bool is_open() const
-  {
-    return impl_ && impl_->is_open() && !done();
-  }
+  BOOST_REQUESTS_DECL bool is_open() const;
 
   /// Read some data from the request body.
   template<typename MutableBuffer>
@@ -220,7 +219,6 @@ struct stream::defaulted : stream
 
 }
 }
-#include <boost/requests/detail/connection_impl.hpp>
 
 #include <boost/requests/impl/stream.hpp>
 

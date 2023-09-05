@@ -5,12 +5,9 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#ifndef BOOST_REQUESTS_IMPL_CONNECTION_IPP
-#define BOOST_REQUESTS_IMPL_CONNECTION_IPP
-
+#include <boost/requests/connection_pool.hpp>
 #include <boost/requests/detail/connection_impl.hpp>
 #include <boost/requests/detail/define.hpp>
-#include <boost/requests/connection_pool.hpp>
 #include <boost/beast/http/read.hpp>
 #include <boost/beast/version.hpp>
 
@@ -594,5 +591,3 @@ void connection_impl::remove_from_pool()
 }
 
 #include <boost/requests/detail/undefine.hpp>
-
-#endif // BOOST_REQUESTS_REQUESTS_CONNECTION_IPP

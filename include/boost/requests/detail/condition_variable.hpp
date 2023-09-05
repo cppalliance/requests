@@ -75,9 +75,4 @@ struct condition_variable
 }
 }
 
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/detail/impl/condition_variable.ipp>
-#endif
-
-
 #endif // BOOST_REQUESTS_DETAIL_CONDITION_VARIABLE_HPP

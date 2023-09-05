@@ -203,10 +203,4 @@ connection_pool::async_ropen(beast::http::verb method,
 }
 }
 
-
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/impl/connection_pool.ipp>
-#endif
-
-
 #endif // BOOST_REQUESTS_IMPL_CONNECTION_POOL_HPP

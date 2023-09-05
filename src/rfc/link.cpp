@@ -5,8 +5,6 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#ifndef BOOST_REQUESTS_RFC_IMPL_LINK_IPP
-#define BOOST_REQUESTS_RFC_IMPL_LINK_IPP
 
 #include <boost/requests/grammar/attr_char.hpp>
 #include <boost/requests/grammar/fixed_token_rule.hpp>
@@ -107,5 +105,3 @@ link_value_t::parse(
 }
 }
 }
-
-#endif // BOOST_REQUESTS_RFC_IMPL_LINK_IPP

@@ -5,9 +5,6 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#ifndef BOOST_REQUESTS_IMPL_REDIRECT_IPP
-#define BOOST_REQUESTS_IMPL_REDIRECT_IPP
-
 #include <boost/requests/redirect.hpp>
 
 namespace boost
@@ -135,5 +132,3 @@ bool same_endpoint_on_host(const urls::url_view current, const asio::generic::st
 
 }
 }
-
-#endif //BOOST_REQUESTS_IMPL_REDIRECT_IPP

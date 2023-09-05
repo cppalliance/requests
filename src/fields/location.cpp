@@ -5,9 +5,6 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#ifndef BOOST_REQUESTS_FIELDS_IMPL_LOCATION_IPP
-#define BOOST_REQUESTS_FIELDS_IMPL_LOCATION_IPP
-
 #include <boost/requests/fields/location.hpp>
 
 namespace boost
@@ -65,5 +62,3 @@ catch(system_error & se)
 
 }
 }
-
-#endif // BOOST_REQUESTS_FIELDS_IMPL_LOCATION_IPP

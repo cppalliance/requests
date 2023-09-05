@@ -5,8 +5,6 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#ifndef BOOST_REQUESTS_SOURCES_IMPL_FILE_IPP
-#define BOOST_REQUESTS_SOURCES_IMPL_FILE_IPP
 
 #include <boost/requests/sources/file.hpp>
 #include <boost/filesystem/path.hpp>
@@ -29,5 +27,3 @@ source_ptr tag_invoke(const make_source_tag &tag, const filesystem::path & path,
 
 }
 }
-
-#endif // BOOST_REQUESTS_SOURCES_IMPL_FILE_IPP

@@ -186,8 +186,4 @@ struct response : response_base
 }
 }
 
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/impl/response.ipp>
-#endif
-
 #endif // BOOST_REQUESTS_RESPONSE_HPP

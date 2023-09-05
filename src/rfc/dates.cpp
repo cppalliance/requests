@@ -5,8 +5,6 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#ifndef BOOST_REQUESTS_RFC_IMPL_DATES_IPP
-#define BOOST_REQUESTS_RFC_IMPL_DATES_IPP
 
 #include <boost/requests/rfc/dates.hpp>
 #include <boost/requests/grammar/fixed_token_rule.hpp>
@@ -302,4 +300,3 @@ http_date_t::parse(
 }
 }
 }
-#endif //BOOST_REQUESTS_RFC_IMPL_RFC_1123_IPP

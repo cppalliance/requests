@@ -5,9 +5,6 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#ifndef BOOST_REQUESTS_IMPL_MIME_TYPES_IPP
-#define BOOST_REQUESTS_IMPL_MIME_TYPES_IPP
-
 #include <boost/requests/mime_types.hpp>
 
 namespace boost {
@@ -97,5 +94,3 @@ const mime_type_map & default_mime_type_map()
 
 }
 }
-
-#endif // BOOST_REQUESTS_IMPL_MIME_TYPES_IPP

@@ -5,15 +5,12 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#ifndef BOOST_REQUESTS_DETAIL_IMPL_MUTEX_IPP
-#define BOOST_REQUESTS_DETAIL_IMPL_MUTEX_IPP
-
 #include <boost/requests/detail/mutex.hpp>
 #include <boost/asio/defer.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/thread_pool.hpp>
-#include <boost/core/ignore_unused.hpp>
 #include <boost/container/pmr/monotonic_buffer_resource.hpp>
+#include <boost/core/ignore_unused.hpp>
 #include <condition_variable>
 
 namespace boost
@@ -139,5 +136,3 @@ mutex::~mutex()
 }
 }
 }
-
-#endif // BOOST_REQUESTS_DETAIL_IMPL_MUTEX_IPP

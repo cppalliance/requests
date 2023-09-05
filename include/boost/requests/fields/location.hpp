@@ -28,8 +28,4 @@ BOOST_REQUESTS_DECL system::result<urls::url_view> interpret_location(
 }
 }
 
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/fields/impl/location.ipp>
-#endif
-
 #endif // BOOST_REQUESTS_FIELDS_LOCATION_HPP

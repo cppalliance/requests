@@ -94,8 +94,5 @@ struct mutex
 }
 }
 
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/detail/impl/mutex.ipp>
-#endif
 
 #endif // BOOST_REQUESTS_MUTEX_HPP

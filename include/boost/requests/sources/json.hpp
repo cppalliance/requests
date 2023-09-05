@@ -32,9 +32,4 @@ struct json_source : source
 
 }
 }
-
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/sources/impl/json.ipp>
-#endif
-
 #endif //BOOST_REQUESTS_SOURCES_JSON_HPP

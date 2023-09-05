@@ -57,8 +57,4 @@ BOOST_REQUESTS_DECL bool same_endpoint_on_host(const urls::url_view current, con
 }
 }
 
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/impl/redirect.ipp>
-#endif
-
 #endif //BOOST_REQUESTS_REDIRECT_HPP

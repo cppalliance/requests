@@ -5,10 +5,9 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#ifndef BOOST_REQUESTS_DETAIL_IMPL_CONDITION_VARIABLE_IPP
-#define BOOST_REQUESTS_DETAIL_IMPL_CONDITION_VARIABLE_IPP
-
 #include <boost/requests/detail/condition_variable.hpp>
+#include <boost/asio/deferred.hpp>
+
 
 namespace boost
 {
@@ -52,4 +51,3 @@ condition_variable::~condition_variable()
 }
 }
 }
-#endif // BOOST_REQUESTS_DETAIL_IMPL_CONDITION_VARIABLE_IPP

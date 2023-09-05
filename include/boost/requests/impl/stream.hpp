@@ -8,9 +8,11 @@
 #ifndef BOOST_REQUESTS_IMPL_STREAM_HPP
 #define BOOST_REQUESTS_IMPL_STREAM_HPP
 
+#include <boost/requests/stream.hpp>
+#include <boost/requests/detail/connection_impl.hpp>
+
 #include <boost/asio/read_until.hpp>
 #include <boost/asio/redirect_error.hpp>
-#include <boost/requests/stream.hpp>
 
 
 namespace boost
@@ -262,10 +264,5 @@ stream::async_dump(CompletionToken && token)
 
 }
 }
-
-
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/impl/stream.ipp>
-#endif
 
 #endif // BOOST_REQUESTS_IMPL_STREAM_HPP

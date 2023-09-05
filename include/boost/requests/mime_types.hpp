@@ -27,8 +27,4 @@ BOOST_REQUESTS_DECL const mime_type_map & default_mime_type_map();
 }
 
 
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/impl/mime_types.ipp>
-#endif
-
 #endif // BOOST_REQUESTS_MIME_TYPES_HPP

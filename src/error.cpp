@@ -5,13 +5,10 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#ifndef BOOST_REQUESTS_IMPL_ERROR_IPP
-#define BOOST_REQUESTS_IMPL_ERROR_IPP
-
-#include <boost/beast/http/status.hpp>
 #include <boost/requests/error.hpp>
-#include <boost/core/detail/string_view.hpp>
 #include <algorithm>
+#include <boost/beast/http/status.hpp>
+#include <boost/core/detail/string_view.hpp>
 
 namespace boost {
 namespace requests {
@@ -111,5 +108,3 @@ make_error_code(error e)
 } // requests
 } // boost
 
-
-#endif // BOOST_REQUESTS_IMPL_ERROR_IPP
