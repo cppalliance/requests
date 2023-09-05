@@ -265,7 +265,7 @@ stream connection_pool::async_ropen_op::resume(
 connection_pool::connection_pool(connection_pool && lhs)
   : use_ssl_(lhs.use_ssl_), context_(lhs.context_), cv_(lhs.cv_.get_executor()), host_(std::move(lhs.host_)),
     endpoints_(std::move(lhs.endpoints_)), limit_(lhs.limit_),
-    conns_(std::move(lhs.conns_)), free_conns_(std::move(lhs.free_conns_))
+    conns_(std::move(lhs.conns_))
 {
   BOOST_ASSERT(std::count_if(
       conns_.begin(), conns_.end(),
@@ -276,6 +276,8 @@ connection_pool::connection_pool(connection_pool && lhs)
 
   for (auto & p : conns_)
     p.second->borrowed_from_ = this;
+
+  free_conns_ = std::move(lhs.free_conns_);
 }
 
 connection_pool::~connection_pool()

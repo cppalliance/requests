@@ -201,7 +201,8 @@ struct connection_impl : std::enable_shared_from_this<connection_impl>
     beast::flat_buffer buffer_;
     endpoint_type endpoint_;
 
-    connection_pool * borrowed_from_{nullptr};
+    // atomic so moving the pool can be thread-safe
+    std::atomic<connection_pool *> borrowed_from_{nullptr};
 
     struct async_close_op;
     struct async_connect_op;

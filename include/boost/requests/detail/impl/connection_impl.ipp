@@ -579,13 +579,13 @@ void connection_impl::do_close_(system::error_code & ec)
 void connection_impl::return_to_pool()
 {
   if (borrowed_from_)
-    borrowed_from_->return_connection_(this);
+    borrowed_from_.load()->return_connection_(this);
 }
 
 void connection_impl::remove_from_pool()
 {
   if (borrowed_from_)
-    borrowed_from_->drop_connection_(this);
+    borrowed_from_.load()->drop_connection_(this);
 }
 
 
