@@ -44,16 +44,14 @@ struct mutex
   BOOST_REQUESTS_DECL auto
   async_lock(CompletionToken && tk)
   {
-    return asio::async_initiate<CompletionToken, void(system::error_code)>
-        (async_lock_impl_, tk, this);
+    return asio::async_initiate<CompletionToken, void(system::error_code)>(async_lock_impl_, tk, this);
   }
 
   mutex& operator=(const mutex&) = delete;
   mutex& operator=(mutex&& lhs) noexcept
   {
-    std::lock_guard<std::mutex> _(mtx_);
+    std::lock_guard<std::mutex> _(waiters_mtx_);
     exec_ = std::move(lhs.exec_);
-    locked_ = locked_.exchange(lhs.locked_.load());
     waiters_ = std::move(lhs.waiters_);
     return *this;
   }
@@ -61,10 +59,10 @@ struct mutex
   mutex(const mutex&) = delete;
   mutex(mutex&& mi) noexcept
       : exec_(std::move(mi.exec_)),
-        locked_(mi.locked_.exchange(false)),
         waiters_(std::move(mi.waiters_))
   {
   }
+
   BOOST_REQUESTS_DECL void lock(system::error_code & ec);
   void lock()
   {
@@ -94,8 +92,7 @@ struct mutex
   void async_lock_impl_(asio::any_completion_handler<void(system::error_code)> handler, mutex * this_);
 
   asio::any_io_executor exec_;
-  std::atomic<bool> locked_{false};
-  std::mutex mtx_;
+  std::mutex mutex_, waiters_mtx_;
   std::list<asio::any_completion_handler<void(system::error_code)>> waiters_;
 };
 

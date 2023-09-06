@@ -23,10 +23,10 @@ namespace detail
 void mutex::async_lock_impl_(asio::any_completion_handler<void(system::error_code)> handler,
                              mutex * this_)
 {
-  std::lock_guard<std::mutex> lock{this_->mtx_};
+  std::lock_guard<std::mutex> lock{this_->waiters_mtx_};
   if (this_->try_lock())
     return asio::dispatch(
-        asio::get_associated_executor(handler, this_->exec_),
+        asio::get_associated_immediate_executor(handler, this_->exec_),
         asio::append(std::move(handler), system::error_code()));
 
   auto itr = this_->waiters_.insert(this_->waiters_.end(), std::move(handler));
@@ -39,7 +39,7 @@ void mutex::async_lock_impl_(asio::any_completion_handler<void(system::error_cod
         {
           if (type != asio::cancellation_type::none)
           {
-            std::lock_guard<std::mutex> lock{this_->mtx_};
+            std::lock_guard<std::mutex> lock{this_->waiters_mtx_};
             ignore_unused(lock);
             system::error_code ec;
             BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::operation_aborted);
@@ -51,59 +51,19 @@ void mutex::async_lock_impl_(asio::any_completion_handler<void(system::error_cod
 }
 
 void mutex::lock(system::error_code & ec)
+try {
+  this->mutex_.lock();
+}
+catch (std::system_error & se)
 {
-  if (try_lock())
-    return ;
-
-  using token_type = faux_token_t<void(system::error_code)>;
-  struct impl final : token_type::base
-  {
-    using allocator_type = container::pmr::polymorphic_allocator<void>;
-    container::pmr::memory_resource * resource;
-    asio::any_io_executor executor;
-    allocator_type get_allocator() override
-    {
-      return container::pmr::polymorphic_allocator<void>{resource};
-    }
-
-    void resume(faux_token_t<void(system::error_code)> tk, system::error_code ec) override
-    {
-      done = true;
-      this->ec = ec;
-      var.notify_all();
-    }
-
-    impl(container::pmr::memory_resource * res, asio::any_io_executor executor) : resource(res), executor(executor) {}
-    system::error_code ec;
-    bool done = false;
-    std::condition_variable var;
-
-    void wait(std::unique_lock<std::mutex> & lock)
-    {
-      var.wait(lock, [this]{ return done;});
-    }
-  };
-
-  char buf[4096];
-  container::pmr::monotonic_buffer_resource res{buf, sizeof(buf)};
-
-  impl ip{&res, get_executor()};
-
-  std::unique_lock<std::mutex> lock(mtx_);
-  std::shared_ptr<token_type::base> ptr{&ip, [](impl * ) {}};
-  token_type ft{ptr};
-
-  waiters_.push_back(std::move(ft));
-
-  ip.wait(lock);
-  ec = ip.ec;
+  ec = se.code();
 }
 
 void mutex::unlock()
 {
-  std::lock_guard<std::mutex> lock{mtx_};
+  std::lock_guard<std::mutex> lock{waiters_mtx_};
   if (waiters_.empty())
-    locked_ = false;
+    this->mutex_.unlock();
   else if (!waiters_.empty())
   {
     auto h = std::move(waiters_.front());
@@ -115,7 +75,7 @@ void mutex::unlock()
 
 bool mutex::try_lock()
 {
-  return !locked_.exchange(true);
+  return this->mutex_.try_lock();
 }
 
 mutex::~mutex()
