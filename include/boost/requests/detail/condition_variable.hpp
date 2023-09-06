@@ -9,6 +9,7 @@
 #define BOOST_REQUESTS_DETAIL_CONDITION_VARIABLE_HPP
 
 #include <boost/requests/detail/faux_coroutine.hpp>
+#include <boost/asio/any_completion_handler.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <boost/requests/detail/config.hpp>
 #include <condition_variable>
@@ -35,8 +36,15 @@ struct condition_variable
   {
   }
 
-  BOOST_REQUESTS_DECL void
-  async_wait(std::unique_lock<std::mutex> & lock, faux_token_t<void(system::error_code)> tk);
+  template<typename CompletionToken>
+  auto
+  async_wait(std::unique_lock<std::mutex> & lock, CompletionToken && tk)
+  {
+    return asio::async_initiate<CompletionToken, void(system::error_code)>
+            (
+                async_wait_impl_, tk, this, std::ref(lock)
+            );
+  }
 
   condition_variable& operator=(const condition_variable&) = delete;
   condition_variable& operator=(condition_variable&& lhs) noexcept = default;
@@ -66,6 +74,10 @@ struct condition_variable
   BOOST_REQUESTS_DECL ~condition_variable();
 
  private:
+  BOOST_REQUESTS_DECL static
+  void async_wait_impl_(asio::any_completion_handler<void(system::error_code)> h,
+                        condition_variable * this_, std::unique_lock<std::mutex> & lock);
+
   asio::steady_timer timer_;
   std::condition_variable cv_;
   std::shared_ptr<int> shutdown_indicator_{std::make_shared<int>()};

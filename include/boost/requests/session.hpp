@@ -150,8 +150,7 @@ struct session
     template< BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, stream)) CompletionToken>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                        void (boost::system::error_code, stream))
-    async_ropen(urls::url_view url,
-                http::verb method,
+    async_ropen(http::verb method,
                 urls::url_view path,
                 http::fields & headers,
                 source & src,
@@ -212,14 +211,13 @@ struct session::defaulted : session
 
   template<typename CompletionToken>
   BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, stream))
-  async_ropen(urls::url_view url,
-              http::verb method,
+  async_ropen(http::verb method,
               urls::url_view path,
               http::fields & headers,
               source & src,
               CompletionToken && completion_token )
   {
-    return session::async_ropen(url, method, path, headers, src,
+    return session::async_ropen(method, path, headers, src,
                                 detail::with_defaulted_token<Token>(std::forward<CompletionToken>(completion_token)));
   }
 
@@ -232,13 +230,12 @@ struct session::defaulted : session
     return async_ropen(method, path, std::forward<RequestBody>(body), std::move(req), default_token());
   }
 
-  auto async_ropen(urls::url_view url,
-                   http::verb method,
+  auto async_ropen(http::verb method,
                    urls::url_view path,
                    http::fields & headers,
                    source & src)
   {
-    return async_ropen(url, method, path, headers, src, default_token());
+    return async_ropen(method, path, headers, src, default_token());
   }
 
 

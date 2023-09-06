@@ -194,10 +194,22 @@ connection_pool::async_ropen(beast::http::verb method,
                              RequestBody && body, request_parameters req,
                              CompletionToken && completion_token)
 {
-  return detail::faux_run_with_allocator<async_ropen_op_body>(
-      std::forward<CompletionToken>(completion_token),
-      this, method, path, std::forward<RequestBody>(body),
-      std::move(req));
+  return asio::async_initiate<CompletionToken, void(boost::system::error_code, stream)>(
+      [this](auto handler,
+             beast::http::verb method,
+             urls::url_view path,
+             RequestBody && body, request_parameters req)
+      {
+        auto source_ptr = requests::make_source(std::forward<RequestBody>(body));
+        auto & source = *source_ptr;
+        auto alloc = asio::get_associated_allocator(handler, asio::recycling_allocator<void>());
+        auto header_ptr = allocate_unique<http::fields>(alloc, std::move(req.fields));
+        auto & headers = *header_ptr;
+        async_ropen(method, path, headers, source, std::move(req.opts), req.jar,
+                    asio::consign(std::move(handler), std::move(source_ptr), std::move(header_ptr)));
+      },
+      completion_token, method, path, std::forward<RequestBody>(body), std::move(req)
+  );
 }
 
 }

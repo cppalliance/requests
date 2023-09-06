@@ -20,31 +20,31 @@ namespace requests
 namespace detail
 {
 
-void mutex::async_lock(faux_token_t<void(system::error_code)> tk)
+void mutex::async_lock_impl_(asio::any_completion_handler<void(system::error_code)> handler,
+                             mutex * this_)
 {
-  std::lock_guard<std::mutex> lock{mtx_};
-  if (try_lock())
-    return asio::post(
-        exec_,
-        asio::append(std::move(tk), system::error_code()));
+  std::lock_guard<std::mutex> lock{this_->mtx_};
+  if (this_->try_lock())
+    return asio::dispatch(
+        asio::get_associated_executor(handler, this_->exec_),
+        asio::append(std::move(handler), system::error_code()));
 
-
-  auto itr = waiters_.insert(waiters_.end(), std::move(tk));
+  auto itr = this_->waiters_.insert(this_->waiters_.end(), std::move(handler));
 
   auto slot = itr->get_cancellation_slot();
   if (slot.is_connected())
   {
     slot.assign(
-        [this, itr](asio::cancellation_type type)
+        [this_, itr](asio::cancellation_type type)
         {
           if (type != asio::cancellation_type::none)
           {
-            std::lock_guard<std::mutex> lock{mtx_};
+            std::lock_guard<std::mutex> lock{this_->mtx_};
             ignore_unused(lock);
             system::error_code ec;
             BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::operation_aborted);
-            asio::defer(exec_, asio::append(std::move(*itr), ec));
-            waiters_.erase(itr);
+            asio::defer(this_->exec_, asio::append(std::move(*itr), ec));
+            this_->waiters_.erase(itr);
           }
         });
   }

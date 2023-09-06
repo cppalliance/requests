@@ -159,16 +159,15 @@ session::async_ropen(beast::http::verb method,
 
 template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, stream)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                   void (boost::system::error_code, basic_stream<Executor>))
-session::async_ropen(urls::url_view url,
-                     http::verb method,
+                                   void (boost::system::error_code, stream))
+session::async_ropen(http::verb method,
                      urls::url_view path,
                      http::fields & headers,
                      source & src,
                      CompletionToken && completion_token)
 {
   return detail::faux_run<async_ropen_op>(std::forward<CompletionToken>(completion_token),
-                                        this, url, method, path, headers, src);
+                                        this, method, path, headers, src);
 }
 
 }

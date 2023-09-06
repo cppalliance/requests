@@ -24,12 +24,14 @@ void condition_variable::wait(std::unique_lock<std::mutex> & lock, system::error
     ec = asio::error::operation_aborted;
 }
 
-void condition_variable::async_wait(std::unique_lock<std::mutex> & lock,
-                                    faux_token_t<void(system::error_code)> tk)
+void condition_variable::async_wait_impl_(
+    asio::any_completion_handler<void(system::error_code)> tk,
+    condition_variable * this_,
+    std::unique_lock<std::mutex> & lock)
 {
-  std::weak_ptr<int> indicator = this->shutdown_indicator_;
+  std::weak_ptr<int> indicator = this_->shutdown_indicator_;
   lock.unlock();
-  timer_.async_wait(
+  this_->timer_.async_wait(
         asio::deferred(
           [&lock, indicator](system::error_code ec_)
           {

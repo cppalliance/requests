@@ -8,6 +8,7 @@
 #ifndef BOOST_REQUESTS_DETAIL_MUTEX_HPP
 #define BOOST_REQUESTS_DETAIL_MUTEX_HPP
 
+#include <boost/asio/any_completion_handler.hpp>
 #include <boost/asio/any_io_executor.hpp>
 #include <boost/system/error_code.hpp>
 #include <boost/system/system_error.hpp>
@@ -39,8 +40,13 @@ struct mutex
   {
   }
 
-  BOOST_REQUESTS_DECL void
-  async_lock(faux_token_t<void(system::error_code)> tk);
+  template<typename CompletionToken>
+  BOOST_REQUESTS_DECL auto
+  async_lock(CompletionToken && tk)
+  {
+    return asio::async_initiate<CompletionToken, void(system::error_code)>
+        (async_lock_impl_, tk, this);
+  }
 
   mutex& operator=(const mutex&) = delete;
   mutex& operator=(mutex&& lhs) noexcept
@@ -84,10 +90,13 @@ struct mutex
   BOOST_REQUESTS_DECL ~mutex();
  private:
 
+  BOOST_REQUESTS_DECL static
+  void async_lock_impl_(asio::any_completion_handler<void(system::error_code)> handler, mutex * this_);
+
   asio::any_io_executor exec_;
   std::atomic<bool> locked_{false};
   std::mutex mtx_;
-  std::list<faux_token_t<void(system::error_code)>> waiters_;
+  std::list<asio::any_completion_handler<void(system::error_code)>> waiters_;
 };
 
 }
