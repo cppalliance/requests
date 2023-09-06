@@ -152,39 +152,6 @@ connection_pool::async_ropen(beast::http::verb method,
       this, method, path, std::ref(headers), std::ref(src), std::move(opt), jar);
 }
 
-struct connection_pool::async_ropen_op_body_base
-{
-  source_ptr source_impl;
-  http::fields headers;
-
-  template<typename RequestBody>
-  async_ropen_op_body_base(
-      container::pmr::polymorphic_allocator<void> alloc,
-      RequestBody && body, http::fields headers)
-      : source_impl(requests::make_source(std::forward<RequestBody>(body), alloc.resource())), headers(std::move(headers))
-  {
-  }
-};
-
-
-struct connection_pool::async_ropen_op_body : async_ropen_op_body_base, async_ropen_op
-{
-  template<typename RequestBody>
-  async_ropen_op_body(
-      container::pmr::polymorphic_allocator<void> alloc,
-      connection_pool * this_,
-      beast::http::verb method,
-      urls::url_view path,
-      RequestBody && body,
-                      request_parameters req)
-      : async_ropen_op_body_base{alloc, std::forward<RequestBody>(body), std::move(req.fields)},
-        async_ropen_op{this_, method, path.encoded_resource(), async_ropen_op_body_base::headers,
-                       *this->source_impl,
-                       std::move(req.opts), req.jar}
-  {}
-};
-
-
 template<typename RequestBody,
           typename CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,

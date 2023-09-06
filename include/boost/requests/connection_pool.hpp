@@ -231,8 +231,6 @@ struct connection_pool
 
     struct async_lookup_op;
     struct async_get_connection_op;
-    struct async_ropen_op_body;
-    struct async_ropen_op_body_base;
     struct async_ropen_op;
 
     void return_connection_(detail::connection_impl * conn)

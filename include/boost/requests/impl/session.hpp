@@ -97,8 +97,8 @@ struct session::async_ropen_op : asio::coroutine
   async_ropen_op(session * this_,
                  http::verb method,
                  urls::url_view path,
-                 http::fields & headers,
-                 source & src)
+                 source & src,
+                 http::fields & headers)
       : this_(this_), method(method), url(path), opts(this_->options_), headers(headers), src(src)
   {
   }
@@ -110,39 +110,6 @@ struct session::async_ropen_op : asio::coroutine
               system::error_code & ec, variant2::variant<variant2::monostate, std::shared_ptr<connection_pool>, stream> s) -> stream;
 };
 
-
-struct session::async_ropen_op_body_base
-{
-  source_ptr source_impl;
-  http::fields headers;
-
-  template<typename RequestBody>
-  async_ropen_op_body_base(
-      container::pmr::polymorphic_allocator<void> alloc,
-      RequestBody && body, http::fields headers)
-      : source_impl(requests::make_source(std::forward<RequestBody>(body), alloc.resource())),
-        headers(std::move(headers))
-  {
-  }
-};
-
-struct session::async_ropen_op_body : async_ropen_op_body_base, async_ropen_op
-{
-  template<typename RequestBody>
-  async_ropen_op_body(
-      container::pmr::polymorphic_allocator<void> alloc,
-      session * this_,
-      beast::http::verb method,
-      urls::url_view path,
-      RequestBody && body,
-      http::fields req)
-      : async_ropen_op_body_base{alloc, std::forward<RequestBody>(body), std::move(req)},
-        async_ropen_op(this_, method, path, async_ropen_op_body_base::headers,
-                       *this->source_impl)
-  {}
-};
-
-
 template<typename RequestBody,
           BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, stream)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, basic_stream<Executor>))
@@ -152,9 +119,22 @@ session::async_ropen(beast::http::verb method,
                      http::fields req,
                      CompletionToken && completion_token)
 {
-  return detail::faux_run_with_allocator<async_ropen_op_body>(
-                  std::forward<CompletionToken>(completion_token),
-                  this, method, path, std::forward<RequestBody>(body), std::move(req));
+  return asio::async_initiate<CompletionToken, void(boost::system::error_code, stream)>(
+      [this](auto handler,
+             beast::http::verb method,
+             urls::url_view path,
+             RequestBody && body, http::fields req)
+      {
+        auto source_ptr = requests::make_source(std::forward<RequestBody>(body));
+        auto & source = *source_ptr;
+        auto alloc = asio::get_associated_allocator(handler, asio::recycling_allocator<void>());
+        auto req_ptr = allocate_unique<http::fields>(alloc, std::move(req));
+        auto & req_ref = *req_ptr;
+        async_ropen(method, path, source, req_ref,
+                    asio::consign(std::move(handler), std::move(source_ptr), std::move(req_ptr)));
+      },
+      completion_token, method, path, std::forward<RequestBody>(body), std::move(req)
+  );
 }
 
 template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, stream)) CompletionToken>
@@ -162,12 +142,12 @@ BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, stream))
 session::async_ropen(http::verb method,
                      urls::url_view path,
-                     http::fields & headers,
                      source & src,
+                     http::fields & headers,
                      CompletionToken && completion_token)
 {
   return detail::faux_run<async_ropen_op>(std::forward<CompletionToken>(completion_token),
-                                        this, method, path, headers, src);
+                                        this, method, path, src, headers);
 }
 
 }

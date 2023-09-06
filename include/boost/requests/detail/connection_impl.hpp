@@ -206,10 +206,7 @@ struct connection_impl : std::enable_shared_from_this<connection_impl>
 
     struct async_close_op;
     struct async_connect_op;
-
     struct async_ropen_op;
-    struct async_ropen_op_body;
-    struct async_ropen_op_body_base;
 
     BOOST_REQUESTS_DECL std::size_t do_read_some_(beast::http::basic_parser<false> & parser);
     BOOST_REQUESTS_DECL std::size_t do_read_some_(beast::http::basic_parser<false> & parser, system::error_code & ec) ;

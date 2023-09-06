@@ -152,8 +152,8 @@ struct session
                                        void (boost::system::error_code, stream))
     async_ropen(http::verb method,
                 urls::url_view path,
-                http::fields & headers,
                 source & src,
+                http::fields & headers,
                 CompletionToken && completion_token);
 
   private:
@@ -171,12 +171,8 @@ struct session
     cookie_jar jar_{boost::container::pmr::polymorphic_allocator<char>(&pmr_)};
 
     struct async_get_pool_op;
-
     struct async_ropen_op;
 
-    struct async_ropen_op_body;
-
-    struct async_ropen_op_body_base;
 
     BOOST_REQUESTS_DECL auto make_request_(http::fields fields) -> requests::request_parameters;
     BOOST_REQUESTS_DECL static urls::url normalize_(urls::url_view in);
@@ -213,11 +209,11 @@ struct session::defaulted : session
   BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, stream))
   async_ropen(http::verb method,
               urls::url_view path,
-              http::fields & headers,
               source & src,
+              http::fields & headers,
               CompletionToken && completion_token )
   {
-    return session::async_ropen(method, path, headers, src,
+    return session::async_ropen(method, path, src, headers,
                                 detail::with_defaulted_token<Token>(std::forward<CompletionToken>(completion_token)));
   }
 
@@ -232,8 +228,8 @@ struct session::defaulted : session
 
   auto async_ropen(http::verb method,
                    urls::url_view path,
-                   http::fields & headers,
-                   source & src)
+                   source & src,
+                   http::fields & headers)
   {
     return async_ropen(method, path, headers, src, default_token());
   }
