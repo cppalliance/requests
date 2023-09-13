@@ -31,8 +31,7 @@ TEST_CASE("sync")
   std::thread thr{
       [&]{
         system::error_code ec;
-        auto sp = tag_invoke(requests::make_source_tag{}, json::value{"foobaria"},
-                             container::pmr::get_default_resource());
+        auto sp = tag_invoke(requests::make_source_tag{}, json::value{"foobaria"});
         requests::http::fields hd;
         write_request(wp,
                       requests::http::verb::post, "/test", hd,

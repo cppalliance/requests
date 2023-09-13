@@ -62,12 +62,9 @@ struct xml_ref_source final : requests::source
 namespace pugi
 {
 
-requests::source_ptr tag_invoke(const requests::make_source_tag&, const pugi::xml_document &doc,
-                          container::pmr::memory_resource * res)
+requests::source_ptr tag_invoke(const requests::make_source_tag&, const pugi::xml_document &doc)
 {
-  return std::allocate_shared<xml_ref_source>(
-            container::pmr::polymorphic_allocator<void>(res),
-            std::move(doc));
+  return std::make_shared<xml_ref_source>(std::move(doc));
 }
 
 

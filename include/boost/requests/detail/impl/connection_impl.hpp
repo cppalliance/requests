@@ -21,7 +21,6 @@
 #include <boost/asio/deferred.hpp>
 #include <boost/asio/redirect_error.hpp>
 #include <boost/asio/ssl/host_name_verification.hpp>
-#include <boost/container/pmr/monotonic_buffer_resource.hpp>
 #include <boost/core/exchange.hpp>
 #include <boost/optional.hpp>
 #include <boost/smart_ptr/allocate_unique.hpp>

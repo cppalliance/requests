@@ -150,44 +150,6 @@ requests::post(
     requests::headers({{"Content-Type", "application/json"}}));
 ----
 
-
-## Allocations
-
-All types used in requests, responses & headers use a `boost::container::pmr::polymorphic_allocator`. 
-Any response object will take the allocator from the request object. 
-E.g. if a user wishes to use a `monotonic_resource` for a request, his code might look like this:
-
-[source,cpp]
-----
-char buf[8096];
-container::pmr::monotonic_buffer_resource memres{buf, 8096};
-requests::response res = requests::get(
-    urls::url_view("https://boost.org/index.html"),
-    requests::headers({}, &memres));
-
-assert(res.headers.get_allocator().resource() == &memres);
-----
-
-This allows users to modify the allocation strategy without introducing more templates than necessary.
-
-The types used from `boost::beast` are aliased in `requests::http` with the proper allocator:
-
-[source,cpp]
-----
-using fields = boost::beast::http::basic_fields<boost::container::pmr::polymorphic_allocator<char>>;
-
-using request_header  = beast::http::request_header <fields>;
-using response_header = beast::http::response_header<fields>;
-
-template<typename Body> using request  = beast::http::request <Body, fields>;
-template<typename Body> using response = beast::http::response<Body, fields>;
-
-template<typename Body> using request_parser  = beast::http::request_parser <Body, boost::container::pmr::polymorphic_allocator<char>>;
-template<typename Body> using response_parser = beast::http::response_parser<Body, boost::container::pmr::polymorphic_allocator<char>>;
-----
-
-NOTE: This does nto apply to the memory allocated for async operations, which wills till use the `asio::associated_allocator`.
-
 ## Request settings
 
 <<request_settings>> dictate how a request performs. It contains the `headers`, <<request_options>> and a pointer to the cookie_jar.
@@ -238,8 +200,6 @@ json::response<optional<httpbin_res>> oes = json::delete_<httpbin_res>("https://
 
 Similarly, the request_body will be treated as if it is `json`, i.e. it will attempt to use `boost::json::value_from` 
 to send json data.
-
-Since `json::storage_ptr` uses `boost::container::pmr::memory_resource`, the result will use the same resource.
 
 [source,cpp]
 ----

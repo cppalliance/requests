@@ -11,8 +11,8 @@ namespace boost::requests
 
 struct response_base
 {
-  using allocator_type = container::pmr::polymorphic_allocator<char>;
-  using buffer_type    = beast::basic_flat_buffer<allocator_type>;
+using allocator_type = std::allocator<char>;
+    using buffer_type    = beast::basic_flat_buffer<allocator_type>;
   using body_type      = beast::http::basic_dynamic_body<buffer_type>;
 
   http::response_header headers;
@@ -21,8 +21,8 @@ struct response_base
   http::status result()      const {return headers.result(); }
 
   using string_body_type = typename beast::http::basic_string_body<char, std::char_traits<char>, allocator_type>;
-  using vector_alloc = boost::container::pmr::polymorphic_allocator<typename http::response<body_type>>;
-  using history_type = std::vector<typename http::response<body_type>, vector_alloc>;
+using allocator_type = std::allocator<char>;
+    using history_type = std::vector<typename http::response<body_type>, vector_alloc>;
 
   // The history contains all the redirect messages.
   history_type history;

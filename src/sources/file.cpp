@@ -19,10 +19,9 @@ file_source::file_source(const filesystem::path & file) : path(file.c_str())
   this->file.open(file.string().c_str(), beast::file_mode::read, ec);
 }
 
-source_ptr tag_invoke(const make_source_tag &tag, const filesystem::path & path,
-                      container::pmr::memory_resource * res)
+source_ptr tag_invoke(const make_source_tag &tag, const filesystem::path & path)
 {
-  return std::allocate_shared<file_source>(container::pmr::polymorphic_allocator<void>(res), path);
+  return std::make_shared<file_source>(path);
 }
 
 }

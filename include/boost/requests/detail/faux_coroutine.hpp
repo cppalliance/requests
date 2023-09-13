@@ -17,8 +17,6 @@
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/post.hpp>
 #include <boost/asio/recycling_allocator.hpp>
-#include <boost/container/pmr/polymorphic_allocator.hpp>
-#include <boost/container/pmr/resource_adaptor.hpp>
 #include <boost/system/error_code.hpp>
 
 namespace boost
@@ -40,9 +38,6 @@ struct faux_token_t<void()>
   using cancellation_slot_type = asio::cancellation_slot;
   cancellation_slot_type get_cancellation_slot() const {BOOST_ASSERT(impl_ != nullptr); return impl_->slot;}
 
-  using allocator_type = container::pmr::polymorphic_allocator<void>;
-  allocator_type get_allocator() const {BOOST_ASSERT(impl_ != nullptr); return impl_->get_allocator();}
-
   void operator()()
   {
     auto & base = *impl_;
@@ -53,7 +48,6 @@ struct faux_token_t<void()>
   {
     virtual void resume(faux_token_t<void()> impl) = 0;
     asio::cancellation_slot slot;
-    virtual container::pmr::polymorphic_allocator<void> get_allocator() = 0;
   };
 
   faux_token_t(const faux_token_t & ) = delete;
@@ -76,9 +70,6 @@ struct faux_token_t<void(T1)>
 {
   using cancellation_slot_type = asio::cancellation_slot;
   cancellation_slot_type get_cancellation_slot() const {BOOST_ASSERT(impl_ != nullptr); return impl_->slot;}
-
-  using allocator_type = container::pmr::polymorphic_allocator<void>;
-  allocator_type get_allocator() const {BOOST_ASSERT(impl_ != nullptr); return impl_->get_allocator();}
 
   void operator()(T1 t1 = {})
   {
@@ -122,13 +113,6 @@ struct faux_token_t<void(T1, T2)>
   {
     BOOST_ASSERT(impl_ != nullptr);
     return impl_->slot;
-  }
-
-  using allocator_type = container::pmr::polymorphic_allocator<void>;
-  allocator_type get_allocator() const
-  {
-    BOOST_ASSERT(impl_ != nullptr);
-    return impl_->get_allocator();
   }
 
   void operator()(T1 t1 = {}, T2 t2 = {})
@@ -263,34 +247,7 @@ struct faux_runner<Implementation, void(system::error_code, Args...)>
     }
 
     Handler handler;
-    container::pmr::resource_adaptor_imp<
-        typename std::allocator_traits<asio::associated_allocator_t<Handler>>::template rebind_alloc<char>
-          > alloc_re{asio::get_associated_allocator(handler)};
-
     Implementation impl;
-
-    template<typename T>
-    typename token_type::allocator_type get_allocator_impl(T )
-    {
-
-    }
-
-    template<typename T>
-    typename token_type::allocator_type get_allocator_impl(std::allocator<T>)
-    {
-      return {};
-    }
-
-    template<typename T>
-    typename token_type::allocator_type get_allocator_impl(container::pmr::polymorphic_allocator<T> alloc)
-    {
-      return alloc;
-    }
-
-    typename token_type::allocator_type get_allocator() override
-    {
-      return get_allocator_impl(asio::get_associated_allocator(handler));
-    }
 
 
     template<typename Handler_, typename ... Args_>
@@ -305,7 +262,7 @@ struct faux_runner<Implementation, void(system::error_code, Args...)>
     template<typename Handler_, typename ... Args_>
     impl_(Handler_ && h, const with_allocator_t &, Args_ && ... args)
         : handler(std::forward<Handler_>(h))
-        , impl(get_allocator(), std::forward<Args_>(args)...)
+        , impl(std::forward<Args_>(args)...)
     {
       this->token_type::base::slot = asio::get_associated_cancellation_slot(handler);
     }
@@ -313,7 +270,7 @@ struct faux_runner<Implementation, void(system::error_code, Args...)>
     template<typename Handler_, typename ... Args_>
     impl_(Handler_ && h, with_allocator_t &&, Args_ && ... args)
         : handler(std::forward<Handler_>(h))
-        , impl(get_allocator(), std::forward<Args_>(args)...)
+        , impl(std::forward<Args_>(args)...)
     {
       this->token_type::base::slot = asio::get_associated_cancellation_slot(handler);
     }
@@ -341,19 +298,6 @@ auto faux_run(Token && token, Args && ... args)
                 "Can't construct implementation from those args");
   return asio::async_initiate<Token, typename Implementation::completion_signature_type>(
       faux_runner<Implementation>{}, token, std::forward<Args>(args)...);
-}
-
-template<typename Implementation,
-          typename Token,
-          typename ... Args>
-auto faux_run_with_allocator(Token && token, Args && ... args)
-{
-  static_assert(std::is_constructible<Implementation,
-                container::pmr::polymorphic_allocator<void>,
-                Args&&...>::value,
-                "Can't construct implementation from those args");
-  return asio::async_initiate<Token, typename Implementation::completion_signature_type>(
-      faux_runner<Implementation>{}, token, with_allocator, std::forward<Args>(args)...);
 }
 
 

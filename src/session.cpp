@@ -48,8 +48,7 @@ auto session::ropen(
   }
 
   {
-    detail::monotonic_token mv;
-    auto cc = jar_.get(host, is_secure, url.encoded_path(), mv);
+    auto cc = jar_.get(host, is_secure, url.encoded_path());
     if (!cc.empty())
       headers.set(http::field::cookie, cc);
   }
@@ -118,8 +117,7 @@ auto session::ropen(
 
 
     {
-      detail::monotonic_token mv;
-      auto cc = jar_.get(host, is_secure, url.encoded_path(), mv);
+      auto cc = jar_.get(host, is_secure, url.encoded_path());
       if (!cc.empty())
         headers.set(http::field::cookie, cc);
     }
@@ -168,9 +166,6 @@ urls::url session::normalize_(urls::url_view in)
 auto
 session::get_pool(urls::url_view url, error_code & ec) -> std::shared_ptr<connection_pool>
 {
-  // can be optimized to ellide the string allocation, blabla (pmr?)
-  char buf[1024];
-  container::pmr::monotonic_buffer_resource res{buf, sizeof(buf)};
   auto host_key = normalize_(url);
 
   auto lock = detail::lock(mutex_, ec);
@@ -233,8 +228,7 @@ auto session::async_ropen_op::resume(requests::detail::faux_token_t<step_signatu
     }
 
     {
-      detail::monotonic_token mv;
-      auto cc = this_->jar_.get(url.encoded_host(), is_secure, url.encoded_path(), mv);
+      auto cc = this_->jar_.get(url.encoded_host(), is_secure, url.encoded_path());
       if (!cc.empty())
         headers.set(http::field::cookie, cc);
     }
@@ -301,8 +295,7 @@ auto session::async_ropen_op::resume(requests::detail::faux_token_t<step_signatu
       }
 
       {
-        detail::monotonic_token mv;
-        auto cc = this_->jar_.get(url.encoded_host(), is_secure, url.encoded_path(), mv);
+        auto cc = this_->jar_.get(url.encoded_host(), is_secure, url.encoded_path());
         if (!cc.empty())
           headers.set(http::field::cookie, cc);
         else

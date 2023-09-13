@@ -13,7 +13,6 @@
 #include <boost/beast/http/basic_parser.hpp>
 #include <boost/requests/detail/config.hpp>
 #include <boost/requests/detail/faux_coroutine.hpp>
-#include <boost/requests/detail/pmr.hpp>
 #include <boost/requests/fields/keep_alive.hpp>
 #include <boost/requests/http.hpp>
 #include <boost/requests/response.hpp>
@@ -173,8 +172,7 @@ struct stream
   std::shared_ptr<detail::connection_impl> impl_;
   detail::lock_guard lock_;
 
-  std::unique_ptr<http::response_parser<http::buffer_body>,
-                  detail::pmr_deleter> parser_;
+  std::unique_ptr<http::response_parser<http::buffer_body>> parser_;
   history_type history_;
 
   template<typename DynamicBuffer>

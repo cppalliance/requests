@@ -111,8 +111,7 @@ auto connection_impl::ropen(beast::http::verb method,
   lock_type read_lock;
   if (jar)
   {
-    detail::monotonic_token mv;
-    auto cc = jar->get(host(), is_secure, path, mv);
+    auto cc = jar->get(host(), is_secure, path);
     if (!cc.empty())
       headers.set(http::field::cookie, cc);
     else
@@ -178,8 +177,7 @@ auto connection_impl::ropen(beast::http::verb method,
       return stream{get_executor(), nullptr};
 
     stream str{get_executor(), shared_from_this()};
-    str.parser_ = detail::make_pmr<http::response_parser<http::buffer_body>>(headers.get_allocator().resource(),
-                                                                             http::response_header{http::fields(headers.get_allocator())});
+    str.parser_ = std::make_unique<http::response_parser<http::buffer_body>>(http::response_header{http::fields(headers.get_allocator())});
     str.parser_->body_limit(boost::none);
     if (use_ssl_)
       beast::http::read_header(next_layer_, buffer_, *str.parser_, ec);
@@ -261,8 +259,7 @@ auto connection_impl::ropen(beast::http::verb method,
     path = url->encoded_resource();
     if (jar)
     {
-      detail::monotonic_token mv;
-      auto cc = jar->get(host(), is_secure, url->encoded_path(), mv);
+      auto cc = jar->get(host(), is_secure, url->encoded_path());
 
       if (!cc.empty())
         headers.set(http::field::cookie, cc);
@@ -302,8 +299,7 @@ auto connection_impl::async_ropen_op::resume(
 
     if (jar)
     {
-      detail::monotonic_token mv;
-      auto cc = jar->get(this_->host(), this_->use_ssl_, path, mv);
+      auto cc = jar->get(this_->host(), this_->use_ssl_, path);
       if (!cc.empty())
         headers.set(http::field::cookie, cc);
       else
@@ -354,8 +350,7 @@ auto connection_impl::async_ropen_op::resume(
       // END OF write impl
 
       str.emplace(this_->get_executor(), this_); // , req.get_allocator().resource()
-      str->parser_ = detail::make_pmr<http::response_parser<http::buffer_body>>(headers.get_allocator().resource(),
-                                                                                http::response_header{http::fields(headers.get_allocator())});
+      str->parser_ = std::make_unique<http::response_parser<http::buffer_body>>(http::response_header{http::fields(headers.get_allocator())});
       str->parser_->body_limit(boost::none);
       if (this_->use_ssl_)
       {
@@ -442,8 +437,7 @@ auto connection_impl::async_ropen_op::resume(
       path = url->encoded_resource();
       if (jar)
       {
-        detail::monotonic_token mv;
-        auto cc = jar->get(this_->host(), this_->use_ssl_, url->encoded_path(), mv);
+        auto cc = jar->get(this_->host(), this_->use_ssl_, url->encoded_path());
         if (!cc.empty())
           headers.set(http::field::cookie, cc);
         else

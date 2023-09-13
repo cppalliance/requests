@@ -16,7 +16,6 @@
 #include <boost/beast/http/message.hpp>
 #include <boost/beast/http/string_body.hpp>
 #include <boost/config.hpp>
-#include <boost/container/pmr/polymorphic_allocator.hpp>
 #include <boost/core/span.hpp>
 #include <boost/requests/error.hpp>
 #include <boost/requests/fields/link.hpp>
@@ -36,7 +35,7 @@ namespace requests
 
 struct response_base
 {
-  using allocator_type = container::pmr::polymorphic_allocator<char>;
+  using allocator_type = std::allocator<char>;
   using buffer_type    = beast::basic_flat_buffer<allocator_type>;
   using body_type      = beast::http::basic_dynamic_body<buffer_type>;
 
@@ -45,16 +44,15 @@ struct response_base
   int          result_code() const {return headers.result_int(); }
   http::status result()      const {return headers.result(); }
 
-  using string_body_type = typename beast::http::basic_string_body<char, std::char_traits<char>, allocator_type>;
-  using vector_alloc = boost::container::pmr::polymorphic_allocator<typename http::response<body_type>>;
-  using history_type = std::vector<typename http::response<body_type>, vector_alloc>;
-  history_type history{vector_alloc{headers.get_allocator()}};
+  using string_body_type = typename beast::http::basic_string_body<char, std::char_traits<char>>;
+  using history_type = std::vector<typename http::response<body_type>>;
+  history_type history{};
 
-  response_base(allocator_type alloc,         history_type history) : headers(alloc),             history(std::move(history)) {}
+  response_base(history_type history) : history(std::move(history)) {}
   response_base(http::response_header header, history_type history) : headers(std::move(header)), history(std::move(history)) {}
+  response_base(http::response_header header) : headers(std::move(header)) {}
 
-  response_base(allocator_type alloc        ) : headers(alloc),             history (vector_alloc{alloc}) {}
-  response_base(http::response_header header) : headers(std::move(header)), history (vector_alloc{headers.get_allocator()}) {}
+  response_base() = default;
 
   ~response_base() = default;
 
@@ -135,7 +133,7 @@ struct response : response_base
 {
   buffer_type buffer{headers.get_allocator()};
 
-  response(allocator_type alloc = {}) : response_base(alloc), buffer(alloc) {}
+  response() = default;
   response(http::response_header header, buffer_type buffer) : response_base(std::move(header)), buffer(std::move(buffer)) {}
   response(response_base         header, buffer_type buffer) : response_base(std::move(header)), buffer(std::move(buffer)) {}
 

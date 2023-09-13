@@ -27,7 +27,7 @@ auto request(Connection & conn,
              system::error_code & ec) -> response
 {
   auto s = conn.ropen(method, target, std::forward<RequestBody>(body), std::move(req), ec);
-  response rb{req.get_allocator()};
+  response rb{};
 
   if (!ec)
     s.read( rb.buffer,  ec);
@@ -56,7 +56,7 @@ struct async_request_op : asio::coroutine
   typename Connection::request_type req;
   optional<stream> str_;
 
-  response rb{req.get_allocator()};
+  response rb{};
 
   template<typename RequestBody_>
   async_request_op(Connection * conn,

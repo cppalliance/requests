@@ -14,9 +14,9 @@ namespace requests
 namespace sources
 {
 
-source_ptr tag_invoke(make_source_tag, asio::const_buffer cb, container::pmr::memory_resource * res)
+source_ptr tag_invoke(make_source_tag, asio::const_buffer cb)
 {
-  return std::allocate_shared<buffer_source>(container::pmr::polymorphic_allocator<void>(res), cb);
+  return std::make_shared<buffer_source>(cb);
 }
 
 

@@ -11,7 +11,6 @@
 #include <boost/describe/enum.hpp>
 #include <boost/requests/json.hpp>
 #include <boost/variant2.hpp>
-#include <boost/container/pmr/unsynchronized_pool_resource.hpp>
 #include <boost/url/format.hpp>
 
 namespace github
@@ -510,7 +509,7 @@ struct issue_client
     settings_.fields = boost::requests::headers({
         {boost::requests::http::field::content_type, "application/vnd.github+json"},
         boost::requests::bearer(auth_token)
-    }, &memory_);
+      });
   }
 
   // List issues assigned to the authenticated user
@@ -520,7 +519,7 @@ struct issue_client
   }
   response<std::vector<issue>> list_issues(list_issues_query opt, error_code & ec)
   {
-    return boost::requests::json::get<std::vector<issue>>(conn_, opt.make_query("/issues"), settings_, ec);
+    return boost::requests::json::get<std::vector<issue>>(conn_, opt.make_query("/issues"), settings_, {}, ec);
   }
 
   template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<std::vector<issue>>)) CompletionToken>
@@ -545,7 +544,7 @@ struct issue_client
     return boost::requests::json::get<std::vector<issue>>(
         conn_,
         opt.make_query(urls::format("/repos/{owner}/issues", owner).encoded_target()),
-        settings_, ec);
+        settings_, {}, ec);
   }
 
   template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<std::vector<issue>>)) CompletionToken>
@@ -568,7 +567,7 @@ struct issue_client
   {
     return boost::requests::json::get<std::vector<issue>>(
         conn_, opt.make_query(urls::format("/repos/{owner}/{repository}/issues", owner, repository).encoded_target()),
-        settings_, ec);
+        settings_, {}, ec);
 
   }
   template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<std::vector<issue>>)) CompletionToken>
@@ -594,7 +593,7 @@ struct issue_client
     return boost::requests::json::post<issue>(
         conn_,
         urls::format("/repos/{owner}/{repository}/issues", owner, repository),
-        boost::json::value_from(opts, storage()), settings_, ec);
+        boost::json::value_from(opts, storage()), settings_, {}, ec);
   }
   template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<issue>)) CompletionToken>
   BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, response<issue>))
@@ -622,7 +621,7 @@ struct issue_client
     return boost::requests::json::get<issue>(
         conn_,
         urls::format("/repos/{owner}/{repository}/issues/{issue_number}", owner, repository, issue_number),
-        settings_, ec);
+        settings_, {}, ec);
   }
 
   template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<issue>)) CompletionToken>
@@ -652,7 +651,7 @@ struct issue_client
         conn_,
         urls::format("/repos/{owner}/{repository}/issues/{issue_number}", owner, repository, issue_number),
         boost::json::value_from(opts, storage()),
-        settings_, ec);
+        settings_, {}, ec);
   }
 
   template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, response<issue>)) CompletionToken>
@@ -729,7 +728,7 @@ struct issue_client
   }
   response<std::vector<issue>> list_user_issues(list_issues_query opt, error_code & ec)
   {
-    return boost::requests::json::get<std::vector<issue>>(conn_, opt.make_query("/user/issues"), settings_, ec);
+    return boost::requests::json::get<std::vector<issue>>(conn_, opt.make_query("/user/issues"), settings_, {}, ec);
   }
 
 
@@ -745,13 +744,12 @@ struct issue_client
 
   boost::json::storage_ptr storage()
   {
-    return boost::json::storage_ptr(&memory_);
+    return boost::json::storage_ptr();
   }
 private:
-  boost::container::pmr::unsynchronized_pool_resource memory_;
 
   boost::requests::cookie_jar jar_;
-  boost::requests::request_parameters settings_{boost::requests::http::fields {&memory_},
+  boost::requests::request_parameters settings_{boost::requests::http::fields{},
                                               {true, boost::requests::redirect_mode::none, 0}, &jar_};
 
 

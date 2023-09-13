@@ -33,18 +33,14 @@ std::array<char, 62> make_boundary_value()
 
 }
 
-source_ptr tag_invoke(make_source_tag, form form_, container::pmr::memory_resource * res)
+source_ptr tag_invoke(make_source_tag, form form_)
 {
-  return std::allocate_shared<form_source>(
-      container::pmr::polymorphic_allocator<void>(res),
-      std::move(form_));
+  return std::make_shared<form_source>(std::move(form_));
 }
 
-source_ptr tag_invoke(make_source_tag, multi_part_form mpf, container::pmr::memory_resource * res)
+source_ptr tag_invoke(make_source_tag, multi_part_form mpf)
 {
-  return std::allocate_shared<multi_part_form_source>(
-      container::pmr::polymorphic_allocator<void>(res),
-      std::move(mpf));
+  return std::make_shared<multi_part_form_source>(std::move(mpf));
 }
 
 optional<std::size_t> multi_part_form_source::size() const

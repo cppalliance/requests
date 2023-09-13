@@ -39,7 +39,7 @@ struct buffer_source : source
 };
 
 BOOST_REQUESTS_DECL
-source_ptr tag_invoke(make_source_tag, asio::const_buffer cb, container::pmr::memory_resource * res);
+source_ptr tag_invoke(make_source_tag, asio::const_buffer cb);
 
 }
 }

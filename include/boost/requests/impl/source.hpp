@@ -6,7 +6,6 @@
 #define BOOST_REQUESTS_IMPL_SOURCE_HPP
 
 #include <boost/requests/detail/faux_coroutine.hpp>
-#include <boost/requests/detail/pmr.hpp>
 #include <boost/requests/source.hpp>
 
 #include <boost/asio/consign.hpp>

@@ -35,27 +35,27 @@ json_source::~json_source() = default;
 
 
 BOOST_REQUESTS_DECL
-source_ptr tag_invoke(make_source_tag, boost::json::value value, container::pmr::memory_resource * res)
+source_ptr tag_invoke(make_source_tag, boost::json::value value)
 {
-  return std::allocate_shared<json_source>(container::pmr::polymorphic_allocator<void>(res), std::move(value));
+  return std::make_shared<json_source>(std::move(value));
 
 }
 
 BOOST_REQUESTS_DECL
-source_ptr tag_invoke(make_source_tag, boost::json::object   obj, container::pmr::memory_resource * res)
+source_ptr tag_invoke(make_source_tag, boost::json::object   obj)
 {
-  return std::allocate_shared<json_source>(container::pmr::polymorphic_allocator<void>(res), std::move(obj));
+  return std::make_shared<json_source>(std::move(obj));
 }
 BOOST_REQUESTS_DECL
-source_ptr tag_invoke(make_source_tag, boost::json::array    arr, container::pmr::memory_resource * res)
+source_ptr tag_invoke(make_source_tag, boost::json::array    arr)
 {
-  return std::allocate_shared<json_source>(container::pmr::polymorphic_allocator<void>(res), std::move(arr));
+  return std::make_shared<json_source>(std::move(arr));
 }
 
 BOOST_REQUESTS_DECL
-source_ptr tag_invoke(make_source_tag, const boost::json::string & arr, container::pmr::memory_resource * res)
+source_ptr tag_invoke(make_source_tag, const boost::json::string & arr)
 {
-  return std::allocate_shared<json_source>(container::pmr::polymorphic_allocator<void>(res), std::move(arr));
+  return std::make_shared<json_source>(std::move(arr));
 }
 
 

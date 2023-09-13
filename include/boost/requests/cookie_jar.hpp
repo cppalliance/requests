@@ -5,7 +5,6 @@
 #ifndef BOOST_REQUESTS_COOKIES_JAR_HPP
 #define BOOST_REQUESTS_COOKIES_JAR_HPP
 
-#include <boost/container/pmr/polymorphic_allocator.hpp>
 #include <boost/requests/fields/set_cookie.hpp>
 #include <boost/requests/cookie.hpp>
 #include <boost/requests/public_suffix.hpp>
@@ -17,7 +16,6 @@
 #include <chrono>
 
 #include <boost/beast/http/message.hpp>
-#include <boost/container/pmr/polymorphic_allocator.hpp>
 #include <boost/url/parse.hpp>
 
 namespace boost {
@@ -53,7 +51,7 @@ struct cookie_equal
 
 struct cookie_jar final
 {
-    using allocator_type = boost::container::pmr::polymorphic_allocator<char>;
+    using allocator_type = std::allocator<char>;
     boost::unordered_set<cookie, cookie_hash, cookie_equal,
                          typename std::allocator_traits<allocator_type>::template rebind_alloc<cookie>> content;
 

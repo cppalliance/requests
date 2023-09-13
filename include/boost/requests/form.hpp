@@ -48,9 +48,8 @@ struct multi_part_form
     template<typename Source>
     form_data(core::string_view name,
               Source && source,
-              container::pmr::memory_resource * resource = container::pmr::get_default_resource(),
               decltype(make_source(std::declval<Source>())) * = nullptr)
-      : name(name), source(make_source(std::forward<Source>(source), resource))
+      : name(name), source(make_source(std::forward<Source>(source)))
     {
     }
   };

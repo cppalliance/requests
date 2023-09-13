@@ -91,10 +91,10 @@ struct multi_part_form_source final : source
 };
 
 BOOST_REQUESTS_DECL
-source_ptr tag_invoke(make_source_tag, form form_, container::pmr::memory_resource * res);
+source_ptr tag_invoke(make_source_tag, form form_);
 
 BOOST_REQUESTS_DECL
-source_ptr tag_invoke(make_source_tag, multi_part_form mpf, container::pmr::memory_resource * res);
+source_ptr tag_invoke(make_source_tag, multi_part_form mpf);
 
 
 }

@@ -188,12 +188,6 @@ TEST_CASE("cancel_twice")
   {
     std::vector<error_code> ecs;
 
-    using allocator_type = container::pmr::polymorphic_allocator<void>;
-    allocator_type get_allocator() override
-    {
-      return container::pmr::polymorphic_allocator<void>{container::pmr::get_default_resource()};
-    }
-
     void resume(boost::requests::detail::faux_token_t<void(error_code)> tk, error_code ec) override
     {
       ecs.push_back(ec);
@@ -247,11 +241,7 @@ TEST_CASE("cancel_lock")
   {
     std::vector<error_code> ecs;
 
-    using allocator_type = container::pmr::polymorphic_allocator<void>;
-    allocator_type get_allocator() override
-    {
-      return container::pmr::polymorphic_allocator<void>{container::pmr::get_default_resource()};
-    }
+
 
     void resume(boost::requests::detail::faux_token_t<void(error_code)> tk, error_code ec) override
     {
@@ -301,12 +291,6 @@ TEST_CASE("cancel_one")
   struct impl final : token_type::base
   {
     std::vector<error_code> ecs;
-
-    using allocator_type = container::pmr::polymorphic_allocator<void>;
-    allocator_type get_allocator() override
-    {
-      return container::pmr::polymorphic_allocator<void>{container::pmr::get_default_resource()};
-    }
 
     void resume(boost::requests::detail::faux_token_t<void(error_code)> tk, error_code ec) override
     {

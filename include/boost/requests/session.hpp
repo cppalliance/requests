@@ -7,9 +7,6 @@
 #define BOOST_REQUESTS_BASIC_SESSION_HPP
 
 #include <boost/requests/connection_pool.hpp>
-#include <boost/container/pmr/polymorphic_allocator.hpp>
-#include <boost/container/pmr/string.hpp>
-#include <boost/container/pmr/synchronized_pool_resource.hpp>
 
 
 namespace boost
@@ -167,8 +164,7 @@ struct session
                          detail::url_hash> pools_;
 
     // this isn't great
-    boost::container::pmr::synchronized_pool_resource pmr_;
-    cookie_jar jar_{boost::container::pmr::polymorphic_allocator<char>(&pmr_)};
+    cookie_jar jar_{};
 
     struct async_get_pool_op;
     struct async_ropen_op;
@@ -211,7 +207,7 @@ struct session::defaulted : session
               urls::url_view path,
               source & src,
               http::fields & headers,
-              CompletionToken && completion_token )
+              CompletionToken && completion_token)
   {
     return session::async_ropen(method, path, src, headers,
                                 detail::with_defaulted_token<Token>(std::forward<CompletionToken>(completion_token)));

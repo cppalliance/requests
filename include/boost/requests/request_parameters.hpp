@@ -54,12 +54,10 @@ inline field_entry bearer(core::string_view token)
   return fe;
 }
 
-inline auto headers(std::initializer_list<field_entry> fields,
-                    boost::container::pmr::memory_resource * res = boost::container::pmr::get_default_resource())
-  -> beast::http::basic_fields<boost::container::pmr::polymorphic_allocator<char>>
+inline auto headers(std::initializer_list<field_entry> fields)
+  -> beast::http::fields
 {
-  using allocator_type = boost::container::pmr::polymorphic_allocator<char>;
-  beast::http::basic_fields<allocator_type> f{allocator_type{res}};
+  beast::http::fields f;
   for (const auto & init : fields)
     if (init.field != http::field::unknown)
       f.set(init.field, init.value);
@@ -71,9 +69,7 @@ inline auto headers(std::initializer_list<field_entry> fields,
 
 struct request_parameters {
   //Allocator
-  using allocator_type = boost::container::pmr::polymorphic_allocator<char>;
-  allocator_type get_allocator() const {return fields.get_allocator();}
-  using fields_type = beast::http::basic_fields<allocator_type>;
+  using fields_type = beast::http::fields;
   fields_type fields;
   request_options opts{};
   cookie_jar * jar = nullptr;

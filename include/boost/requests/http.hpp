@@ -18,7 +18,6 @@
 #include <boost/beast/http/parser.hpp>
 #include <boost/beast/http/status.hpp>
 #include <boost/beast/http/verb.hpp>
-#include <boost/container/pmr/polymorphic_allocator.hpp>
 
 namespace boost {
 namespace requests {
@@ -30,7 +29,7 @@ using boost::beast::http::status_class;
 using boost::beast::http::to_status_class;
 using boost::beast::http::to_string;
 using boost::beast::http::verb;
-using fields = boost::beast::http::basic_fields<boost::container::pmr::polymorphic_allocator<char>>;
+using fields = boost::beast::http::fields;
 
 using file_body   = beast::http::file_body;
 using empty_body   = beast::http::empty_body;
@@ -43,8 +42,8 @@ using response_header = beast::http::response_header<fields>;
 template<typename Body> using request  = beast::http::request <Body, fields>;
 template<typename Body> using response = beast::http::response<Body, fields>;
 
-template<typename Body> using request_parser  = beast::http::request_parser <Body, boost::container::pmr::polymorphic_allocator<char>>;
-template<typename Body> using response_parser = beast::http::response_parser<Body, boost::container::pmr::polymorphic_allocator<char>>;
+template<typename Body> using request_parser  = beast::http::request_parser <Body>;
+template<typename Body> using response_parser = beast::http::response_parser<Body>;
 
 }
 

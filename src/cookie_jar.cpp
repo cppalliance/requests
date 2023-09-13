@@ -50,7 +50,7 @@ bool cookie_jar::set(const set_cookie & set,
   // https://www.rfc-editor.org/rfc/rfc6265#section-5.3
 
   // 2.   Create a new cookie with name cookie-name, value cookie-value.
-  cookie sc{content.get_allocator()};
+  cookie sc{};
   sc.name = set.name;
   sc.value = set.value;
   const auto now = std::chrono::system_clock::now();

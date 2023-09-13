@@ -44,7 +44,7 @@ auto async_read_optional_json(
 template<typename Value = value>
 struct response : response_base
 {
-  using allocator_type = container::pmr::polymorphic_allocator<char>;
+  using allocator_type = std::allocator<char>;
   using fields_type = http::fields;
 
   response(allocator_type alloc,         history_type history, Value && value);
@@ -64,7 +64,8 @@ template<typename Value = json::value,
 auto ~method~(Connection & conn,
               urls::url_view target,
               RequestBody && request_body, // omitted for some methods.
-              typename Connection::request_type req = {}) -> response<Value>;
+              typename Connection::request_type req = {},
+              json::storage_ptr ptr = {}) -> response<Value>;
 
 template<typename Value = json::value,
           typename RequestBody,
@@ -73,6 +74,7 @@ auto ~method~(Connection & conn,
               urls::url_view target,
               RequestBody && request_body, // omitted for some methods.
               typename Connection::request_type req,
+              json::storage_ptr ptr,
               system::error_code & ec) -> response<Value>;
 
 template<typename Value = value,
@@ -84,6 +86,7 @@ auto async_~method~(Connection & conn,
         urls::url_view target,
         RequestBody && request_body,
         typename Connection::request_type req = {},
+        json::storage_ptr ptr = {},
         CompletionToken && token = asio::default_token_t<typename Connection::executor_type>());
 
 // requests on the default_session
@@ -91,13 +94,15 @@ template<typename Value = json::value,
          typename RequestBody>
 auto ~method~(urls::url_view target,
               RequestBody && request_body, // omitted for some methods.
-              http::fields req) -> response<Value>;
+              http::fields req,
+              json::storage_ptr ptr = {}) -> response<Value>;
 
 template<typename Value = json::value,
           typename RequestBody>
 auto ~method~(urls::url_view target,
               RequestBody && request_body, // omitted for some methods.
               http::fields req,
+              json::storage_ptr ptr,
               system::error_code & ec) -> response<Value>;
 
 template<typename Value = value,
@@ -107,6 +112,7 @@ auto async_~method~(
         urls::url_view target,
         RequestBody && request_body,
         http::fields req,
+        json::storage_ptr ptr = {},
         CompletionToken && token);
 
 

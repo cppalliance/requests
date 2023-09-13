@@ -237,7 +237,7 @@ struct download_response : response_base
 {
   filesystem::path download_path;
 
-  download_response(allocator_type allocator = {}) : response_base(allocator) {}
+  download_response() = default;
 
   download_response(http::response_header header, response_base::history_type history, filesystem::path file) : response_base(std::move(header), std::move(history)), download_path(std::move(file)) {}
   download_response(response_base         header, filesystem::path file) : response_base(std::move(header)), download_path(std::move(file)) {}
@@ -320,7 +320,7 @@ struct async_download_op : asio::coroutine
                     filesystem::path download_path)
       : conn(*conn), target(target), req(std::move(req)), download_path(std::move(download_path)) {}
 
-  download_response rb{req.get_allocator()};
+  download_response rb{};
   optional<stream> str_;
 
   using completion_signature_type = void(system::error_code, download_response);

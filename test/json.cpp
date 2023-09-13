@@ -114,7 +114,7 @@ void json_request_connection(bool https)
   {
     error_code ec;
     auto res = requests::json::get(hc, urls::url_view("/redirect/10"),
-                                   {{}, {false, requests::redirect_mode::private_domain, 5}}, ec);
+                                   {{}, {false, requests::redirect_mode::private_domain, 5}}, {}, ec);
     CHECK_HTTP_RESULT(res.headers);
     CHECK(res.history.size() == 5);
     CHECK(res.headers.begin() == res.headers.end());
@@ -184,7 +184,7 @@ void run_json_tests(error_code ec,
 {
   requests::json::async_get(
       hc, urls::url_view("/get"),
-      requests::request_parameters{requests::headers({{"Test-Header", "it works"}}), {false}},
+      requests::request_parameters{requests::headers({{"Test-Header", "it works"}}), {false}}, {},
       tracker(
           [url](error_code ec, requests::json::response<> hdr)
           {
@@ -199,7 +199,7 @@ void run_json_tests(error_code ec,
 
   requests::json::async_get(
       hc, urls::url_view("/redirect-to?url=%2Fget"),
-      requests::request_parameters{requests::headers({{"Test-Header", "it works"}}), {false}},
+      requests::request_parameters{requests::headers({{"Test-Header", "it works"}}), {false}}, {},
       tracker(
         [url](error_code ec, requests::json::response<> hdr)
         {
@@ -216,7 +216,7 @@ void run_json_tests(error_code ec,
 
 
   requests::json::async_get(
-      hc, urls::url_view("/redirect/10"), {{}, {false, requests::redirect_mode::private_domain, 5}},
+      hc, urls::url_view("/redirect/10"), {{}, {false, requests::redirect_mode::private_domain, 5}},{},
       tracker(
           [url](error_code ec, requests::json::response<> res)
           {
@@ -228,7 +228,7 @@ void run_json_tests(error_code ec,
 
 
   requests::json::async_delete(
-      hc, urls::url_view("/delete"), json::value{{"test-key", "test-value"}}, {{}, {false}},
+      hc, urls::url_view("/delete"), json::value{{"test-key", "test-value"}}, {{}, {false}}, {},
       tracker(
         [url](error_code ec, requests::json::response<> hdr)
         {
@@ -240,7 +240,7 @@ void run_json_tests(error_code ec,
         }));
 
     requests::json::async_patch(
-        hc, urls::url_view("/patch"), json::value {{"test-key", "test-value"}}, {{}, {false}},
+        hc, urls::url_view("/patch"), json::value {{"test-key", "test-value"}}, {{}, {false}}, {},
         tracker(
           [url](error_code ec, requests::json::response<> hdr)
           {
@@ -253,7 +253,7 @@ void run_json_tests(error_code ec,
           }));
 
   requests::json::async_put(
-        hc, urls::url_view("/put"), json::value{{"test-key", "test-value"}}, {{}, {false}},
+        hc, urls::url_view("/put"), json::value{{"test-key", "test-value"}}, {{}, {false}}, {},
         tracker(
             [url](error_code ec, requests::json::response<boost::optional<json::value>> hdr)
             {
@@ -267,7 +267,7 @@ void run_json_tests(error_code ec,
             }));
 
   requests::json::async_post(
-      hc, urls::url_view("/post"), json::value{{"test-key", "test-value"}}, {{}, {false}},
+      hc, urls::url_view("/post"), json::value{{"test-key", "test-value"}}, {{}, {false}}, {},
       tracker(
           [url](error_code ec, requests::json::response<> hdr)
           {

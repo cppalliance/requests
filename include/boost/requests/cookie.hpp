@@ -6,7 +6,6 @@
 #define BOOST_REQUESTS_COOKIES_COOKIE_HPP
 
 #include <boost/requests/fields/set_cookie.hpp>
-#include <boost/container/pmr/monotonic_buffer_resource.hpp>
 #include <boost/url/grammar/string_token.hpp>
 #include <boost/core/detail/string_view.hpp>
 #include <string>
@@ -16,26 +15,9 @@ namespace requests {
 
 struct cookie
 {
-  using allocator_type = boost::container::pmr::polymorphic_allocator<char>;
-  using string_type = std::basic_string<char, std::char_traits<char>, allocator_type>;
+  using string_type = std::basic_string<char, std::char_traits<char>>;
 
-  cookie(allocator_type && alloc) : name(alloc), value(alloc), domain(alloc), path(alloc) {}
   cookie(cookie &&) noexcept = default;
-
-  cookie(cookie && val, allocator_type && alloc)
-      : name(std::move(val.name), alloc),
-        value(std::move(val.value), alloc),
-        expiry_time(val.expiry_time),
-        domain(std::move(val.domain), alloc),
-        path(std::move(val.path), alloc),
-        creation_time(val.creation_time),
-        last_access_time(val.last_access_time),
-        persistent_flag(val.persistent_flag),
-        host_only_flag(val.host_only_flag),
-        secure_only_flag(val.secure_only_flag),
-        http_only_flag(val.http_only_flag)
-  {}
-
   string_type name, value;
   std::chrono::system_clock::time_point expiry_time;
   string_type domain, path;
@@ -120,34 +102,6 @@ auto make_cookie_field(Range && range, StringToken && token = {})
     }
     return token.result();
 }
-
-struct monotonic_token : urls::grammar::string_token::arg
-{
-  unsigned char buf[4096];
-  boost::container::pmr::monotonic_buffer_resource memres{buf, sizeof(buf)};
-
-  char * data = nullptr;
-  std::size_t size = 0u;
-
-  monotonic_token() = default;
-  monotonic_token(const monotonic_token &) = delete;
-
-  using result_type = core::string_view;
-
-  char * prepare(std::size_t size_)
-  {
-    if (size_ == 0u)
-      return nullptr;
-    else
-      return data = static_cast<char*>(memres.allocate(size = size_, 1u));
-  }
-
-  core::string_view result() const
-  {
-    return core::string_view(data, size);
-  }
-
-};
 
 }
 

@@ -9,7 +9,6 @@
 #define BOOST_REQUESTS_FIELDS_LOCATION_HPP
 
 #include <boost/beast/http/message.hpp>
-#include <boost/container/pmr/polymorphic_allocator.hpp>
 #include <boost/requests/error.hpp>
 #include <boost/requests/redirect.hpp>
 #include <boost/url/parse.hpp>
