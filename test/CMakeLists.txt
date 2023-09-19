@@ -7,3 +7,5 @@ target_link_libraries(boost_requests_tests PUBLIC Boost::requests Boost::filesys
 target_compile_definitions(boost_requests_tests PUBLIC
         BOOST_REQUESTS_SEPARATE_COMPILATION=1
         BOOST_FILESYSTEM_NO_DEPRECATED=1)
+
+

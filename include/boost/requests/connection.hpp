@@ -73,16 +73,16 @@ struct connection
   /// Construct a stream.
   template<typename ExecutorOrContext>
   explicit connection(ExecutorOrContext && exec_or_ctx, asio::ssl::context & ctx)
-      : impl_(std::make_shared<detail::connection_impl>(std::forward<ExecutorOrContext>(exec_or_ctx), ctx)) {}
+      : impl_(new detail::connection_impl(std::forward<ExecutorOrContext>(exec_or_ctx), ctx)) {}
 
   template<typename ExecutionContext>
   explicit connection(ExecutionContext &context,
                       typename asio::constraint<
                           asio::is_convertible<ExecutionContext &, asio::execution_context &>::value
                           >::type = 0)
-      : impl_(std::make_shared<detail::connection_impl>(context)) {}
+      : impl_(new detail::connection_impl(context)) {}
 
-  explicit connection(asio::any_io_executor exec) : impl_(std::make_shared<detail::connection_impl>(exec)) {}
+  explicit connection(asio::any_io_executor exec) : impl_(new detail::connection_impl(std::move(exec))) {}
 
   void connect(endpoint_type ep)
   {
@@ -226,20 +226,10 @@ struct connection
   operator bool() const {return impl_ != nullptr;}
 
   struct connection_pool * pool() {return impl_ ? impl_->pool() : nullptr; }
-  ~connection()
-  {
-    if (impl_.use_count() == 2u && impl_->pool() != nullptr)
-    {
-      if (impl_->is_open())
-        impl_->return_to_pool();
-      else
-        impl_->remove_from_pool();
-    }
-  }
-private:
-  explicit connection(std::shared_ptr<detail::connection_impl> impl) : impl_(std::move(impl)) {}
+ private:
+  explicit connection(boost::intrusive_ptr<detail::connection_impl> impl) : impl_(std::move(impl)) {}
 
-  std::shared_ptr<detail::connection_impl> impl_;
+  boost::intrusive_ptr<detail::connection_impl> impl_;
 
   friend struct connection_pool;
   friend struct stream;

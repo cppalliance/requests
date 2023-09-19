@@ -181,9 +181,9 @@ struct faux_runner<Implementation, void(system::error_code, Args...)>
         if (buf.use_count() == 0u)
           return ;
         auto h = std::move(handler);
-        BOOST_ASSERT(buf.use_count()  >= 1);
+        BOOST_ASSERT(buf.use_count() == 1);
         auto exec = asio::get_associated_executor(h, impl.get_executor());
-        buf = nullptr;
+        buf.reset();
         asio::dispatch(exec, asio::append(std::move(h), ec));
       }
     }
@@ -197,10 +197,10 @@ struct faux_runner<Implementation, void(system::error_code, Args...)>
         if (buf.use_count() == 0u)
           return ;
         auto h = std::move(handler);
-        BOOST_ASSERT(buf.use_count() >= 1);
+        BOOST_ASSERT(buf.use_count() == 1);
         auto tmp = std::move(res);
         auto exec = asio::get_associated_executor(h, impl.get_executor());
-        buf = nullptr;
+        buf.reset();
         asio::dispatch(exec, asio::append(std::move(h), ec, std::move(tmp)));
       }
     }
@@ -224,6 +224,7 @@ struct faux_runner<Implementation, void(system::error_code, Args...)>
 
         auto h = std::move(handler);
         auto exec = asio::get_associated_executor(h, impl.get_executor());
+        BOOST_ASSERT(buf.use_count() == 1);
         buf.reset();
         asio::post(exec, asio::append(std::move(h), ec));
       }
@@ -242,6 +243,8 @@ struct faux_runner<Implementation, void(system::error_code, Args...)>
         auto h = std::move(handler);
         auto tmp = std::move(res);
         auto exec = asio::get_associated_executor(h, impl.get_executor());
+        BOOST_ASSERT(buf.use_count() == 1);
+        buf.reset();
         asio::post(exec,  asio::append(std::move(h), ec, std::move(tmp)));
       }
     }

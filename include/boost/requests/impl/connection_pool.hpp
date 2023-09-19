@@ -52,6 +52,7 @@ connection_pool::async_lookup(urls::url_view av, CompletionToken && completion_t
 
 struct connection_pool::async_get_connection_op : asio::coroutine
 {
+  int i = 0;
   using executor_type = asio::any_io_executor;
   executor_type get_executor() {return this_->get_executor(); }
 
@@ -64,7 +65,7 @@ struct connection_pool::async_get_connection_op : asio::coroutine
   typename conn_t::iterator itr;
 
 
-  std::shared_ptr<detail::connection_impl> nconn = nullptr;
+  boost::intrusive_ptr<detail::connection_impl> nconn = nullptr;
   std::unique_lock<std::mutex> lock{this_->mtx_, std::defer_lock};
   endpoint_type ep;
 

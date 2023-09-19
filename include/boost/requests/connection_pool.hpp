@@ -26,6 +26,13 @@ struct endpoint_hash
   }
 };
 
+struct connection_deleter
+{
+  constexpr connection_deleter() = default;
+  BOOST_REQUESTS_DECL
+  void operator()(connection_impl * ptr);
+};
+
 }
 
 struct connection_pool
@@ -224,7 +231,7 @@ struct connection_pool
     std::size_t limit_;
 
     boost::unordered_multimap<endpoint_type,
-                              std::shared_ptr<detail::connection_impl>,
+                              std::unique_ptr<detail::connection_impl, detail::connection_deleter>,
                               detail::endpoint_hash> conns_;
 
     std::vector<detail::connection_impl*> free_conns_;
@@ -233,30 +240,11 @@ struct connection_pool
     struct async_get_connection_op;
     struct async_ropen_op;
 
-    void return_connection_(detail::connection_impl * conn)
-    {
-      if (!conn->is_open())
-        return drop_connection_(conn);
+    BOOST_REQUESTS_DECL
+    void return_connection_(detail::connection_impl * conn);
+    BOOST_REQUESTS_DECL
+    void drop_connection_(const detail::connection_impl * conn);
 
-      std::lock_guard<std::mutex> lock{mtx_};
-      free_conns_.push_back(std::move(conn));
-      cv_.notify_all();
-    }
-
-    void drop_connection_(const detail::connection_impl * conn)
-    {
-      std::lock_guard<std::mutex> lock{mtx_};
-      auto itr = std::find_if(conns_.begin(), conns_.end(),
-                   [&](const std::pair<endpoint_type, std::shared_ptr<detail::connection_impl>> & e)
-                   {
-                     return e.second.get() == conn;
-                   });
-      if (itr != conns_.end())
-      {
-        conns_.erase(itr);
-        cv_.notify_all();
-      }
-    }
     friend struct connection;
     friend struct stream;
     friend struct detail::connection_impl;

@@ -153,6 +153,7 @@ auto connection_impl::ropen(beast::http::verb method,
       }
 
       alock.reset();
+
       if (use_ssl_)
         write_request(next_layer_,              method, path, headers, src);
       else
@@ -176,9 +177,13 @@ auto connection_impl::ropen(beast::http::verb method,
     if (ec)
       return stream{get_executor(), nullptr};
 
-    stream str{get_executor(), shared_from_this()};
+    stream str{get_executor(), this};
     str.parser_ = std::make_unique<http::response_parser<http::buffer_body>>(http::response_header{http::fields(headers.get_allocator())});
     str.parser_->body_limit(boost::none);
+
+    if (method == http::verb::head || method == http::verb::connect)
+      str.parser_->skip(true);
+
     if (use_ssl_)
       beast::http::read_header(next_layer_, buffer_, *str.parser_, ec);
     else
@@ -257,10 +262,12 @@ auto connection_impl::ropen(beast::http::verb method,
     }
 
     path = url->encoded_resource();
-    if (jar)
-    {
-      auto cc = jar->get(host(), is_secure, url->encoded_path());
+    if (!url->encoded_host_and_port().empty())
+      headers.set(http::field::host, url->encoded_host_and_port());
 
+    if (jar && headers.count(http::field::host) > 0u)
+    {
+      auto cc = jar->get(headers[http::field::host], is_secure, url->encoded_path());
       if (!cc.empty())
         headers.set(http::field::cookie, cc);
       else
@@ -272,7 +279,7 @@ auto connection_impl::ropen(beast::http::verb method,
     read_lock = {};
   }
 
-  stream str{get_executor(), shared_from_this()};
+  stream str{get_executor(), this};
   str.history_ = std::move(history);
   return str;
 }
@@ -299,6 +306,7 @@ auto connection_impl::async_ropen_op::resume(
 
     if (jar)
     {
+
       auto cc = jar->get(this_->host(), this_->use_ssl_, path);
       if (!cc.empty())
         headers.set(http::field::cookie, cc);
@@ -352,6 +360,10 @@ auto connection_impl::async_ropen_op::resume(
       str.emplace(this_->get_executor(), this_); // , req.get_allocator().resource()
       str->parser_ = std::make_unique<http::response_parser<http::buffer_body>>(http::response_header{http::fields(headers.get_allocator())});
       str->parser_->body_limit(boost::none);
+
+      if (method == http::verb::head || method == http::verb::connect)
+        str->parser_->skip(true);
+
       if (this_->use_ssl_)
       {
         BOOST_ASIO_CORO_YIELD beast::http::async_read_header(this_->next_layer_, this_->buffer_, *str->parser_, std::move(self));
@@ -435,9 +447,12 @@ auto connection_impl::async_ropen_op::resume(
       }
 
       path = url->encoded_resource();
-      if (jar)
+      if (!url->encoded_host_and_port().empty())
+        headers.set(http::field::host, url->encoded_host_and_port());
+
+      if (jar && headers.count(http::field::host) > 0u)
       {
-        auto cc = jar->get(this_->host(), this_->use_ssl_, url->encoded_path());
+        auto cc = jar->get(headers[http::field::host], this_->use_ssl_, url->encoded_path());
         if (!cc.empty())
           headers.set(http::field::cookie, cc);
         else
@@ -530,6 +545,7 @@ void connection_impl::async_connect_op::resume(requests::detail::faux_token_t<st
     BOOST_REQUESTS_AWAIT_LOCK(this_->write_mtx_, write_lock);
     BOOST_REQUESTS_AWAIT_LOCK(this_->read_mtx_,  read_lock);
     BOOST_ASIO_CORO_YIELD this_->next_layer_.next_layer().async_connect(this_->endpoint_ = ep, std::move(self));
+
     if (!ec && this_->use_ssl_)
     {
       BOOST_ASIO_CORO_YIELD this_->next_layer_.async_handshake(asio::ssl::stream_base::client, std::move(self));
@@ -567,18 +583,17 @@ void connection_impl::do_close_(system::error_code & ec)
     next_layer_.next_layer().close(ec);
 }
 
-void connection_impl::return_to_pool()
+void connection_impl::return_to_pool_()
 {
-  if (borrowed_from_)
-    borrowed_from_.load()->return_connection_(this);
+  if (auto ptr = borrowed_from_.load())
+    ptr->return_connection_(this);
 }
 
-void connection_impl::remove_from_pool()
+void connection_impl::remove_from_pool_()
 {
-  if (borrowed_from_)
-    borrowed_from_.load()->drop_connection_(this);
+  if (auto ptr = borrowed_from_.load())
+    ptr->drop_connection_(this);
 }
-
 
 }
 }

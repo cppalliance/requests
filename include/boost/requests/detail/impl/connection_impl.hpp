@@ -23,6 +23,7 @@
 #include <boost/asio/ssl/host_name_verification.hpp>
 #include <boost/core/exchange.hpp>
 #include <boost/optional.hpp>
+#include <boost/smart_ptr/intrusive_ptr.hpp>
 #include <boost/smart_ptr/allocate_unique.hpp>
 #include <boost/url/grammar/ci_string.hpp>
 
@@ -59,7 +60,6 @@ template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code)) Compl
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code))
 connection_impl::async_connect(endpoint_type ep, CompletionToken && completion_token)
 {
-
   return detail::faux_run<async_connect_op>(
       std::forward<CompletionToken>(completion_token), this, ep);
 }
@@ -160,7 +160,7 @@ struct connection_impl::async_ropen_op
 
   using lock_type = detail::lock_guard;
 
-  std::shared_ptr<connection_impl> this_;
+  boost::intrusive_ptr<connection_impl> this_;
   optional<stream> str;
 
   beast::http::verb method;
@@ -177,7 +177,7 @@ struct connection_impl::async_ropen_op
   response_base::history_type history;
   system::error_code ec_;
 
-  async_ropen_op(std::shared_ptr<connection_impl> this_,
+  async_ropen_op(boost::intrusive_ptr<connection_impl> this_,
                  beast::http::verb method,
                  urls::pct_string_view path,
                  http::fields & headers,
@@ -188,7 +188,7 @@ struct connection_impl::async_ropen_op
   {
   }
 
-  async_ropen_op(std::shared_ptr<connection_impl> this_,
+  async_ropen_op(boost::intrusive_ptr<connection_impl> this_,
                  beast::http::verb method,
                  urls::url_view path,
                  http::fields & headers,
@@ -250,7 +250,7 @@ connection_impl::async_ropen(beast::http::verb method,
                         CompletionToken && completion_token)
 {
   return detail::faux_run<async_ropen_op>(std::forward<CompletionToken>(completion_token),
-                                          shared_from_this(), method, path,
+                                          this, method, path,
                                           std::ref(headers), std::ref(src), std::move(opt), jar);
 }
 

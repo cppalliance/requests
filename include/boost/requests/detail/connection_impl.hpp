@@ -21,6 +21,7 @@
 #include <boost/beast/core/flat_buffer.hpp>
 #include <boost/url/url_view.hpp>
 
+
 namespace boost {
 namespace requests {
 
@@ -29,7 +30,8 @@ struct connection_pool;
 
 namespace detail {
 
-struct connection_impl : std::enable_shared_from_this<connection_impl>
+struct connection_deleter;
+struct connection_impl
 {
     typedef asio::ssl::stream<asio::generic::stream_protocol::socket> next_layer_type;
     typedef typename next_layer_type::executor_type executor_type;
@@ -186,8 +188,6 @@ struct connection_impl : std::enable_shared_from_this<connection_impl>
     bool uses_ssl() const {return use_ssl_;}
     void use_ssl(bool use_ssl = true) {use_ssl_ = use_ssl;}
 
-    BOOST_REQUESTS_DECL void return_to_pool();
-    BOOST_REQUESTS_DECL void remove_from_pool();
 
     struct connection_pool * pool() const {return borrowed_from_; }
   private:
@@ -203,6 +203,7 @@ struct connection_impl : std::enable_shared_from_this<connection_impl>
 
     // atomic so moving the pool can be thread-safe
     std::atomic<connection_pool *> borrowed_from_{nullptr};
+    std::atomic<std::size_t> borrow_count_{0u};
 
     struct async_close_op;
     struct async_connect_op;
@@ -214,9 +215,34 @@ struct connection_impl : std::enable_shared_from_this<connection_impl>
     BOOST_REQUESTS_DECL void do_async_close_(detail::faux_token_t<void(system::error_code)>);
     BOOST_REQUESTS_DECL void do_close_(system::error_code & ec);
 
+    BOOST_REQUESTS_DECL void return_to_pool_();
+    BOOST_REQUESTS_DECL void remove_from_pool_();
 
-    friend struct boost::requests::stream;
-    friend struct requests::connection_pool;
+    friend stream;
+    friend connection_pool;
+    friend connection_deleter;
+
+    friend void intrusive_ptr_add_ref(connection_impl* ptr)
+    {
+      ptr->borrow_count_++;
+    }
+
+    friend void intrusive_ptr_release(connection_impl* ptr)
+    {
+      // borrow usage
+      if (--ptr->borrow_count_ == 0u)
+      {
+        if (ptr->borrowed_from_ != nullptr)
+        {
+          if (ptr->is_open())
+            ptr->return_to_pool_();
+          else
+            ptr->remove_from_pool_();
+        }
+        else
+          delete ptr;
+      }
+    }
 };
 
 

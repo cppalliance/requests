@@ -41,9 +41,9 @@ inline std::string httpbin()
 
 TEST_SUITE_BEGIN("connection-pool");
 
-void http_request_connection_pool(bool https)
+TEST_CASE("sync-http")
 {
-  auto url = urls::url((https ? "https://" : "http://") + httpbin());
+  auto url = urls::url("http://" + httpbin());
 
   asio::io_context ctx;
 
@@ -52,10 +52,9 @@ void http_request_connection_pool(bool https)
   sslctx.set_verify_mode(asio::ssl::verify_peer);
   sslctx.set_default_verify_paths();
 
-
   requests::connection_pool hc(ctx.get_executor(), sslctx);
   hc.lookup(url);
-  CHECK(https == hc.uses_ssl());
+  CHECK(!hc.uses_ssl());
 
 
   // headers
@@ -306,15 +305,58 @@ void http_request_connection_pool(bool https)
     CHECK(js.at("headers").at("Content-Type") == "application/x-www-form-urlencoded");
     CHECK(js.at("form") == json::value{{"foo", "42"}, {"bar", "21"}, {"foo bar" , "23"}});
   }
-
 }
 
-TEST_CASE("sync-connection-request")
-{
-  SUBCASE("http") { http_request_connection_pool(false);}
-  SUBCASE("https") { http_request_connection_pool(true);}
-}
+TEST_CASE("sync-https") {
+  asio::io_context ctx;
 
+  asio::ssl::context sslctx{asio::ssl::context_base::tlsv13_client};
+  sslctx.set_default_verify_paths();
+
+  requests::connection_pool hc(ctx.get_executor(), sslctx);
+  hc.lookup("https://google.com");
+  CHECK(hc.uses_ssl());
+  // header
+  {
+    auto hdr = request(hc, requests::http::verb::head, urls::url_view("/"), requests::empty{}, {{}, {false}});
+    CHECK_HTTP_RESULT(hdr.headers);
+  }
+
+  // stream
+  {
+    auto str = hc.ropen(requests::http::verb::get, urls::url_view("/"), requests::empty{}, {{}, {false}});
+
+    CHECK_HTTP_RESULT(str.headers());
+    json::stream_parser sp;
+
+    char buf[32];
+    while (!str.done())
+      auto sz = str.read_some(asio::buffer(buf));
+  }
+
+  // stream-all
+  {
+    auto str = hc.ropen(requests::http::verb::get, urls::url_view("/"), requests::empty{}, {{}, {false}});
+
+    CHECK_HTTP_RESULT(str.headers());
+    std::string buf;
+    auto bb = asio::dynamic_buffer(buf);
+    CHECK(str.read(bb) > 0u);
+  }
+
+  // stream-dump
+  {
+    auto str = hc.ropen(requests::http::verb::get, urls::url_view("/"), requests::empty{}, {{}, {false}});
+    CHECK_HTTP_RESULT(str.headers());
+    str.dump();
+  }
+
+  // get
+  {
+    auto hdr = get(hc, urls::url_view("/"), {{}, {false}});
+    CHECK_HTTP_RESULT(hdr.headers);
+  }
+}
 
 void run_tests(error_code ec,
                requests::connection_pool & conn,
@@ -526,33 +568,122 @@ void run_tests(error_code ec,
 }
 
 
-TEST_CASE("async-connection-pool-request")
+TEST_CASE("async-http")
 {
-  urls::url url;
-  url.set_host(httpbin());
+  auto url = urls::url("http://" + httpbin());
+
   asio::io_context ctx;
   asio::ssl::context sslctx{asio::ssl::context_base::tls_client};
-  sslctx.set_verify_mode(asio::ssl::verify_peer);
   sslctx.set_default_verify_paths();
   requests::connection_pool conn(ctx, sslctx);
 
-  SUBCASE("http")
-  {
-    url.set_scheme("http");
-    conn.async_lookup(url, asio::append(&run_tests, std::ref(conn), urls::url_view(url)));
-    ctx.run();
-    CHECK(!conn.uses_ssl());
-    CHECK(conn.limit() >= conn.active());
-  }
-
-  SUBCASE("https")
-  {
-    url.set_scheme("https");
-    CHECK(conn.uses_ssl());
-    conn.async_lookup(url, asio::append(&run_tests, std::ref(conn), urls::url_view(url)));
-    ctx.run();
-    CHECK(conn.limit() >= conn.active());
-  }
+  url.set_scheme("http");
+  conn.async_lookup(url, asio::append(&run_tests, std::ref(conn), urls::url_view(url)));
+  ctx.run();
+  CHECK(!conn.uses_ssl());
+  CHECK(conn.limit() >= conn.active());
 }
+
+
+void async_https_impl(requests::connection_pool & hc)
+{
+
+  // header
+  async_request(hc, requests::http::verb::head, urls::url_view("/"), requests::empty{}, {{}, {false}},
+                tracker([](error_code ec, requests::response hdr)
+                {
+                  CHECK_FALSE(ec);
+                  CHECK_HTTP_RESULT(hdr.headers);
+                }));
+
+  // stream
+  hc.async_ropen(requests::http::verb::get, urls::url_view("/"),
+                 requests::empty{}, {{}, {false}},
+                 tracker([](error_code ec, requests::stream str)
+                 {
+                   CHECK_FALSE(ec);
+                   CHECK_HTTP_RESULT(str.headers());
+
+                   struct ht
+                   {
+                     requests::stream str;
+                     std::unique_ptr<char[]> buf = std::make_unique<char[]>(32);
+                     void operator()(error_code ec, std::size_t n)
+                     {
+                       CHECK_FALSE(ec);
+                       if (!ec && !str.done())
+                       str.async_read_some(asio::buffer(buf.get(), 32), tracker(std::move(*this)));
+                     }
+                   };
+                   ht h{std::move(str)};
+                   h.str.async_read_some(asio::buffer(h.buf.get(), 32), tracker(std::move(h)));
+                 }));
+
+
+  // stream-all
+  hc.async_ropen(requests::http::verb::get, urls::url_view("/"),
+                 requests::empty{}, {{}, {false}},
+                 tracker(
+                 [](error_code ec, requests::stream str)
+                 {
+                   CHECK_FALSE(ec);
+                   CHECK_HTTP_RESULT(str.headers());
+                   thread_local static std::string buf;
+                   auto bb = asio::dynamic_buffer(buf);
+                   str.async_read(
+                     bb,
+                     tracker(
+                        [](error_code ec, std::size_t n)
+                        {
+                            CHECK(n > 0u);
+                            CHECK_FALSE(ec);
+                        }));
+                }));
+
+
+  // stream-dump
+  hc.async_ropen(requests::http::verb::get, urls::url_view("/"),
+                 requests::empty{}, {{}, {false}},
+                 tracker(
+                 [](error_code ec, requests::stream str)
+                 {
+                   CHECK_FALSE(ec);
+                   CHECK_HTTP_RESULT(str.headers());
+                   str.async_dump(tracker([](error_code ec) {CHECK_FALSE(ec);}));
+                 }));
+
+  // get
+  async_get(hc, urls::url_view("/"), {{}, {false}},
+            tracker(
+            [](error_code ec, requests::response hdr)
+            {
+              CHECK_FALSE(ec);
+              CHECK_HTTP_RESULT(hdr.headers);
+            }));
+}
+
+TEST_CASE("async-https")
+{
+  asio::io_context ctx;
+
+  asio::ssl::context sslctx{asio::ssl::context_base::tls_client};
+
+  sslctx.set_default_verify_paths();
+
+  requests::connection_pool hc (ctx.get_executor(), sslctx);
+
+  error_code ec;
+  hc.async_lookup(
+      "https://google.com",
+      tracker([&](error_code ec)
+              {
+                CHECK_FALSE(ec);
+                if (!ec)
+                  async_https_impl(hc);
+              }));
+
+  ctx.run();
+}
+
 
 TEST_SUITE_END();

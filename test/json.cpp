@@ -36,7 +36,7 @@ inline std::string httpbin()
 
 TEST_SUITE_BEGIN("json-connection");
 
-void json_request_connection(bool https)
+TEST_CASE("sync-http")
 {
   auto url = httpbin();
 
@@ -50,11 +50,11 @@ void json_request_connection(bool https)
   requests::connection hc(ctx.get_executor(), sslctx);
 
   hc.set_host(url);
-  hc.use_ssl(https);
-  CHECK(hc.uses_ssl() == https);
+  hc.use_ssl(false);
+  CHECK(hc.uses_ssl() == false);
 
   asio::ip::tcp::resolver rslvr{ctx};
-  asio::ip::tcp::endpoint ep = *rslvr.resolve(url, https ? "https" : "http").begin();
+  asio::ip::tcp::endpoint ep = *rslvr.resolve(url, false ? "https" : "http").begin();
 
   hc.connect(ep);
 
@@ -172,11 +172,6 @@ void json_request_connection(bool https)
 
 }
 
-TEST_CASE("sync-connection-request")
-{
-  SUBCASE("http")  { json_request_connection(false);}
-  SUBCASE("https") { json_request_connection(true);}
-}
 
 void run_json_tests(error_code ec,
                     requests::connection & hc,

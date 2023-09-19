@@ -14,11 +14,11 @@ namespace requests
 
 void stream::dump(system::error_code & ec)
 {
-  if (!parser_ || !parser_->get().body().more)
+  if (!parser_ || !parser_->get().body().more || parser_->is_done())
     return;
 
   char data[65535];
-  while (!ec && parser_->get().body().more)
+  while (!ec && parser_->get().body().more && !parser_->is_done())
   {
     parser_->get().body().data = data;
     parser_->get().body().size = sizeof(data);
@@ -49,14 +49,6 @@ stream::~stream()
   if (parser_ && parser_->is_header_done() && !parser_->is_done()
       && parser_->get().body().more && impl_ && impl_->is_open())
     dump();
-
-  if (impl_.use_count() == 2u && impl_->pool() != nullptr)
-  {
-    if (impl_->is_open())
-      impl_->return_to_pool();
-    else
-      impl_->remove_from_pool();
-  }
 }
 
 

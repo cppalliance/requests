@@ -10,6 +10,7 @@
 
 #include <boost/requests/detail/faux_coroutine.hpp>
 #include <boost/asio/any_completion_handler.hpp>
+#include <boost/asio/compose.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <boost/requests/detail/config.hpp>
 #include <condition_variable>
@@ -40,16 +41,15 @@ struct condition_variable
   auto
   async_wait(std::unique_lock<std::mutex> & lock, CompletionToken && tk)
   {
-    return asio::async_initiate<CompletionToken, void(system::error_code)>
-            (
-                async_wait_impl_, tk, this, std::ref(lock)
-            );
+    return asio::async_compose<CompletionToken, void(system::error_code)>(async_wait_op{this, lock}, tk, timer_);
   }
 
   condition_variable& operator=(const condition_variable&) = delete;
-  condition_variable& operator=(condition_variable&& lhs) noexcept = default;
+  BOOST_REQUESTS_DECL
+  condition_variable& operator=(condition_variable&& lhs) noexcept;
   condition_variable(const condition_variable&) = delete;
-  condition_variable(condition_variable&& mi) noexcept = default;
+  BOOST_REQUESTS_DECL
+  condition_variable(condition_variable&& mi) noexcept;
   BOOST_REQUESTS_DECL void wait(std::unique_lock<std::mutex> & lock, system::error_code & ec);
   void wait(std::unique_lock<std::mutex> & lock)
   {
@@ -74,13 +74,33 @@ struct condition_variable
   BOOST_REQUESTS_DECL ~condition_variable();
 
  private:
-  BOOST_REQUESTS_DECL static
-  void async_wait_impl_(asio::any_completion_handler<void(system::error_code)> h,
-                        condition_variable * this_, std::unique_lock<std::mutex> & lock);
-
   asio::steady_timer timer_;
   std::condition_variable cv_;
   std::shared_ptr<int> shutdown_indicator_{std::make_shared<int>()};
+
+  struct async_wait_op
+  {
+    condition_variable * this_;
+    std::unique_lock<std::mutex> & lock;
+    std::weak_ptr<int> indicator;
+
+    template<typename Self>
+    void operator()(Self && self)
+    {
+      indicator = this_->shutdown_indicator_;
+      this_->timer_.async_wait(std::move(self));
+      lock.unlock();
+    }
+
+    template<typename Self>
+    void operator()(Self && self, system::error_code ec)
+    {
+      lock.lock();
+      if (!indicator.expired() && self.get_cancellation_state().cancelled() == asio::cancellation_type::none)
+        ec.clear();
+      self.complete(ec);
+    }
+  };
 };
 
 }

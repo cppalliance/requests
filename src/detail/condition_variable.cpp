@@ -23,31 +23,26 @@ void condition_variable::wait(std::unique_lock<std::mutex> & lock, system::error
   if (indicator.expired())
     ec = asio::error::operation_aborted;
 }
-
-void condition_variable::async_wait_impl_(
-    asio::any_completion_handler<void(system::error_code)> tk,
-    condition_variable * this_,
-    std::unique_lock<std::mutex> & lock)
-{
-  std::weak_ptr<int> indicator = this_->shutdown_indicator_;
-  lock.unlock();
-  this_->timer_.async_wait(
-        asio::deferred(
-          [&lock, indicator](system::error_code ec_)
-          {
-            lock.lock();
-            if (!indicator.expired())
-              ec_.clear();
-            return asio::deferred.values(ec_);
-          }))
-          (std::move(tk));
-}
-
 condition_variable::~condition_variable()
 {
   shutdown_indicator_.reset();
   timer_.cancel();
   cv_.notify_all();
+}
+
+condition_variable& condition_variable::operator=(condition_variable&& lhs) noexcept
+{
+  shutdown_indicator_ = std::make_shared<int>();
+  timer_.cancel();
+  cv_.notify_all();
+  timer_ = asio::steady_timer(lhs.timer_.get_executor());
+  return *this;
+}
+
+
+condition_variable::condition_variable(condition_variable&& mi) noexcept
+  : timer_(mi.timer_.get_executor())
+{
 }
 
 }

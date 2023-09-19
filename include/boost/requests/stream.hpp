@@ -9,13 +9,16 @@
 #define BOOST_REQUESTS_STREAM_HPP
 
 #include <boost/requests/detail/lock_guard.hpp>
-#include <boost/asio/execution/bad_executor.hpp>
-#include <boost/beast/http/basic_parser.hpp>
 #include <boost/requests/detail/config.hpp>
 #include <boost/requests/detail/faux_coroutine.hpp>
 #include <boost/requests/fields/keep_alive.hpp>
 #include <boost/requests/http.hpp>
 #include <boost/requests/response.hpp>
+
+#include <boost/asio/execution/bad_executor.hpp>
+#include <boost/beast/http/basic_parser.hpp>
+#include <boost/smart_ptr/intrusive_ptr.hpp>
+
 
 namespace boost
 {
@@ -143,7 +146,7 @@ struct stream
 
   bool done() const {return !parser_ ||  parser_->is_done();}
   explicit stream(executor_type executor, std::nullptr_t ) : executor_{executor}, impl_(nullptr) {}
-  explicit stream(executor_type executor, std::shared_ptr<detail::connection_impl> impl)
+  explicit stream(executor_type executor, boost::intrusive_ptr<detail::connection_impl> impl)
       : executor_{executor},
         impl_(std::move(impl))
   {}
@@ -169,7 +172,7 @@ struct stream
   }
  private:
   executor_type executor_;
-  std::shared_ptr<detail::connection_impl> impl_;
+  boost::intrusive_ptr<detail::connection_impl> impl_;
   detail::lock_guard lock_;
 
   std::unique_ptr<http::response_parser<http::buffer_body>> parser_;

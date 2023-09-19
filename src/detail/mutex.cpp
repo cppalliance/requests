@@ -24,9 +24,10 @@ void mutex::async_lock_impl_(asio::any_completion_handler<void(system::error_cod
 {
   std::lock_guard<std::mutex> lock{this_->waiters_mtx_};
   if (this_->try_lock())
-    return asio::dispatch(
-        asio::get_associated_immediate_executor(handler, this_->exec_),
-        asio::append(std::move(handler), system::error_code()));
+  {
+    auto exec = asio::get_associated_immediate_executor(handler, this_->exec_);
+    return asio::dispatch(exec, asio::append(std::move(handler), system::error_code()));
+  }
 
   auto itr = this_->waiters_.insert(this_->waiters_.end(), std::move(handler));
 

@@ -43,23 +43,28 @@ inline std::string httpbin()
 
 TEST_SUITE_BEGIN("connection");
 
-void http_request_connection(bool https)
+TEST_CASE("sync-http")
 {
-  auto url = httpbin();
-
+  urls::url u = urls::parse_uri("http://" + httpbin()).value();
+  auto url = u.encoded_host_and_port();
   asio::io_context ctx;
-
   asio::ssl::context sslctx{asio::ssl::context_base::tls_client};
 
   sslctx.set_verify_mode(asio::ssl::verify_peer);
   sslctx.set_default_verify_paths();
 
-  auto hc = https ? requests::connection(ctx.get_executor(), sslctx) : requests::connection(ctx.get_executor());
+  requests::connection hc(ctx.get_executor());
   hc.set_host(url);
-  hc.use_ssl(https);
-  asio::ip::tcp::resolver rslvr{ctx};
-  asio::ip::tcp::endpoint ep = *rslvr.resolve(url, https ? "https" : "http").begin();
-  hc.use_ssl(https);
+  hc.use_ssl(false);
+
+  asio::ip::tcp::endpoint ep;
+  if (url == "localhost")
+    ep = {asio::ip::make_address("127.0.0.1"), u.port_number()};
+  else
+  {
+    asio::ip::tcp::resolver rslvr{ctx};
+    ep = *rslvr.resolve(u.host_name(), u.has_port() ? u.port() : u.scheme()).begin();
+  }
   hc.connect(ep);
 
   // headers
@@ -150,7 +155,6 @@ void http_request_connection(bool https)
     CHECK(hdr.history.at(0u).at(requests::http::field::location) == "/get");
 
     auto hd = as_json(hdr).at("headers");
-
     CHECK(hd.at("Host")        == json::value(url));
     CHECK(hd.at("Test-Header") == json::value("it works"));
   }
@@ -327,10 +331,70 @@ void http_request_connection(bool https)
   }
 }
 
-TEST_CASE("sync-connection-request")
+TEST_CASE("sync-https")
 {
-  SUBCASE("http") { http_request_connection(false);}
-  SUBCASE("https") { http_request_connection(true);}
+  asio::io_context ctx;
+
+  asio::ssl::context sslctx{asio::ssl::context_base::tlsv13_client};
+  sslctx.set_default_verify_paths();
+
+  requests::connection hc (ctx.get_executor(), sslctx);
+
+  const auto host = "google.com";
+  hc.set_host(host);
+  hc.use_ssl(true);
+  asio::ip::tcp::resolver rslvr{ctx};
+  asio::ip::tcp::endpoint ep = *rslvr.resolve(host, "https").begin();
+  error_code ec;
+  hc.connect(ep, ec);
+  CHECK_FALSE(ec);
+
+  // header
+  {
+    auto hdr = request(hc, requests::http::verb::head, urls::url_view("/"), requests::empty{}, {{}, {false}}, ec);
+    CHECK_FALSE(ec);
+    CHECK_HTTP_RESULT(hdr.headers);
+  }
+
+  // stream
+  {
+    auto str = hc.ropen(requests::http::verb::get, urls::url_view("/"),
+                        requests::empty{}, {{}, {false}});
+
+    CHECK_HTTP_RESULT(str.headers());
+    json::stream_parser sp;
+
+    char buf[32];
+    while (!str.done())
+      auto sz = str.read_some(asio::buffer(buf));
+  }
+
+
+  // stream-all
+  {
+    auto str = hc.ropen(requests::http::verb::get, urls::url_view("/"),
+                        requests::empty{}, {{}, {false}});
+
+    CHECK_HTTP_RESULT(str.headers());
+    std::string buf;
+    auto bb = asio::dynamic_buffer(buf);
+    CHECK(str.read(bb) > 0u);
+  }
+
+
+  // stream-dump
+  {
+    auto str = hc.ropen(requests::http::verb::get, urls::url_view("/"),
+                        requests::empty{}, {{}, {false}});
+    CHECK_HTTP_RESULT(str.headers());
+    str.dump();
+  }
+
+  // get
+  {
+    auto hdr = get(hc, urls::url_view("/"), {{}, {false}});
+    CHECK_HTTP_RESULT(hdr.headers);
+  }
 }
 
 
@@ -546,8 +610,7 @@ void run_tests(error_code ec,
 
 TEST_CASE("async-connection-request")
 {
-  urls::url url;
-  url.set_host(httpbin());
+  urls::url url = urls::parse_uri("http://" + httpbin()).value();
   asio::io_context ctx;
   asio::ssl::context sslctx{asio::ssl::context_base::tls_client};
   sslctx.set_verify_mode(asio::ssl::verify_peer);
@@ -569,8 +632,6 @@ TEST_CASE("async-connection-request")
              .otherwise(asio::post(ctx, asio::append(asio::deferred, ec)));
       });
 
-  SUBCASE("http")
-  {
     conn = requests::connection(ctx);
     asio::ip::tcp::resolver rslvr{ctx};
     url.set_scheme("http");
@@ -578,24 +639,120 @@ TEST_CASE("async-connection-request")
     CHECK(!conn.uses_ssl());
     conn.set_host(url.encoded_host());
 
-    rslvr.async_resolve(std::string(url.encoded_host().data(), url.encoded_host().size()),
-                        "80", do_the_thing)
-                       (asio::append(&run_tests, std::ref(conn), urls::url_view(url)));
+    if (url.encoded_host() == "localhost")
+      conn.async_connect(
+          asio::ip::tcp::endpoint{asio::ip::make_address("127.0.0.1"), url.port_number()},
+          asio::append(&run_tests, std::ref(conn), urls::url_view(url)));
+    else
+      rslvr.async_resolve(std::string(url.encoded_host().data(), url.encoded_host().size()),
+                          "80", do_the_thing)
+                         (asio::append(&run_tests, std::ref(conn), urls::url_view(url)));
     ctx.run();
-  }
 
-  SUBCASE("https")
-  {
-    conn = requests::connection(ctx, sslctx);
-    asio::ip::tcp::resolver rslvr{ctx};
-    url.set_scheme("https");
-    CHECK(conn.uses_ssl());
-    conn.set_host(url.encoded_host());
-    rslvr.async_resolve(std::string(url.encoded_host().data(), url.encoded_host().size()),
-                        "443", do_the_thing)
-                       (asio::append(&run_tests, std::ref(conn), urls::url_view(url)));
-    ctx.run();
-  }
 }
 
+void async_https_impl(requests::connection & hc)
+{
+
+  // header
+  async_request(hc, requests::http::verb::head, urls::url_view("/"), requests::empty{}, {{}, {false}},
+                tracker([](error_code ec, requests::response hdr)
+                {
+                  CHECK_FALSE(ec);
+                  CHECK_HTTP_RESULT(hdr.headers);
+                }));
+
+  // stream
+  hc.async_ropen(requests::http::verb::get, urls::url_view("/"),
+                 requests::empty{}, {{}, {false}},
+                 tracker([](error_code ec, requests::stream str)
+                 {
+                   CHECK_FALSE(ec);
+                   CHECK_HTTP_RESULT(str.headers());
+
+                   struct ht
+                   {
+                     requests::stream str;
+                     std::unique_ptr<char[]> buf = std::make_unique<char[]>(32);
+                     void operator()(error_code ec, std::size_t n)
+                     {
+                       CHECK_FALSE(ec);
+                       if (!ec && !str.done())
+                       str.async_read_some(asio::buffer(buf.get(), 32), tracker(std::move(*this)));
+                     }
+                   };
+                   ht h{std::move(str)};
+                   h.str.async_read_some(asio::buffer(h.buf.get(), 32), tracker(std::move(h)));
+                 }));
+
+
+  // stream-all
+  hc.async_ropen(requests::http::verb::get, urls::url_view("/"),
+                 requests::empty{}, {{}, {false}},
+                 tracker(
+                 [](error_code ec, requests::stream str)
+                 {
+                   CHECK_FALSE(ec);
+                   CHECK_HTTP_RESULT(str.headers());
+                   thread_local static std::string buf;
+                   auto bb = asio::dynamic_buffer(buf);
+                   str.async_read(
+                     bb,
+                     tracker(
+                        [](error_code ec, std::size_t n)
+                        {
+                            CHECK(n > 0u);
+                            CHECK_FALSE(ec);
+                        }));
+                }));
+
+
+  // stream-dump
+  hc.async_ropen(requests::http::verb::get, urls::url_view("/"),
+                 requests::empty{}, {{}, {false}},
+                 tracker(
+                 [](error_code ec, requests::stream str)
+                 {
+                   CHECK_FALSE(ec);
+                   CHECK_HTTP_RESULT(str.headers());
+                   str.async_dump(tracker([](error_code ec) {CHECK_FALSE(ec);}));
+                 }));
+
+  // get
+  async_get(hc, urls::url_view("/"), {{}, {false}},
+            tracker(
+            [](error_code ec, requests::response hdr)
+            {
+              CHECK_FALSE(ec);
+              CHECK_HTTP_RESULT(hdr.headers);
+            }));
+}
+
+TEST_CASE("async-https")
+{
+  asio::io_context ctx;
+
+  asio::ssl::context sslctx{asio::ssl::context_base::tls_client};
+
+  sslctx.set_default_verify_paths();
+
+  requests::connection hc (ctx.get_executor(), sslctx);
+
+  const auto host = "google.com";
+  hc.set_host(host);
+  hc.use_ssl(true);
+  asio::ip::tcp::resolver rslvr{ctx};
+  asio::ip::tcp::endpoint ep = *rslvr.resolve(host, "https").begin();
+  error_code ec;
+  hc.async_connect(
+        ep,
+        tracker([&](error_code ec)
+        {
+          CHECK_FALSE(ec);
+          if (!ec)
+            async_https_impl(hc);
+        }));
+
+  ctx.run();
+}
 TEST_SUITE_END();
