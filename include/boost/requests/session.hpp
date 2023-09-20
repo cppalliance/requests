@@ -169,6 +169,17 @@ struct session
     struct async_get_pool_op;
     struct async_ropen_op;
 
+    BOOST_REQUESTS_DECL
+    static void async_ropen_impl(
+        asio::any_completion_handler<void (boost::system::error_code, stream)> handler,
+        session * sess, http::verb method, urls::url_view path, source * src, http::fields * headers);
+
+    BOOST_REQUESTS_DECL
+    static void async_get_pool_impl(
+        asio::any_completion_handler<void (boost::system::error_code, std::shared_ptr<connection_pool>)> handler,
+        session * sess, urls::url_view url);
+
+
 
     BOOST_REQUESTS_DECL auto make_request_(http::fields fields) -> requests::request_parameters;
     BOOST_REQUESTS_DECL static urls::url normalize_(urls::url_view in);

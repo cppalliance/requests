@@ -10,7 +10,6 @@
 
 #include <boost/requests/detail/lock_guard.hpp>
 #include <boost/requests/detail/config.hpp>
-#include <boost/requests/detail/faux_coroutine.hpp>
 #include <boost/requests/fields/keep_alive.hpp>
 #include <boost/requests/http.hpp>
 #include <boost/requests/response.hpp>
@@ -182,6 +181,14 @@ struct stream
   struct async_read_op;
   struct async_dump_op;
   struct async_read_some_op;
+
+  BOOST_REQUESTS_DECL
+  void async_read_some_impl(
+      asio::any_completion_handler<void(error_code, std::size_t)> handler, asio::mutable_buffer buffer);
+
+
+  BOOST_REQUESTS_DECL
+  static void async_dump_impl(asio::any_completion_handler<void(error_code)> handler, stream * this_);
 
   friend struct detail::connection_impl;
   friend struct connection;

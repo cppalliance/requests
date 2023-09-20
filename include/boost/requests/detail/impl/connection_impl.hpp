@@ -11,7 +11,6 @@
 #include <boost/requests/detail/connection_impl.hpp>
 #include <boost/requests/detail/config.hpp>
 #include <boost/requests/detail/defaulted.hpp>
-#include <boost/requests/detail/faux_coroutine.hpp>
 #include <boost/requests/detail/ssl.hpp>
 #include <boost/requests/fields/location.hpp>
 #include <boost/requests/request_parameters.hpp>
@@ -32,65 +31,23 @@ namespace boost {
 namespace requests {
 namespace detail {
 
-struct connection_impl::async_connect_op : asio::coroutine
-{
-  using executor_type = asio::any_io_executor;
-  executor_type get_executor() {return this_->get_executor(); }
-
-  connection_impl * this_;
-  endpoint_type ep;
-
-  asio::coroutine inner_coro;
-
-  async_connect_op(connection_impl * this_, endpoint_type ep) : this_(this_), ep(ep) {}
-
-  using lock_type = detail::lock_guard;
-
-  lock_type read_lock, write_lock;
-
-  using completion_signature_type = void(system::error_code);
-  using step_signature_type       = void(system::error_code);
-
-  BOOST_REQUESTS_DECL
-  void resume(requests::detail::faux_token_t<step_signature_type> self,
-              system::error_code & ec);
-};
-
 template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code))
 connection_impl::async_connect(endpoint_type ep, CompletionToken && completion_token)
 {
-  return detail::faux_run<async_connect_op>(
-      std::forward<CompletionToken>(completion_token), this, ep);
+  return asio::async_initiate<CompletionToken, void (boost::system::error_code)>(
+      &async_connect_impl, completion_token,
+      this, ep);
 }
 
-struct connection_impl::async_close_op : asio::coroutine
-{
-  connection_impl * this_;
-
-  using executor_type = asio::any_io_executor;
-  executor_type get_executor() const {return this_->get_executor();}
-
-  using lock_type = detail::lock_guard;
-  lock_type read_lock, write_lock;
-
-
-  async_close_op(connection_impl * this_) : this_(this_) {}
-
-  using completion_signature_type = void(system::error_code);
-  using step_signature_type       = void(system::error_code);
-
-  BOOST_REQUESTS_DECL
-  void resume(requests::detail::faux_token_t<step_signature_type> self,
-              system::error_code & ec);
-};
 
 template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code))
 connection_impl::async_close(CompletionToken && completion_token)
 {
-  return detail::faux_run<async_close_op>(
-      std::forward<CompletionToken>(completion_token), this);
+  return asio::async_initiate<CompletionToken, void (boost::system::error_code)>(
+      &async_close_impl, completion_token,
+      this);
 }
 
 BOOST_REQUESTS_DECL bool check_endpoint(
@@ -151,65 +108,6 @@ auto connection_impl::ropen(
   return ropen(method, path.encoded_target(), req.fields, *src, std::move(req.opts), req.jar, ec);
 }
 
-
-struct connection_impl::async_ropen_op
-    : boost::asio::coroutine
-{
-  using executor_type = asio::any_io_executor;
-  executor_type get_executor() {return this_->get_executor(); }
-
-  using lock_type = detail::lock_guard;
-
-  boost::intrusive_ptr<connection_impl> this_;
-  optional<stream> str;
-
-  beast::http::verb method;
-  urls::pct_string_view path;
-  http::fields & headers;
-  source & src;
-  request_options opts;
-  cookie_jar * jar{nullptr};
-  response_base::buffer_type buf{headers.get_allocator()};
-
-  lock_type lock;
-  boost::optional<lock_type> alock;
-
-  response_base::history_type history;
-  system::error_code ec_;
-
-  async_ropen_op(boost::intrusive_ptr<connection_impl> this_,
-                 beast::http::verb method,
-                 urls::pct_string_view path,
-                 http::fields & headers,
-                 source & src,
-                 request_options opts,
-                 cookie_jar * jar)
-      : this_(std::move(this_)), method(method), path(path), headers(headers), src(src), opts(std::move(opts)), jar(jar)
-  {
-  }
-
-  async_ropen_op(boost::intrusive_ptr<connection_impl> this_,
-                 beast::http::verb method,
-                 urls::url_view path,
-                 http::fields & headers,
-                 source & src,
-                 request_options opt,
-                 cookie_jar * jar)
-      : this_(this_), method(method), path(path.encoded_resource()),
-        headers(headers), src(src), opts(std::move(opt)), jar(jar)
-  {
-    detail::check_endpoint(path, this_->endpoint(), this_->host(), this_->use_ssl_, ec_);
-  }
-
-  using completion_signature_type = void(system::error_code, stream);
-  using step_signature_type       = void(system::error_code, std::size_t);
-
-  BOOST_REQUESTS_DECL
-  auto resume(requests::detail::faux_token_t<step_signature_type> self,
-              system::error_code & ec, std::size_t res_ = 0u) -> stream;
-};
-
-
 template<typename RequestBody, typename CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code,
                                                          stream))
@@ -239,8 +137,7 @@ connection_impl::async_ropen(
 
 template<typename CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                   void (boost::system::error_code,
-                                        stream))
+                                   void (boost::system::error_code, stream))
 connection_impl::async_ropen(beast::http::verb method,
                         urls::pct_string_view path,
                         http::fields & headers,
@@ -249,9 +146,10 @@ connection_impl::async_ropen(beast::http::verb method,
                         cookie_jar * jar,
                         CompletionToken && completion_token)
 {
-  return detail::faux_run<async_ropen_op>(std::forward<CompletionToken>(completion_token),
-                                          this, method, path,
-                                          std::ref(headers), std::ref(src), std::move(opt), jar);
+  return asio::async_initiate<CompletionToken, void (boost::system::error_code, stream)>(
+      &async_ropen_impl, completion_token,
+      this, method, path,
+      std::ref(headers), std::ref(src), std::move(opt), jar);
 }
 
 }

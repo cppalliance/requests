@@ -13,7 +13,6 @@
 #include <boost/system/error_code.hpp>
 #include <boost/system/system_error.hpp>
 #include <boost/requests/detail/config.hpp>
-#include <boost/requests/detail/faux_coroutine.hpp>
 #include <list>
 
 namespace boost

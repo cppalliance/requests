@@ -291,18 +291,87 @@ void connection_impl::set_host(core::string_view sv, system::error_code & ec)
 }
 
 
-BOOST_REQUESTS_DECL
-auto connection_impl::async_ropen_op::resume(
-            requests::detail::faux_token_t<step_signature_type> self,
-            system::error_code & ec, std::size_t res_) -> stream
+struct connection_impl::async_ropen_op
+    : boost::asio::coroutine
 {
+  using executor_type = asio::any_io_executor;
+  executor_type get_executor() {return this_->get_executor(); }
+
+  using lock_type = detail::lock_guard;
+
+  boost::intrusive_ptr<connection_impl> this_;
+
+  optional<stream> str;
+  beast::http::verb method;
+  urls::pct_string_view path;
+  http::fields & headers;
+  source & src;
+  request_options opts;
+  cookie_jar * jar{nullptr};
+  system::error_code ec_;
+
+  struct state_t
+  {
+    response_base::buffer_type buf;
+
+    lock_type lock;
+    boost::optional<lock_type> alock;
+
+    response_base::history_type history;
+  };
+
+  using allocator_type = asio::any_completion_handler_allocator<void, void(boost::system::error_code, stream)>;
+  std::unique_ptr<state_t, alloc_deleter<state_t, allocator_type>> state;
+
+  async_ropen_op(allocator_type alloc,
+                 boost::intrusive_ptr<connection_impl> this_,
+                 beast::http::verb method,
+                 urls::pct_string_view path,
+                 http::fields & headers,
+                 source & src,
+                 request_options opts,
+                 cookie_jar * jar)
+      : this_(std::move(this_)), method(method), path(path), headers(headers), src(src), opts(std::move(opts))
+      , jar(jar), state(allocate_unique<state_t>(alloc))
+  {
+  }
+
+  async_ropen_op(allocator_type alloc,
+                 boost::intrusive_ptr<connection_impl> this_,
+                 beast::http::verb method,
+                 urls::url_view path,
+                 http::fields & headers,
+                 source & src,
+                 request_options opt,
+                 cookie_jar * jar)
+      : this_(this_), method(method), path(path.encoded_resource()),
+        headers(headers), src(src), opts(std::move(opt)), jar(jar), state(allocate_unique<state_t>(alloc))
+  {
+    detail::check_endpoint(path, this_->endpoint(), this_->host(), this_->use_ssl_, ec_);
+  }
+
+  template<typename Self>
+  void operator()(Self && self, system::error_code ec = {}, std::size_t res_ = 0u);
+};
+
+
+template<typename Self>
+void connection_impl::async_ropen_op::operator()(
+            Self && self,
+            system::error_code ec, std::size_t res_)
+{
+  auto st = state.get();
+  if (!ec)
   BOOST_ASIO_CORO_REENTER(this)
   {
     if (ec_)
     {
       BOOST_ASIO_CORO_YIELD asio::post(this_->get_executor(), std::move(self));
       ec = ec_;
+      break;
     }
+
+    state = boost::allocate_unique<state_t>(asio::get_associated_allocator(self));
 
     if (jar)
     {
@@ -323,12 +392,12 @@ auto connection_impl::async_ropen_op::resume(
 
     while (!ec)
     {
-      BOOST_REQUESTS_AWAIT_LOCK(this_->write_mtx_, lock);
+      BOOST_REQUESTS_AWAIT_LOCK(this_->write_mtx_, st->lock);
 
       if (!this_->is_open())
       {
       retry:
-        BOOST_REQUESTS_AWAIT_LOCK(this_->read_mtx_, alock);
+        BOOST_REQUESTS_AWAIT_LOCK(this_->read_mtx_, st->alock);
         BOOST_ASIO_CORO_YIELD this_->next_layer_.next_layer().async_connect(this_->endpoint_, std::move(self));
         if (!ec && this_->use_ssl_)
         {
@@ -338,7 +407,7 @@ auto connection_impl::async_ropen_op::resume(
           break;
       }
 
-      alock.reset();
+      st->alock.reset();
       if (this_->use_ssl_)
       {
         BOOST_ASIO_CORO_YIELD async_write_request(this_->next_layer_, method, path, headers, src, std::move(self));
@@ -354,7 +423,7 @@ auto connection_impl::async_ropen_op::resume(
         break;
 
       // release after acquire!
-      BOOST_REQUESTS_AWAIT_LOCK(this_->read_mtx_, lock);
+      BOOST_REQUESTS_AWAIT_LOCK(this_->read_mtx_, st->lock);
       // END OF write impl
 
       str.emplace(this_->get_executor(), this_); // , req.get_allocator().resource()
@@ -388,7 +457,7 @@ auto connection_impl::async_ropen_op::resume(
             else
             {
               ec = f.error();
-              return *std::move(str);
+              return self.complete(ec, *std::move(str));
             }
           }
         }
@@ -399,23 +468,23 @@ auto connection_impl::async_ropen_op::resume(
              (rc != http::status::temporary_redirect) && (rc != http::status::permanent_redirect)))
         {
           // GO
-          str->lock_ = std::move(lock);
-          str->history_ = std::move(history);
-          return *std::move(str);
+          str->lock_ = std::move(st->lock);
+          str->history_ = std::move(st->history);
+          return self.complete(ec, *std::move(str));
         }
       }
 
       if (method != http::verb::head)
       {
-        BOOST_ASIO_CORO_YIELD str->async_read(buf, std::move(self));
+        BOOST_ASIO_CORO_YIELD str->async_read(st->buf, std::move(self));
       }
       if (ec)
         break;
-      history.emplace_back(std::move( str->parser_->get().base()), std::move(buf));
-      lock = {};
+      state->history.emplace_back(std::move(str->parser_->get().base()), std::move(st->buf));
+      st->lock = {};
       str.reset();
 
-      auto & res = history.back().base();
+      auto & res = state->history.back().base();
 
       // read the body to put into history
       auto loc_itr = res.find(http::field::location);
@@ -464,12 +533,16 @@ auto connection_impl::async_ropen_op::resume(
     }
 
     stream str_{this_->get_executor(), nullptr};
-    str_.history_ = std::move(history);
-    return str_;
+    str_.history_ = std::move(st->history);
+    return self.complete(ec, std::move(str_));
 
   }
-  return stream{this_->get_executor(), nullptr};
-
+  // coro is complete
+  if (is_complete())
+  {
+      state.reset();
+      self.complete(ec, stream{this_->get_executor(), nullptr});
+  }
 }
 
 
@@ -524,7 +597,7 @@ std::size_t connection_impl::do_read_some_(beast::http::basic_parser<false> & pa
     return beast::http::read_some(next_layer_.next_layer(), buffer_, parser, ec);
 }
 
-void connection_impl::do_async_read_some_(beast::http::basic_parser<false> & parser, detail::faux_token_t<void(system::error_code, std::size_t)> tk)
+void connection_impl::do_async_read_some_(beast::http::basic_parser<false> & parser, asio::any_completion_handler<void(system::error_code, std::size_t)> tk)
 {
   if (use_ssl_)
     beast::http::async_read_some(next_layer_, buffer_, parser, std::move(tk));
@@ -532,43 +605,84 @@ void connection_impl::do_async_read_some_(beast::http::basic_parser<false> & par
     beast::http::async_read_some(next_layer_.next_layer(), buffer_, parser, std::move(tk));
 }
 
-void connection_impl::do_async_close_(detail::faux_token_t<void(system::error_code)> tk)
+void connection_impl::do_async_close_(asio::any_completion_handler<void(system::error_code)> tk)
 {
-  async_close(std::move(tk));
+  async_close_impl(std::move(tk), this);
 }
 
-void connection_impl::async_connect_op::resume(requests::detail::faux_token_t<step_signature_type> self,
-                                          system::error_code & ec)
+struct connection_impl::async_connect_op : asio::coroutine
 {
-  BOOST_ASIO_CORO_REENTER(this)
+  using lock_type = detail::lock_guard;
+  struct state_t
   {
-    BOOST_REQUESTS_AWAIT_LOCK(this_->write_mtx_, write_lock);
-    BOOST_REQUESTS_AWAIT_LOCK(this_->read_mtx_,  read_lock);
-    BOOST_ASIO_CORO_YIELD this_->next_layer_.next_layer().async_connect(this_->endpoint_ = ep, std::move(self));
+    lock_type read_lock, write_lock;
+  };
+  using allocator_type = asio::any_completion_handler_allocator<void, void(error_code)>;
+  std::unique_ptr<state_t, alloc_deleter<state_t, allocator_type>> state;
 
-    if (!ec && this_->use_ssl_)
+  connection_impl * this_;
+  endpoint_type ep;
+
+  template<typename Self>
+  void operator()(Self && self, system::error_code ec = {})
+  {
+    auto st = state.get();
+    if (!ec)
+      BOOST_ASIO_CORO_REENTER(this)
+      {
+        BOOST_REQUESTS_AWAIT_LOCK(this_->write_mtx_, st->write_lock);
+        BOOST_REQUESTS_AWAIT_LOCK(this_->read_mtx_,  st->read_lock);
+        if (this_->use_ssl_)
+        {
+          BOOST_ASIO_CORO_YIELD this_->next_layer_.async_handshake(asio::ssl::stream_base::client, std::move(self));
+        }
+      }
+    // coro is complete
+    if (is_complete())
     {
-      BOOST_ASIO_CORO_YIELD this_->next_layer_.async_handshake(asio::ssl::stream_base::client, std::move(self));
+      state.reset();
+      self.complete(ec);
     }
   }
-}
+};
 
-void connection_impl::async_close_op::resume(requests::detail::faux_token_t<step_signature_type> self,
-                                          system::error_code & ec)
+struct connection_impl::async_close_op : asio::coroutine
 {
-  BOOST_ASIO_CORO_REENTER(this)
+  using lock_type = detail::lock_guard;
+  struct state_t
   {
-    BOOST_REQUESTS_AWAIT_LOCK(this_->write_mtx_, write_lock);
-    BOOST_REQUESTS_AWAIT_LOCK(this_->read_mtx_,  read_lock);
-    if (!ec && this_->use_ssl_)
-    {
-      BOOST_ASIO_CORO_YIELD this_->next_layer_.async_shutdown(std::move(self));
-    }
-    if (this_->next_layer_.next_layer().is_open())
-      this_->next_layer_.next_layer().close(ec);
-  }
-}
+    lock_type read_lock, write_lock;
+  };
+  using allocator_type = asio::any_completion_handler_allocator<void, void(error_code)>;
+  std::unique_ptr<state_t, alloc_deleter<state_t, allocator_type>> state;
 
+  connection_impl * this_;
+  endpoint_type ep;
+
+  template<typename Self>
+  void operator()(Self && self, system::error_code ec = {})
+  {
+    auto st = state.get();
+    if (!ec)
+      BOOST_ASIO_CORO_REENTER(this)
+      {
+          BOOST_REQUESTS_AWAIT_LOCK(this_->write_mtx_, st->write_lock);
+          BOOST_REQUESTS_AWAIT_LOCK(this_->read_mtx_,  st->read_lock);
+          if (!ec && this_->use_ssl_)
+          {
+            BOOST_ASIO_CORO_YIELD this_->next_layer_.async_shutdown(std::move(self));
+          }
+          if (this_->next_layer_.next_layer().is_open())
+            this_->next_layer_.next_layer().close(ec);
+      }
+    // coro is complete
+    if (is_complete())
+    {
+      state.reset();
+      self.complete(ec);
+    }
+  }
+};
 
 void connection_impl::do_close_(system::error_code & ec)
 {
@@ -593,6 +707,37 @@ void connection_impl::remove_from_pool_()
 {
   if (auto ptr = borrowed_from_.load())
     ptr->drop_connection_(this);
+}
+
+BOOST_REQUESTS_DECL
+void connection_impl::async_connect_impl(asio::any_completion_handler<void(error_code)> handler,
+                                         connection_impl * this_, endpoint_type ep)
+{
+  return asio::async_compose<asio::any_completion_handler<void(error_code)>, void(error_code)>(
+      async_connect_op{{},
+                       allocate_unique<async_connect_op::state_t>(asio::get_associated_allocator(handler)),
+                       this_, ep}, handler, this_->get_executor());
+}
+
+BOOST_REQUESTS_DECL
+void connection_impl::async_close_impl(asio::any_completion_handler<void(error_code)> handler,
+                                       connection_impl * this_)
+{
+  return asio::async_compose<asio::any_completion_handler<void(error_code)>, void(error_code)>(
+      async_close_op{{},
+                     allocate_unique<async_close_op::state_t>(asio::get_associated_allocator(handler)),
+                     this_}, handler, this_->get_executor());
+}
+
+BOOST_REQUESTS_DECL
+void connection_impl::async_ropen_impl(asio::any_completion_handler<void(error_code, stream)> handler,
+                             connection_impl * this_, http::verb method,
+                             urls::pct_string_view path, http::fields & headers,
+                             source & src, request_options opt, cookie_jar * jar)
+{
+  return asio::async_compose<asio::any_completion_handler<void(error_code, stream)>, void(error_code, stream)>(
+      async_ropen_op{asio::get_associated_allocator(handler), this_, method, path, headers, src, std::move(opt), jar},
+      handler, this_->get_executor());
 }
 
 }

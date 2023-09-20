@@ -248,6 +248,25 @@ struct connection_pool
     friend struct connection;
     friend struct stream;
     friend struct detail::connection_impl;
+
+    BOOST_REQUESTS_DECL
+    static void async_ropen_impl(asio::any_completion_handler<void(error_code, stream)> handler,
+                                 connection_pool * this_, http::verb method,
+                                 urls::pct_string_view path, http::fields & headers,
+                                 source & src, request_options opt, cookie_jar * jar);
+
+
+    BOOST_REQUESTS_DECL
+    static void async_get_connection_impl(
+                                 asio::any_completion_handler<void(error_code, connection)> handler,
+                                 connection_pool * this_);
+
+
+    BOOST_REQUESTS_DECL
+    static void async_lookup_impl(
+        asio::any_completion_handler<void(error_code)> handler,
+        connection_pool * this_, urls::url_view av);
+
 };
 
 template<typename Token>

@@ -6,8 +6,11 @@
 //
 
 #include <boost/requests/detail/mutex.hpp>
+#include <boost/asio/append.hpp>
 #include <boost/asio/defer.hpp>
+#include <boost/asio/dispatch.hpp>
 #include <boost/asio/io_context.hpp>
+#include <boost/asio/post.hpp>
 #include <boost/asio/thread_pool.hpp>
 #include <boost/core/ignore_unused.hpp>
 #include <condition_variable>

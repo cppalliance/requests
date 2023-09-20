@@ -65,17 +65,17 @@ struct basic_main
     using completion_signature_type = void(error_code);
     using step_signature_type       = void(error_code, lock_guard);
 
-
-    void resume(requests::detail::faux_token_t<step_signature_type> self,
-                    error_code & ec, lock_guard l = {})
+    template<typename Self>
+    void operator()(Self && self, error_code ec = {}, lock_guard l = {})
     {
       BOOST_ASIO_CORO_REENTER(this)
       {
         BOOST_ASIO_CORO_YIELD mtx.async_lock(std::move(self));
         v.push_back(i);
         tim = std::make_unique<asio::steady_timer>(mtx.get_executor(), std::chrono::milliseconds(10));
-        BOOST_ASIO_CORO_YIELD tim->async_wait(std::move(self));
         v.push_back(i + 1);
+        BOOST_ASIO_CORO_YIELD tim->async_wait(std::move(self));
+        self.complete(ec);
       }
     }
   };
@@ -86,7 +86,8 @@ struct basic_main
 
   static auto f(std::vector< int > &v, mutex &mtx, int i)
   {
-    return boost::requests::detail::faux_run<step_impl>(asio::deferred, std::ref(v), std::ref(mtx), i);
+    return asio::async_compose<const asio::deferred_t&, void(error_code)>(
+        step_impl(v, mtx, i), asio::deferred);
   }
 
 
@@ -183,29 +184,17 @@ TEST_CASE("cancel_twice")
 {
   asio::io_context ctx;
 
-  using token_type = boost::requests::detail::faux_token_t<void(boost::system::error_code)>;
-  struct impl final : token_type::base
-  {
-    std::vector<error_code> ecs;
-
-    void resume(boost::requests::detail::faux_token_t<void(error_code)> tk, error_code ec) override
-    {
-      ecs.push_back(ec);
-    }
-  };
-
-  impl ip{};
-  std::shared_ptr<token_type::base> ptr{&ip, [](impl * ) {}};
+  std::vector<error_code> ecs;
 
   {
       mutex mtx{ctx};
-      mtx.async_lock(token_type{ptr});
-      mtx.async_lock(token_type{ptr});
-      mtx.async_lock(token_type{ptr});
-      mtx.async_lock(token_type{ptr});
-      mtx.async_lock(token_type{ptr});
-      mtx.async_lock(token_type{ptr});
-      mtx.async_lock(token_type{ptr});
+      mtx.async_lock([&](error_code ec){ecs.push_back(ec);});
+      mtx.async_lock([&](error_code ec){ecs.push_back(ec);});
+      mtx.async_lock([&](error_code ec){ecs.push_back(ec);});
+      mtx.async_lock([&](error_code ec){ecs.push_back(ec);});
+      mtx.async_lock([&](error_code ec){ecs.push_back(ec);});
+      mtx.async_lock([&](error_code ec){ecs.push_back(ec);});
+      mtx.async_lock([&](error_code ec){ecs.push_back(ec);});
 
       ctx.run_for(std::chrono::milliseconds(10));
 
@@ -222,12 +211,12 @@ TEST_CASE("cancel_twice")
   ctx.run_for(std::chrono::milliseconds(10));
 
 
-  CHECK(ip.ecs.size() == 7u);
-  CHECK(!ip.ecs.at(0));
-  CHECK(!ip.ecs.at(1));
-  CHECK(!ip.ecs.at(2));
+  CHECK(ecs.size() == 7u);
+  CHECK(!ecs.at(0));
+  CHECK(!ecs.at(1));
+  CHECK(!ecs.at(2));
 
-  CHECK(4u == std::count(ip.ecs.begin(), ip.ecs.end(), asio::error::operation_aborted));
+  CHECK(4u == std::count(ecs.begin(), ecs.end(), asio::error::operation_aborted));
 }
 
 
@@ -236,30 +225,17 @@ TEST_CASE("cancel_lock")
 {
   asio::io_context ctx;
 
-  using token_type = boost::requests::detail::faux_token_t<void(boost::system::error_code)>;
-  struct impl final : token_type::base
-  {
-    std::vector<error_code> ecs;
-
-
-
-    void resume(boost::requests::detail::faux_token_t<void(error_code)> tk, error_code ec) override
-    {
-      ecs.push_back(ec);
-    }
-  };
-  impl ip{};
-  std::shared_ptr<token_type::base> ptr{&ip, [](impl * ) {}};
+  std::vector<error_code> ecs;
 
   {
     mutex mtx{ctx};
-    mtx.async_lock(token_type{ptr});
-    mtx.async_lock(token_type{ptr});
-    mtx.async_lock(token_type{ptr});
-    mtx.async_lock(token_type{ptr});
-    mtx.async_lock(token_type{ptr});
-    mtx.async_lock(token_type{ptr});
-    mtx.async_lock(token_type{ptr});
+    mtx.async_lock([&](error_code ec){ecs.push_back(ec);});
+    mtx.async_lock([&](error_code ec){ecs.push_back(ec);});
+    mtx.async_lock([&](error_code ec){ecs.push_back(ec);});
+    mtx.async_lock([&](error_code ec){ecs.push_back(ec);});
+    mtx.async_lock([&](error_code ec){ecs.push_back(ec);});
+    mtx.async_lock([&](error_code ec){ecs.push_back(ec);});
+    mtx.async_lock([&](error_code ec){ecs.push_back(ec);});
     ctx.run_for(std::chrono::milliseconds(10));
 
     mtx.unlock();
@@ -274,54 +250,42 @@ TEST_CASE("cancel_lock")
   ctx.run_for(std::chrono::milliseconds(10));
 
 
-  CHECK(ip.ecs.size() == 7u);
-  CHECK(!ip.ecs.at(0));
-  CHECK(!ip.ecs.at(1));
-  CHECK(!ip.ecs.at(2));
+  CHECK(ecs.size() == 7u);
+  CHECK(!ecs.at(0));
+  CHECK(!ecs.at(1));
+  CHECK(!ecs.at(2));
 
-  CHECK(4u == std::count(ip.ecs.begin(), ip.ecs.end(), asio::error::operation_aborted));
+  CHECK(4u == std::count(ecs.begin(), ecs.end(), asio::error::operation_aborted));
 }
 
 
 TEST_CASE("cancel_one")
 {
   asio::io_context ctx;
-
-  using token_type = boost::requests::detail::faux_token_t<void(boost::system::error_code)>;
-  struct impl final : token_type::base
-  {
-    std::vector<error_code> ecs;
-
-    void resume(boost::requests::detail::faux_token_t<void(error_code)> tk, error_code ec) override
-    {
-      ecs.push_back(ec);
-    }
-  };
-  impl ip{};
-  std::shared_ptr<token_type::base> ptr{&ip, [](impl * ) {}};
   asio::cancellation_signal sig;
-  ip.slot = sig.slot();
+  std::vector<error_code> ecs;
+
   {
 
 
     mutex mtx{ctx};
     mtx.lock();
-    mtx.async_lock(token_type{ptr});
-    mtx.async_lock(token_type{ptr});
+    mtx.async_lock(asio::bind_cancellation_slot(sig.slot(), [&](error_code ec){ecs.push_back(ec);}));
+    mtx.async_lock(asio::bind_cancellation_slot(sig.slot(), [&](error_code ec){ecs.push_back(ec);}));
     ctx.run_for(std::chrono::milliseconds(10));
-    CHECK(ip.ecs.empty());
+    CHECK(ecs.empty());
 
     sig.emit(asio::cancellation_type::all);
     ctx.restart();
     ctx.run_for(std::chrono::milliseconds(10));
 
-    REQUIRE(ip.ecs.size() == 1u);
-    CHECK(ip.ecs.front() == asio::error::operation_aborted);
+    REQUIRE(ecs.size() == 1u);
+    CHECK(ecs.front() == asio::error::operation_aborted);
   }
 
   ctx.restart();
   ctx.run_for(std::chrono::milliseconds(10));
-  CHECK(ip.ecs.size() == 2u);
+  CHECK(ecs.size() == 2u);
 }
 
 

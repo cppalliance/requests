@@ -12,7 +12,6 @@
 #include <boost/requests/response.hpp>
 #include <boost/requests/source.hpp>
 #include <boost/requests/detail/defaulted.hpp>
-#include <boost/requests/detail/faux_coroutine.hpp>
 #include <boost/requests/detail/lock_guard.hpp>
 #include <boost/requests/detail/ssl.hpp>
 #include <boost/asio/any_io_executor.hpp>
@@ -211,8 +210,8 @@ struct connection_impl
 
     BOOST_REQUESTS_DECL std::size_t do_read_some_(beast::http::basic_parser<false> & parser);
     BOOST_REQUESTS_DECL std::size_t do_read_some_(beast::http::basic_parser<false> & parser, system::error_code & ec) ;
-    BOOST_REQUESTS_DECL void do_async_read_some_(beast::http::basic_parser<false> & parser, detail::faux_token_t<void(system::error_code, std::size_t)>) ;
-    BOOST_REQUESTS_DECL void do_async_close_(detail::faux_token_t<void(system::error_code)>);
+    BOOST_REQUESTS_DECL void do_async_read_some_(beast::http::basic_parser<false> & parser, asio::any_completion_handler<void(system::error_code, std::size_t)>) ;
+    BOOST_REQUESTS_DECL void do_async_close_(asio::any_completion_handler<void(system::error_code)>);
     BOOST_REQUESTS_DECL void do_close_(system::error_code & ec);
 
     BOOST_REQUESTS_DECL void return_to_pool_();
@@ -222,6 +221,7 @@ struct connection_impl
     friend connection_pool;
     friend connection_deleter;
 
+    // borrow usage is done through intrusive_ptrs
     friend void intrusive_ptr_add_ref(connection_impl* ptr)
     {
       ptr->borrow_count_++;
@@ -229,7 +229,6 @@ struct connection_impl
 
     friend void intrusive_ptr_release(connection_impl* ptr)
     {
-      // borrow usage
       if (--ptr->borrow_count_ == 0u)
       {
         if (ptr->borrowed_from_ != nullptr)
@@ -243,6 +242,20 @@ struct connection_impl
           delete ptr;
       }
     }
+
+    BOOST_REQUESTS_DECL
+    static void async_connect_impl(asio::any_completion_handler<void(error_code)> handler,
+                                   connection_impl * this_, endpoint_type ep);
+
+    BOOST_REQUESTS_DECL
+    static void async_close_impl(asio::any_completion_handler<void(error_code)> handler,
+                                 connection_impl * this_);
+
+    BOOST_REQUESTS_DECL
+    static void async_ropen_impl(asio::any_completion_handler<void(error_code, stream)> handler,
+                                 connection_impl * this_, http::verb method,
+                                 urls::pct_string_view path, http::fields & headers,
+                                 source & src, request_options opt, cookie_jar * jar);
 };
 
 

@@ -8,7 +8,6 @@
 #ifndef BOOST_REQUESTS_DETAIL_CONDITION_VARIABLE_HPP
 #define BOOST_REQUESTS_DETAIL_CONDITION_VARIABLE_HPP
 
-#include <boost/requests/detail/faux_coroutine.hpp>
 #include <boost/asio/any_completion_handler.hpp>
 #include <boost/asio/compose.hpp>
 #include <boost/asio/steady_timer.hpp>

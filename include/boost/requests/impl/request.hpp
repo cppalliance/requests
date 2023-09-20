@@ -46,49 +46,62 @@ struct async_request_op : asio::coroutine
   using executor_type = typename Connection::executor_type;
   executor_type get_executor() {return conn.get_executor(); }
 
-  using completion_signature_type = void(system::error_code, response);
-  using step_signature_type       = void(system::error_code, variant2::variant<std::size_t, stream>);
-
   Connection & conn;
   http::verb method;
   urls::url_view target;
   RequestBody && request_body;
-  typename Connection::request_type req;
-  optional<stream> str_;
 
-  response rb{};
+  struct state_t
+  {
+    state_t(typename Connection::request_type req) : req(std::move(req)) {}
+    typename Connection::request_type req;
+    optional<stream> str_;
+
+    response rb{};
+  };
+
+  using allocator_type = asio::any_completion_handler_allocator<void, void(error_code, response)>;
+  std::unique_ptr<state_t, alloc_deleter<state_t, allocator_type>> state;
 
   template<typename RequestBody_>
-  async_request_op(Connection * conn,
+  async_request_op(allocator_type alloc,
+                   Connection * conn,
                    http::verb method,
                    urls::url_view target,
                    RequestBody_ && request_body,
                    typename Connection::request_type req)
-      : conn(*conn), method(method), target(target),
-        request_body(static_cast<RequestBody&&>(request_body)), req(std::move(req)) {}
+      : conn(*conn), method(method), target(target)
+      , request_body(static_cast<RequestBody&&>(request_body))
+      , state(allocate_unique<state_t>(alloc, std::move(req))) {}
 
-  response & resume(requests::detail::faux_token_t<step_signature_type> self,
-                   system::error_code & ec,
-                   variant2::variant<std::size_t, stream> s)
+  template<typename Self>
+  void operator()(Self && self,
+                  system::error_code ec = {},
+                  variant2::variant<std::size_t, stream> s = 0u)
   {
-    BOOST_ASIO_CORO_REENTER(this)
-    {
-      BOOST_ASIO_CORO_YIELD conn.async_ropen(method, target,
-                             std::forward<RequestBody>(request_body),
-                             std::move(req), std::move(self));
-      str_.emplace(std::move(variant2::get<1>(s)));
-      if (!ec)
-      {
-        BOOST_ASIO_CORO_YIELD str_->async_read( rb.buffer, std::move(self));
-      }
+    auto st = state.get();
 
-      rb.headers = std::move(*str_).headers();
-      rb.history = std::move(*str_).history();
+    if (!ec)
+      BOOST_ASIO_CORO_REENTER(this)
+      {
+        BOOST_ASIO_CORO_YIELD conn.async_ropen(method, target,
+                               std::forward<RequestBody>(request_body),
+                               std::move(st->req), std::move(self));
+        st->str_.emplace(std::move(variant2::get<1>(s)));
+        if (!ec)
+        {
+          BOOST_ASIO_CORO_YIELD st->str_->async_read( st->rb.buffer, std::move(self));
+        }
+        st->rb.headers = std::move(*st->str_).headers();
+        st->rb.history = std::move(*st->str_).history();
+      }
+    if (is_complete())
+    {
+      state.reset();
+      self.complete(ec, std::move(st->rb));
     }
-    return rb;
   }
 };
-
 
 struct async_free_request_op
 {
@@ -107,11 +120,32 @@ struct async_free_request_op
   }
 };
 
+template<typename Connection, typename RequestBody>
+inline void async_request_impl(
+    asio::any_completion_handler<void(system::error_code, response)> handler,
+    Connection * conn,
+    beast::http::verb method,
+    urls::url_view target,
+    RequestBody * body,
+    typename Connection::request_type req)
+{
+  return asio::async_compose<
+      asio::any_completion_handler<void(system::error_code, response)>,
+      void(system::error_code, response)>(
+        async_request_op<Connection, RequestBody>{
+          asio::get_associated_allocator(handler),
+          conn, method, target, std::forward<RequestBody>(*body), std::move(req)
+      },
+      handler, conn->get_executor());
+}
+
+
+
 }
 
 template<typename Connection,
          typename RequestBody,
-         BOOST_ASIO_COMPLETION_TOKEN_FOR(void (system::error_code, response)) CompletionToken>
+         BOOST_ASIO_COMPLETION_TOKEN_FOR(void(system::error_code, response)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (system::error_code, response))
 async_request(Connection & conn,
               beast::http::verb method,
@@ -120,9 +154,10 @@ async_request(Connection & conn,
               typename Connection::request_type req,
               CompletionToken && completion_token)
 {
-  return requests::detail::faux_run<detail::async_request_op<Connection, RequestBody>>(
-                          std::forward<CompletionToken>(completion_token),
-                          &conn, method, target, std::forward<RequestBody>(body), std::move(req));
+  return asio::async_initiate<CompletionToken, void (system::error_code, response)>(
+        &detail::async_request_impl<Connection, RequestBody>,
+        completion_token,
+        &conn, method, target, &body, std::move(req));
 }
 
 template<typename RequestBody,

@@ -15,36 +15,14 @@ namespace boost {
 namespace requests {
 
 
-struct session::async_get_pool_op : asio::coroutine
-{
-  using executor_type = asio::any_io_executor;
-  executor_type get_executor() {return this_->get_executor(); }
-
-  session *this_;
-  urls::url_view url;
-  const bool is_https;
-
-  detail::lock_guard lock;
-
-  async_get_pool_op(session *this_, urls::url_view url)
-      : this_(this_), url(url),
-        is_https((url.scheme_id() == urls::scheme::https) || (url.scheme_id() == urls::scheme::wss))
-  {}
-
-  std::shared_ptr<connection_pool> p;
-
-  using completion_signature_type = void(system::error_code, std::shared_ptr<connection_pool>);
-  using step_signature_type       = void(system::error_code);
-
-  BOOST_REQUESTS_DECL
-  std::shared_ptr<connection_pool> resume(requests::detail::faux_token_t<step_signature_type>  self, error_code ec);
-};
 
 template< BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, std::shared_ptr<connection_pool>)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, pool_ptr))
 session::async_get_pool(urls::url_view url, CompletionToken && completion_token)
 {
-  return detail::faux_run<async_get_pool_op>(std::forward<CompletionToken>(completion_token), this, url);
+  return asio::async_initiate<
+          CompletionToken, void (boost::system::error_code, std::shared_ptr<connection_pool>)>(
+          &async_get_pool_impl, completion_token, this, url);
 }
 
 
@@ -69,46 +47,6 @@ auto session::ropen(
   return ropen(method, url, fields, *src, ec);
 }
 
-struct session::async_ropen_op : asio::coroutine
-{
-  using executor_type = asio::any_io_executor;
-  executor_type get_executor() {return this_->get_executor(); }
-
-  session * this_;
-
-  http::verb method;
-
-  urls::url url;
-  struct request_options opts;
-  core::string_view default_mime_type;
-
-  system::error_code ec_;
-
-  bool is_secure = (url.scheme_id() == urls::scheme::https)
-                || (url.scheme_id() == urls::scheme::wss);
-
-  response_base::history_type history;
-
-  http::fields & headers;
-  source & src;
-
-  urls::url url_cache;
-
-  async_ropen_op(session * this_,
-                 http::verb method,
-                 urls::url_view path,
-                 source & src,
-                 http::fields & headers)
-      : this_(this_), method(method), url(path), opts(this_->options_), headers(headers), src(src)
-  {
-  }
-
-  using completion_signature_type = void(system::error_code, stream);
-  using step_signature_type       = void(system::error_code, variant2::variant<variant2::monostate, std::shared_ptr<connection_pool>, stream>);
-
-  BOOST_REQUESTS_DECL auto resume(requests::detail::faux_token_t<step_signature_type> self,
-              system::error_code & ec, variant2::variant<variant2::monostate, std::shared_ptr<connection_pool>, stream> s) -> stream;
-};
 
 template<typename RequestBody,
           BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, stream)) CompletionToken>
@@ -146,8 +84,9 @@ session::async_ropen(http::verb method,
                      http::fields & headers,
                      CompletionToken && completion_token)
 {
-  return detail::faux_run<async_ropen_op>(std::forward<CompletionToken>(completion_token),
-                                        this, method, path, src, headers);
+  return asio::async_initiate<CompletionToken, void (boost::system::error_code, stream)>(
+      &async_ropen_impl, completion_token,
+      this, method, path, &src, &headers);
 }
 
 }

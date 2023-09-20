@@ -608,7 +608,7 @@ void run_tests(error_code ec,
 }
 
 
-TEST_CASE("async-connection-request")
+TEST_CASE("async-http")
 {
   urls::url url = urls::parse_uri("http://" + httpbin()).value();
   asio::io_context ctx;
