@@ -72,69 +72,6 @@ BOOST_REQUESTS_DECL bool check_endpoint(
     system::error_code & ec);
 
 
-template<typename RequestBody>
-auto connection_impl::ropen(beast::http::verb method,
-           urls::url_view path,
-           RequestBody && body, request_parameters req) -> stream
-{
-  system::error_code ec;
-  auto res = ropen(method, path, std::forward<RequestBody>(body), std::move(req), ec);
-  if (ec)
-    throw_exception(system::system_error(ec));
-  return res;
-}
-
-template<typename RequestBody>
-auto connection_impl::ropen(
-    beast::http::verb method,
-    urls::url_view path,
-    RequestBody && body, request_parameters req,
-    system::error_code & ec) -> stream
-{
-  const auto is_secure = use_ssl_;
-
-  if (!detail::check_endpoint(path, endpoint_, host_, use_ssl_, ec))
-    return stream{get_executor(), nullptr};
-
-  if (((endpoint_.protocol() == asio::ip::tcp::v4())
-    || (endpoint_.protocol() == asio::ip::tcp::v6()))
-      && !is_secure && req.opts.enforce_tls)
-  {
-    BOOST_REQUESTS_ASSIGN_EC(ec, error::insecure);
-    return stream{get_executor(), nullptr};
-  }
-
-  auto src = requests::make_source(std::forward<RequestBody>(body));
-  return ropen(method, path.encoded_target(), req.fields, *src, std::move(req.opts), req.jar, ec);
-}
-
-template<typename RequestBody, typename CompletionToken>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code,
-                                                         stream))
-connection_impl::async_ropen(
-    beast::http::verb method,
-    urls::url_view path,
-    RequestBody && body, request_parameters req,
-    CompletionToken && completion_token)
-{
-  return asio::async_initiate<CompletionToken, void(boost::system::error_code, stream)>(
-      [this](auto handler,
-         beast::http::verb method,
-         urls::url_view path,
-         RequestBody && body, request_parameters req)
-      {
-          auto source_ptr = requests::make_source(std::forward<RequestBody>(body));
-          auto & source = *source_ptr;
-          auto alloc = asio::get_associated_allocator(handler, asio::recycling_allocator<void>());
-          auto header_ptr = allocate_unique<http::fields>(alloc, std::move(req.fields));
-          auto & headers = *header_ptr;
-            async_ropen(method, path, headers, source, std::move(req.opts), req.jar,
-                      asio::consign(std::move(handler), std::move(source_ptr), std::move(header_ptr)));
-      },
-      completion_token, method, path, std::forward<RequestBody>(body), std::move(req)
-      );
-}
-
 template<typename CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, stream))
@@ -142,14 +79,29 @@ connection_impl::async_ropen(beast::http::verb method,
                         urls::pct_string_view path,
                         http::fields & headers,
                         source & src,
-                        request_options opt,
                         cookie_jar * jar,
                         CompletionToken && completion_token)
 {
   return asio::async_initiate<CompletionToken, void (boost::system::error_code, stream)>(
       &async_ropen_impl, completion_token,
       this, method, path,
-      std::ref(headers), std::ref(src), std::move(opt), jar);
+      std::ref(headers), std::ref(src), jar);
+}
+
+template<typename CompletionToken>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
+                                   void (boost::system::error_code, stream))
+connection_impl::async_ropen(beast::http::verb method,
+                             urls::url_view path,
+                             http::fields & headers,
+                             source & src,
+                             cookie_jar * jar,
+                             CompletionToken && completion_token)
+{
+  return asio::async_initiate<CompletionToken, void (boost::system::error_code, stream)>(
+      &async_ropen_impl_url, completion_token,
+      this, method, path,
+      std::ref(headers), std::ref(src), jar);
 }
 
 }

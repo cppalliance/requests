@@ -93,6 +93,8 @@ void connection_pool::lookup(urls::url_view sv, system::error_code & ec)
 
 struct connection_pool::async_lookup_op : asio::coroutine
 {
+  constexpr static const char * op_name = "connection_pool::async_lookup_op";
+
   using executor_type = asio::any_io_executor;
   executor_type get_executor() {return this_->get_executor(); }
 
@@ -116,7 +118,6 @@ void connection_pool::async_lookup_op::operator()(Self && self,
                                                   system::error_code ec,
                                                   typename asio::ip::tcp::resolver::results_type eps)
 {
-  if (!ec)
   BOOST_ASIO_CORO_REENTER(this)
   {
     if (sv.has_scheme())
@@ -134,7 +135,7 @@ void connection_pool::async_lookup_op::operator()(Self && self,
     else if (scheme == "http" || scheme == "https")
     {
 
-      BOOST_ASIO_CORO_YIELD
+      BOOST_REQUESTS_YIELD
       {
         auto service = sv.has_port() ? sv.port() : scheme;
         auto resolver = allocate_unique<asio::ip::tcp::resolver>(
@@ -236,6 +237,8 @@ auto connection_pool::get_connection(error_code & ec) -> connection
 
 struct connection_pool::async_get_connection_op : asio::coroutine
 {
+  constexpr static const char * op_name = "connection_pool::async_get_connection_op";
+
   using executor_type = asio::any_io_executor;
   executor_type get_executor() {return this_->get_executor(); }
 
@@ -262,7 +265,6 @@ void connection_pool::async_get_connection_op::operator()(
             system::error_code ec)
 {
   connection conn;
-  if (!ec)
   BOOST_ASIO_CORO_REENTER (this)
   {
 
@@ -303,7 +305,7 @@ void connection_pool::async_get_connection_op::operator()(
         nconn->use_ssl(this_->use_ssl_);
         nconn->set_host(this_->host_);
 
-        BOOST_ASIO_CORO_YIELD nconn->async_connect(ep, std::move(self));
+        BOOST_REQUESTS_YIELD nconn->async_connect(ep, std::move(self));
         if (ec == system::errc::address_not_available)
         {
           lock.lock();
@@ -325,7 +327,7 @@ void connection_pool::async_get_connection_op::operator()(
         }
 
       }
-      BOOST_ASIO_CORO_YIELD this_->cv_.async_wait(lock, std::move(self));
+      BOOST_REQUESTS_YIELD this_->cv_.async_wait(lock, std::move(self));
     }
     while(!ec);
   }
@@ -338,6 +340,8 @@ void connection_pool::async_get_connection_op::operator()(
 
 struct connection_pool::async_ropen_op : asio::coroutine
 {
+  constexpr static const char * op_name = "connection_pool::async_ropen_op";
+
   using executor_type = asio::any_io_executor;
   executor_type get_executor() {return this_->get_executor(); }
 
@@ -389,17 +393,16 @@ void connection_pool::async_ropen_op::operator()(
     boost::system::error_code ec,
     variant2::variant<variant2::monostate, connection, stream> res)
 {
-  if (!ec)
     BOOST_ASIO_CORO_REENTER(this)
     {
-      BOOST_ASIO_CORO_YIELD this_->async_get_connection(std::move(self));
+      BOOST_REQUESTS_YIELD this_->async_get_connection(std::move(self));
       conn = std::move(variant2::get<1>(res));
       if (!ec && !conn)
         BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::not_found);
       if (ec)
         break;
 
-      BOOST_ASIO_CORO_YIELD conn.async_ropen(method, path, headers, src, std::move(opt), jar, std::move(self));
+      BOOST_REQUESTS_YIELD conn.async_ropen(method, path, headers, src, std::move(opt), jar, std::move(self));
       return self.complete(ec, variant2::get<2>(std::move(res)));
     }
   if (is_complete())

@@ -35,7 +35,7 @@ struct connection_deleter
 
 }
 
-struct connection_pool
+struct connection_pool : private detail::connection_owner
 {
     /// The type of the executor associated with the object.
     typedef asio::any_io_executor executor_type;
@@ -171,7 +171,6 @@ struct connection_pool
                urls::pct_string_view path,
                http::fields & headers,
                source & src,
-               request_options opt,
                cookie_jar * jar,
                system::error_code & ec) -> stream
     {
@@ -182,18 +181,17 @@ struct connection_pool
         return stream{get_executor(), nullptr};
 
       BOOST_ASSERT(conn);
-      return conn.ropen(method, path, headers, src, opt, jar, ec);
+      return conn.ropen(method, path, headers, src, jar, ec);
     }
 
     auto ropen(beast::http::verb method,
                urls::pct_string_view path,
                http::fields & headers,
                source & src,
-               request_options opt,
                cookie_jar * jar) -> stream
     {
       boost::system::error_code ec;
-      auto res = ropen(method, path, headers, src, opt, jar, ec);
+      auto res = ropen(method, path, headers, src,  jar, ec);
       if (ec)
         throw_exception(system::system_error(ec, "open"));
       return res;
@@ -241,9 +239,9 @@ struct connection_pool
     struct async_ropen_op;
 
     BOOST_REQUESTS_DECL
-    void return_connection_(detail::connection_impl * conn);
+    void return_connection_(detail::connection_impl * conn) override;
     BOOST_REQUESTS_DECL
-    void drop_connection_(const detail::connection_impl * conn);
+    void drop_connection_(const detail::connection_impl * conn) override;
 
     friend struct connection;
     friend struct stream;

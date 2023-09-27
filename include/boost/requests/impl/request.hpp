@@ -43,6 +43,8 @@ namespace detail
 template<typename Connection, typename RequestBody>
 struct async_request_op : asio::coroutine
 {
+  constexpr static const char * op_name = "async_request_op";
+
   using executor_type = typename Connection::executor_type;
   executor_type get_executor() {return conn.get_executor(); }
 
@@ -80,21 +82,19 @@ struct async_request_op : asio::coroutine
                   variant2::variant<std::size_t, stream> s = 0u)
   {
     auto st = state.get();
-
-    if (!ec)
-      BOOST_ASIO_CORO_REENTER(this)
+    BOOST_ASIO_CORO_REENTER(this)
+    {
+      BOOST_REQUESTS_YIELD conn.async_ropen(method, target,
+                             std::forward<RequestBody>(request_body),
+                             std::move(st->req), std::move(self));
+      st->str_.emplace(std::move(variant2::get<1>(s)));
+      if (!ec)
       {
-        BOOST_ASIO_CORO_YIELD conn.async_ropen(method, target,
-                               std::forward<RequestBody>(request_body),
-                               std::move(st->req), std::move(self));
-        st->str_.emplace(std::move(variant2::get<1>(s)));
-        if (!ec)
-        {
-          BOOST_ASIO_CORO_YIELD st->str_->async_read( st->rb.buffer, std::move(self));
-        }
-        st->rb.headers = std::move(*st->str_).headers();
-        st->rb.history = std::move(*st->str_).history();
+        BOOST_REQUESTS_YIELD st->str_->async_read( st->rb.buffer, std::move(self));
       }
+      st->rb.headers = std::move(*st->str_).headers();
+      st->rb.history = std::move(*st->str_).history();
+    }
     if (is_complete())
     {
       state.reset();

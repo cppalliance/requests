@@ -23,10 +23,9 @@ auto session::ropen(
     source & src,
     system::error_code & ec) -> stream
 {
-  auto opts = options_;
+  /*auto opts = options_;
 
   response_base::history_type history{headers.get_allocator()};
-
 
   auto do_ropen =
       [&](http::fields & hd, urls::pct_string_view target, request_options opts) -> stream
@@ -35,7 +34,7 @@ auto session::ropen(
     if (ec)
       return stream{get_executor(), nullptr};
 
-    return p->ropen(method, target, hd, src, opts, &jar_, ec);
+    return p->ropen(method, target, hd, src, &jar_, ec);
   };
 
   const auto is_secure = (url.scheme_id() == urls::scheme::https)
@@ -130,7 +129,7 @@ auto session::ropen(
     str = do_ropen(headers, url.encoded_target(), opts);
   }
   str.prepend_history(std::move(history));
-  return str;
+  return str;*/
 }
 
 auto session::make_request_(http::fields fields) -> requests::request_parameters {
@@ -170,7 +169,7 @@ session::get_pool(urls::url_view url, error_code & ec) -> std::shared_ptr<connec
 {
   auto host_key = normalize_(url);
 
-  auto lock = detail::lock(mutex_, ec);
+  std::lock_guard<std::mutex> lock(mutex_);
   if (ec)
     return std::shared_ptr<connection_pool>();
 
@@ -192,14 +191,14 @@ session::get_pool(urls::url_view url, error_code & ec) -> std::shared_ptr<connec
 
 struct session::async_get_pool_op : asio::coroutine
 {
+  constexpr static const char * op_name = "session::async_get_pool_op";
+
   using executor_type = asio::any_io_executor;
   executor_type get_executor() {return this_->get_executor(); }
 
   session *this_;
   urls::url_view url;
   const bool is_https;
-
-  detail::lock_guard lock;
 
   async_get_pool_op(session *this_, urls::url_view url)
       : this_(this_), url(url),
@@ -213,18 +212,23 @@ struct session::async_get_pool_op : asio::coroutine
   {
     BOOST_ASIO_CORO_REENTER(this)
     {
-      BOOST_REQUESTS_AWAIT_LOCK(this_->mutex_, lock);
 
       {
+        std::lock_guard<std::mutex> lock{this_->mutex_};
         auto itr = this_->pools_.find(url);
         if (itr != this_->pools_.end())
           return self.complete(ec, std::move(itr->second));
       }
       p = std::make_shared<connection_pool>(this_->get_executor(), this_->sslctx_);
-      BOOST_ASIO_CORO_YIELD p->async_lookup(url, std::move(self));
+      BOOST_REQUESTS_YIELD p->async_lookup(url, std::move(self));
       if (!ec)
       {
-        this_->pools_.emplace(url, p);
+        std::lock_guard<std::mutex> lock{this_->mutex_};
+        auto itr = this_->pools_.find(url);
+        if (itr == this_->pools_.end())
+          this_->pools_.emplace(url, p);
+        else
+          p = itr->second;
         return self.complete(ec, p);
       }
     }
@@ -235,28 +239,22 @@ struct session::async_get_pool_op : asio::coroutine
 
 struct session::async_ropen_op : asio::coroutine
 {
+  constexpr static const char * op_name = "session::async_ropen_op";
+
   using executor_type = asio::any_io_executor;
   executor_type get_executor() {return this_->get_executor(); }
 
   session * this_;
 
   http::verb method;
-
   urls::url url;
   struct request_options opts;
-  core::string_view default_mime_type;
-
-  system::error_code ec_;
 
   bool is_secure = (url.scheme_id() == urls::scheme::https)
-                   || (url.scheme_id() == urls::scheme::wss);
-
-  response_base::history_type history;
+                || (url.scheme_id() == urls::scheme::wss);
 
   http::fields & headers;
   source & src;
-
-  urls::url url_cache;
 
   async_ropen_op(session * this_,
                  http::verb method,
@@ -281,7 +279,6 @@ void session::async_ropen_op::operator()(
     Self && self, system::error_code  ec,
     variant2::variant<variant2::monostate, std::shared_ptr<connection_pool>, stream> s)
 {
-  if (!ec)
     BOOST_ASIO_CORO_REENTER(this)
     {
       headers.set(beast::http::field::host, url.encoded_host_and_port());
@@ -290,7 +287,7 @@ void session::async_ropen_op::operator()(
       if (!is_secure && this_->options_.enforce_tls)
       {
         BOOST_REQUESTS_ASSIGN_EC(ec, error::insecure);
-        BOOST_ASIO_CORO_YIELD {
+        BOOST_REQUESTS_YIELD {
             auto exec = asio::get_associated_immediate_executor(self, this_->get_executor());
             asio::dispatch(exec, asio::append(std::move(self), ec));
         };
@@ -302,83 +299,14 @@ void session::async_ropen_op::operator()(
           headers.set(http::field::cookie, cc);
       }
 
-      BOOST_ASIO_CORO_YIELD this_->async_get_pool(url, std::move(self));
-      BOOST_ASIO_CORO_YIELD variant2::get<1>(s)->async_ropen(method, url.encoded_resource(),
+      BOOST_REQUESTS_YIELD this_->async_get_pool(url, std::move(self));
+      BOOST_REQUESTS_YIELD variant2::get<1>(s)->async_ropen(method, url.encoded_resource(),
                                              headers, src, opts, &this_->jar_, std::move(self));
 
-      if (!ec || opts.max_redirects == variant2::get<2>(s).history().size())
-        return self.complete(ec, std::move(variant2::get<2>(s)));
-
-      while (ec == error::forbidden_redirect)
-      {
-        ec.clear();
-        if (variant2::get<2>(s).history().empty())
-        {
-          BOOST_REQUESTS_ASSIGN_EC(ec, error::invalid_redirect);
-          break;
-        }
-        opts.max_redirects -= variant2::get<2>(s).history().size();
-        if (opts.max_redirects == 0)
-        {
-          BOOST_REQUESTS_ASSIGN_EC(ec, error::too_many_redirects);
-          break ;
-        }
-
-        {
-          const auto & last = variant2::get<2>(s).history().back();
-          auto loc_itr = last.base().find(http::field::location);
-          auto rc = last.base().result();
-          if (((rc != http::status::moved_permanently)
-               && (rc != http::status::found)
-               && (rc != http::status::temporary_redirect)
-               && (rc != http::status::permanent_redirect))
-              || (loc_itr == last.base().end()))
-          {
-            BOOST_REQUESTS_ASSIGN_EC(ec, error::invalid_redirect);
-            break;
-          }
-          const auto nurl = interpret_location(url.encoded_resource(), loc_itr->value());
-          if (nurl.has_error())
-          {
-            ec = nurl.error();
-            break;
-          }
-
-          if (!should_redirect(this_->options_.redirect, url, *nurl))
-          {
-            BOOST_REQUESTS_ASSIGN_EC(ec, error::forbidden_redirect);
-            break ;
-          }
-
-          if (nurl->has_authority())
-            url = *nurl;
-          else
-          {
-            url_cache = url;
-            url_cache.set_encoded_path(nurl->encoded_path());
-            url = url_cache;
-          }
-
-        }
-
-        {
-          auto cc = this_->jar_.get(url.encoded_host(), is_secure, url.encoded_path());
-          if (!cc.empty())
-            headers.set(http::field::cookie, cc);
-          else
-            headers.erase(http::field::cookie);
-        }
-        history.insert(history.end(),
-                       std::make_move_iterator(std::move(variant2::get<2>(s)).history().begin()),
-                       std::make_move_iterator(std::move(variant2::get<2>(s)).history().end()));
-        BOOST_ASIO_CORO_YIELD this_->async_get_pool(url, std::move(self));
-        BOOST_ASIO_CORO_YIELD variant2::get<1>(s)->async_ropen(method, url.encoded_resource(), headers, src, opts, &this_->jar_, std::move(self));
-      }
-      variant2::get<2>(s).prepend_history(std::move(history));
       return self.complete(ec, std::move(variant2::get<2>(s)));
 
     }
-  if (is_complete() || ec)
+  if (is_complete())
     self.complete(ec, stream{this_->get_executor(), nullptr});
 }
 
@@ -395,7 +323,7 @@ void session::async_ropen_impl(
             );
 }
 
-BOOST_REQUESTS_DECL
+
 void session::async_get_pool_impl(
     asio::any_completion_handler<void (boost::system::error_code, std::shared_ptr<connection_pool>)> handler,
     session * sess, urls::url_view url)

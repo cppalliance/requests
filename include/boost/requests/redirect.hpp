@@ -51,8 +51,16 @@ BOOST_REQUESTS_DECL bool same_endpoint_on_host(const urls::url_view current, con
 BOOST_REQUESTS_DECL bool same_endpoint_on_host(const urls::url_view current, const asio::local::stream_protocol::endpoint);
 
 /// Check if the endpoint is the same as the endpoint
-BOOST_REQUESTS_DECL bool same_endpoint_on_host(const urls::url_view current, const asio::generic::stream_protocol::endpoint);
+BOOST_REQUESTS_DECL bool same_endpoint_on_host(const urls::url_view current, const asio::generic::stream_protocol::endpoint &);
 
+/// Check if a status is a redirect
+inline bool is_redirect(http::status rc)
+{
+  return ((rc != http::status::moved_permanently)
+       && (rc != http::status::found)
+       && (rc != http::status::temporary_redirect)
+       && (rc != http::status::permanent_redirect));
+}
 
 }
 }

@@ -28,6 +28,13 @@ struct stream;
 struct connection_pool;
 
 namespace detail {
+struct connection_impl;
+
+struct connection_owner
+{
+  virtual void return_connection_(connection_impl * conn) = 0;
+  virtual void drop_connection_(const connection_impl * conn)  = 0;
+};
 
 struct connection_deleter;
 struct connection_impl
@@ -57,7 +64,7 @@ struct connection_impl
     connection_impl & operator=(connection_impl && lhs) = delete;
     template<typename ExecutorOrContext>
     explicit connection_impl(ExecutorOrContext && exec_or_ctx, asio::ssl::context & ctx,
-                             connection_pool * borrowed_from = nullptr)
+                             connection_owner * borrowed_from = nullptr)
         : next_layer_(std::forward<ExecutorOrContext>(exec_or_ctx), ctx), use_ssl_{true},
           borrowed_from_{borrowed_from} {}
 
@@ -136,23 +143,11 @@ struct connection_impl
 
     using request_type = request_parameters;
 
-    template<typename RequestBody>
-    auto ropen(beast::http::verb method,
-               urls::url_view path,
-               RequestBody && body, request_parameters req,
-               system::error_code & ec) -> stream;
-
-    template<typename RequestBody>
-    auto ropen(beast::http::verb method,
-               urls::url_view path,
-               RequestBody && body, request_parameters req) -> stream;
-
     BOOST_REQUESTS_DECL
     auto ropen(beast::http::verb method,
                urls::pct_string_view path,
                http::fields & headers,
                source & src,
-               request_options opt,
                cookie_jar * jar,
                system::error_code & ec) -> stream;
 
@@ -161,17 +156,22 @@ struct connection_impl
                urls::pct_string_view path,
                http::fields & headers,
                source & src,
-               request_options opt,
                cookie_jar * jar) -> stream;
 
-    template<typename RequestBody,
-             typename CompletionToken>
-    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                       void (boost::system::error_code, stream))
-    async_ropen(beast::http::verb method,
-                urls::url_view path,
-                RequestBody && body, request_parameters req,
-                CompletionToken && completion_token);
+    BOOST_REQUESTS_DECL
+    auto ropen(beast::http::verb method,
+               urls::url_view path,
+               http::fields & headers,
+               source & src,
+               cookie_jar * jar,
+               system::error_code & ec) -> stream;
+
+    BOOST_REQUESTS_DECL
+    auto ropen(beast::http::verb method,
+               urls::url_view path,
+               http::fields & headers,
+               source & src,
+               cookie_jar * jar) -> stream;
 
     template<typename CompletionToken>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
@@ -181,14 +181,23 @@ struct connection_impl
                 urls::pct_string_view path,
                 http::fields & headers,
                 source & src,
-                request_options opt,
                 cookie_jar * jar,
                 CompletionToken && completion_token);
+
+    template<typename CompletionToken>
+    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, stream))
+    async_ropen(beast::http::verb method,
+                urls::url_view path,
+                http::fields & headers,
+                source & src,
+                cookie_jar * jar,
+                CompletionToken && completion_token);
+
     bool uses_ssl() const {return use_ssl_;}
     void use_ssl(bool use_ssl = true) {use_ssl_ = use_ssl;}
 
 
-    struct connection_pool * pool() const {return borrowed_from_; }
+    struct connection_owner * owner() const {return borrowed_from_.load(); }
   private:
 
     next_layer_type next_layer_;
@@ -201,7 +210,7 @@ struct connection_impl
     endpoint_type endpoint_;
 
     // atomic so moving the pool can be thread-safe
-    std::atomic<connection_pool *> borrowed_from_{nullptr};
+    std::atomic<connection_owner *> borrowed_from_{nullptr};
     std::atomic<std::size_t> borrow_count_{0u};
 
     struct async_close_op;
@@ -255,7 +264,14 @@ struct connection_impl
     static void async_ropen_impl(asio::any_completion_handler<void(error_code, stream)> handler,
                                  connection_impl * this_, http::verb method,
                                  urls::pct_string_view path, http::fields & headers,
-                                 source & src, request_options opt, cookie_jar * jar);
+                                 source & src, cookie_jar * jar);
+
+    BOOST_REQUESTS_DECL
+    static void async_ropen_impl_url(asio::any_completion_handler<void(error_code, stream)> handler,
+                                 connection_impl * this_, http::verb method,
+                                 urls::url_view path, http::fields & headers,
+                                 source & src, cookie_jar * jar);
+
 };
 
 

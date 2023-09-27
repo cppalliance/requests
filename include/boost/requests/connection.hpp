@@ -17,7 +17,7 @@ namespace boost {
 namespace requests {
 struct stream;
 
-struct connection
+struct connection : private detail::connection_owner
 {
   /// The type of the next layer.
   typedef asio::ssl::stream<asio::generic::stream_protocol::socket> next_layer_type;
@@ -174,11 +174,10 @@ struct connection
              urls::pct_string_view path,
              http::fields & headers,
              source & src,
-             request_options opt,
              cookie_jar * jar,
              system::error_code & ec) -> stream
   {
-    return impl_->ropen(method, path, headers, src, std::move(opt), jar, ec);
+    return impl_->ropen(method, path, headers, src, jar, ec);
   }
 
   BOOST_REQUESTS_DECL
@@ -186,10 +185,9 @@ struct connection
              urls::pct_string_view path,
              http::fields & headers,
              source & src,
-             request_options opt,
              cookie_jar * jar) -> stream
   {
-    return impl_->ropen(method, path, headers, src, std::move(opt), jar);
+    return impl_->ropen(method, path, headers, src, jar);
   }
 
   template<typename RequestBody,
@@ -225,11 +223,17 @@ struct connection
 
   operator bool() const {return impl_ != nullptr;}
 
-  struct connection_pool * pool() {return impl_ ? impl_->pool() : nullptr; }
+
  private:
   explicit connection(boost::intrusive_ptr<detail::connection_impl> impl) : impl_(std::move(impl)) {}
 
   boost::intrusive_ptr<detail::connection_impl> impl_;
+
+  BOOST_REQUESTS_DECL
+  void return_connection_(detail::connection_impl * conn) override {}
+  BOOST_REQUESTS_DECL
+  void drop_connection_(const detail::connection_impl * conn) override {}
+
 
   friend struct connection_pool;
   friend struct stream;

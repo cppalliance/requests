@@ -8,12 +8,14 @@
 #ifndef BOOST_REQUESTS_STREAM_HPP
 #define BOOST_REQUESTS_STREAM_HPP
 
-#include <boost/requests/detail/lock_guard.hpp>
 #include <boost/requests/detail/config.hpp>
+#include <boost/requests/detail/lock_guard.hpp>
 #include <boost/requests/fields/keep_alive.hpp>
 #include <boost/requests/http.hpp>
 #include <boost/requests/response.hpp>
 
+#include <boost/asio/any_completion_handler.hpp>
+#include <boost/asio/any_io_executor.hpp>
 #include <boost/asio/execution/bad_executor.hpp>
 #include <boost/beast/http/basic_parser.hpp>
 #include <boost/smart_ptr/intrusive_ptr.hpp>
@@ -129,8 +131,6 @@ struct stream
   stream& operator=(const stream &) = delete;
   BOOST_REQUESTS_DECL ~stream();
 
-  using history_type = response_base::history_type;
-
   const http::response_header &headers() const &
   {
     if (!parser_)
@@ -140,8 +140,6 @@ struct stream
     }
     return parser_->get().base();
   }
-  const history_type          &history() const & { return history_; }
-
 
   bool done() const {return !parser_ ||  parser_->is_done();}
   explicit stream(executor_type executor, std::nullptr_t ) : executor_{executor}, impl_(nullptr) {}
@@ -160,22 +158,12 @@ struct stream
 
     return std::move(parser_->get().base());
   }
-  history_type          &&history() && { return std::move(history_); }
-
-
-  void prepend_history(history_type && pre_history)
-  {
-    history_.insert(history_.begin(),
-                    std::make_move_iterator(pre_history.begin()),
-                    std::make_move_iterator(pre_history.end()));
-  }
  private:
   executor_type executor_;
   boost::intrusive_ptr<detail::connection_impl> impl_;
   detail::lock_guard lock_;
 
   std::unique_ptr<http::response_parser<http::buffer_body>> parser_;
-  history_type history_;
 
   template<typename DynamicBuffer>
   struct async_read_op;

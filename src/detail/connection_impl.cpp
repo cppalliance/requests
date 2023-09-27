@@ -87,28 +87,50 @@ auto connection_impl::ropen(beast::http::verb method,
                        urls::pct_string_view path,
                        http::fields & headers,
                        source & src,
-                       request_options opt,
                        cookie_jar * jar) -> stream
 {
   system::error_code ec;
-  auto res = ropen(method, path, headers, src, std::move(opt), jar, ec);
+  auto res = ropen(method, path, headers, src, jar, ec);
   if (ec)
     throw_exception(system::system_error(ec));
   return res;
 }
 
+auto connection_impl::ropen(beast::http::verb method,
+                            urls::url_view path,
+                            http::fields & headers,
+                            source & src,
+                            cookie_jar * jar) -> stream
+{
+  system::error_code ec;
+  auto res = ropen(method, path, headers, src, jar, ec);
+  if (ec)
+    throw_exception(system::system_error(ec));
+  return res;
+}
+
+auto connection_impl::ropen(beast::http::verb method,
+                            urls::url_view path,
+                            http::fields & headers,
+                            source & src,
+                            cookie_jar * jar,
+                            system::error_code & ec) -> stream
+{
+  detail::check_endpoint(path, endpoint(), host(), use_ssl_, ec);
+  if (ec)
+    return stream{get_executor(), nullptr};
+
+  return ropen(method, path.encoded_resource(), headers, src, jar, ec);
+}
 
 auto connection_impl::ropen(beast::http::verb method,
                        urls::pct_string_view path,
                        http::fields & headers,
                        source & src,
-                       request_options opt,
                        cookie_jar * jar,
                        system::error_code & ec) -> stream
 {
   const auto is_secure = use_ssl_;
-  using lock_type = detail::lock_guard;
-  lock_type read_lock;
   if (jar)
   {
     auto cc = jar->get(host(), is_secure, path);
@@ -124,163 +146,68 @@ auto connection_impl::ropen(beast::http::verb method,
   if (headers.count(http::field::user_agent) > 0)
     headers.set(http::field::user_agent, "Requests-" BOOST_BEAST_VERSION_STRING);
 
-  response_base::history_type history;
-
-  while (!ec)
+  detail::lock_guard lock{write_mtx_};
+  // write impl
   {
-    // write impl
+    if (ec)
+      return stream{get_executor(), nullptr};
+    if (!is_open())
     {
-      write_mtx_.lock(ec);
-      if (ec)
-        return stream{get_executor(), nullptr};
-      lock_type wlock{write_mtx_, std::adopt_lock};
-      boost::optional<lock_type> alock;
-
-      if (!is_open())
-      {
-      retry:
-        read_mtx_.lock(ec);
-        if (ec)
-          return stream{get_executor(), nullptr};
-
-        alock.emplace(read_mtx_, std::adopt_lock);
-
-        next_layer_.next_layer().connect(endpoint_, ec);
-        if (use_ssl_ && !ec)
-          next_layer_.handshake(asio::ssl::stream_base::client, ec);
-        if (ec)
-          return stream{get_executor(), nullptr};
-      }
-
-      alock.reset();
-
-      if (use_ssl_)
-        write_request(next_layer_,              method, path, headers, src);
-      else
-        write_request(next_layer_.next_layer(), method, path, headers, src);
-
-      if (ec == asio::error::broken_pipe || ec == asio::error::connection_reset)
-        goto retry ;
-      else if (ec)
-        return stream{get_executor(), nullptr};
-
-      // release after acquire!
-      read_mtx_.lock(ec);
-
       if (ec)
         return stream{get_executor(), nullptr};
 
-      read_lock = {read_mtx_, std::adopt_lock};
+      next_layer_.next_layer().connect(endpoint_, ec);
+      if (use_ssl_ && !ec)
+        next_layer_.handshake(asio::ssl::stream_base::client, ec);
+      if (ec)
+        return stream{get_executor(), nullptr};
     }
-    // write end
+
+    if (use_ssl_)
+      write_request(next_layer_,              method, path, headers, src);
+    else
+      write_request(next_layer_.next_layer(), method, path, headers, src);
 
     if (ec)
       return stream{get_executor(), nullptr};
-
-    stream str{get_executor(), this};
-    str.parser_ = std::make_unique<http::response_parser<http::buffer_body>>(http::response_header{http::fields(headers.get_allocator())});
-    str.parser_->body_limit(boost::none);
-
-    if (method == http::verb::head || method == http::verb::connect)
-      str.parser_->skip(true);
-
-    if (use_ssl_)
-      beast::http::read_header(next_layer_, buffer_, *str.parser_, ec);
-    else
-      beast::http::read_header(next_layer_.next_layer(), buffer_, *str.parser_, ec);
-
-    if (ec)
-      break;
-
-    if (jar)
-    {
-      auto cookie_itr = str.headers().find(http::field::set_cookie);
-      if (cookie_itr != str.headers().end())
-      {
-        auto f = requests::parse_set_cookie_field(cookie_itr->value());
-        if (f)
-          jar->set(*f, host_);
-        else
-        {
-          ec = f.error();
-          return str;
-        }
-
-      }
-    }
-
-    auto rc = str.parser_->get().base().result();
-
-    if ((opt.redirect == redirect_mode::none)
-        || ((rc != http::status::moved_permanently)
-         && (rc != http::status::found)
-         && (rc != http::status::temporary_redirect)
-         && (rc != http::status::permanent_redirect)))
-    {
-      // GO
-      str.lock_ = std::move(read_lock);
-      str.history_ = std::move(history);
-      return str;
-    }
-    response_base::buffer_type buf{headers.get_allocator()};
-    if (method != http::verb::head)
-      str.read(buf, ec);
-    if (ec)
-      break;
-
-    history.emplace_back(std::move( str.parser_->get().base()), std::move(buf));
-
-    auto & res = history.back().base();
-
-    // read the body to put into history
-    auto loc_itr = res.find(http::field::location);
-    if (loc_itr == res.end())
-    {
-      BOOST_REQUESTS_ASSIGN_EC(ec, error::invalid_redirect);
-      break ;
-    }
-
-    const auto url = interpret_location(path, loc_itr->value());
-    if (url.has_error())
-    {
-      ec = url.error();
-      break;
-    }
-    // we don't need to use should_redirect, bc we're on the same host.
-    if (url->has_authority() &&
-        host_ == url->encoded_host() &&
-        !same_endpoint_on_host(*url, endpoint()))
-    {
-      BOOST_REQUESTS_ASSIGN_EC(ec, error::forbidden_redirect);
-      break ;
-    }
-
-    if (--opt.max_redirects == 0)
-    {
-      BOOST_REQUESTS_ASSIGN_EC(ec, error::too_many_redirects);
-      break ;
-    }
-
-    path = url->encoded_resource();
-    if (!url->encoded_host_and_port().empty())
-      headers.set(http::field::host, url->encoded_host_and_port());
-
-    if (jar && headers.count(http::field::host) > 0u)
-    {
-      auto cc = jar->get(headers[http::field::host], is_secure, url->encoded_path());
-      if (!cc.empty())
-        headers.set(http::field::cookie, cc);
-      else
-        headers.erase(http::field::cookie);
-    }
-    else
-      headers.erase(http::field::cookie);
-
-    read_lock = {};
   }
+  lock = read_mtx_;
+  // write end
+
+  if (ec)
+    return stream{get_executor(), nullptr};
 
   stream str{get_executor(), this};
-  str.history_ = std::move(history);
+  str.parser_ = std::make_unique<http::response_parser<http::buffer_body>>(http::response_header{http::fields(headers.get_allocator())});
+  str.parser_->body_limit(boost::none);
+
+  if (method == http::verb::head || method == http::verb::connect)
+    str.parser_->skip(true);
+
+  if (use_ssl_)
+    beast::http::read_header(next_layer_, buffer_, *str.parser_, ec);
+  else
+    beast::http::read_header(next_layer_.next_layer(), buffer_, *str.parser_, ec);
+
+  if (ec)
+    return stream{get_executor(), nullptr};
+
+  if (jar)
+  {
+    auto cookie_itr = str.headers().find(http::field::set_cookie);
+    if (cookie_itr != str.headers().end())
+    {
+      auto f = requests::parse_set_cookie_field(cookie_itr->value());
+      if (f)
+        jar->set(*f, host_);
+      else
+      {
+        ec = f.error();
+        return str;
+      }
+    }
+  }
+  str.lock_ = std::move(lock);
   return str;
 }
 
@@ -294,10 +221,10 @@ void connection_impl::set_host(core::string_view sv, system::error_code & ec)
 struct connection_impl::async_ropen_op
     : boost::asio::coroutine
 {
+  constexpr static const char * op_name = "connection_impl::async_ropen_op";
+
   using executor_type = asio::any_io_executor;
   executor_type get_executor() {return this_->get_executor(); }
-
-  using lock_type = detail::lock_guard;
 
   boost::intrusive_ptr<connection_impl> this_;
 
@@ -306,46 +233,29 @@ struct connection_impl::async_ropen_op
   urls::pct_string_view path;
   http::fields & headers;
   source & src;
-  request_options opts;
   cookie_jar * jar{nullptr};
   system::error_code ec_;
+  lock_guard lock_;
 
-  struct state_t
-  {
-    response_base::buffer_type buf;
-
-    lock_type lock;
-    boost::optional<lock_type> alock;
-
-    response_base::history_type history;
-  };
-
-  using allocator_type = asio::any_completion_handler_allocator<void, void(boost::system::error_code, stream)>;
-  std::unique_ptr<state_t, alloc_deleter<state_t, allocator_type>> state;
-
-  async_ropen_op(allocator_type alloc,
-                 boost::intrusive_ptr<connection_impl> this_,
+  async_ropen_op(boost::intrusive_ptr<connection_impl> this_,
                  beast::http::verb method,
                  urls::pct_string_view path,
                  http::fields & headers,
                  source & src,
-                 request_options opts,
                  cookie_jar * jar)
-      : this_(std::move(this_)), method(method), path(path), headers(headers), src(src), opts(std::move(opts))
-      , jar(jar), state(allocate_unique<state_t>(alloc))
+      : this_(std::move(this_)), method(method), path(path), headers(headers), src(src)
+      , jar(jar)
   {
   }
 
-  async_ropen_op(allocator_type alloc,
-                 boost::intrusive_ptr<connection_impl> this_,
+  async_ropen_op(boost::intrusive_ptr<connection_impl> this_,
                  beast::http::verb method,
                  urls::url_view path,
                  http::fields & headers,
                  source & src,
-                 request_options opt,
                  cookie_jar * jar)
       : this_(this_), method(method), path(path.encoded_resource()),
-        headers(headers), src(src), opts(std::move(opt)), jar(jar), state(allocate_unique<state_t>(alloc))
+        headers(headers), src(src), jar(jar)
   {
     detail::check_endpoint(path, this_->endpoint(), this_->host(), this_->use_ssl_, ec_);
   }
@@ -360,18 +270,16 @@ void connection_impl::async_ropen_op::operator()(
             Self && self,
             system::error_code ec, std::size_t res_)
 {
-  auto st = state.get();
-  if (!ec)
+  BOOST_ASIO_HANDLER_LOCATION((__FILE__, __LINE__, op_name));
+
   BOOST_ASIO_CORO_REENTER(this)
   {
     if (ec_)
     {
-      BOOST_ASIO_CORO_YIELD asio::post(this_->get_executor(), std::move(self));
+      BOOST_REQUESTS_YIELD asio::post(this_->get_executor(), std::move(self));
       ec = ec_;
       break;
     }
-
-    state = boost::allocate_unique<state_t>(asio::get_associated_allocator(self));
 
     if (jar)
     {
@@ -389,173 +297,96 @@ void connection_impl::async_ropen_op::operator()(
     if (headers.count(http::field::user_agent) > 0)
       headers.set(http::field::user_agent, "Requests-" BOOST_BEAST_VERSION_STRING);
 
-
-    while (!ec)
+    if (!this_->write_mtx_.try_lock())
     {
-      BOOST_REQUESTS_AWAIT_LOCK(this_->write_mtx_, st->lock);
+      BOOST_REQUESTS_YIELD this_->write_mtx_.async_lock(std::move(self));
+      if (ec)
+        return self.complete(ec, *std::move(str));
+      lock_ = {this_->write_mtx_, std::adopt_lock};
+    }
 
-      if (!this_->is_open())
+    if (!this_->is_open())
+    {
+      BOOST_REQUESTS_YIELD this_->next_layer_.next_layer().async_connect(this_->endpoint_, std::move(self));
+      if (!ec && this_->use_ssl_)
       {
-      retry:
-        BOOST_REQUESTS_AWAIT_LOCK(this_->read_mtx_, st->alock);
-        BOOST_ASIO_CORO_YIELD this_->next_layer_.next_layer().async_connect(this_->endpoint_, std::move(self));
-        if (!ec && this_->use_ssl_)
-        {
-          BOOST_ASIO_CORO_YIELD this_->next_layer_.async_handshake(asio::ssl::stream_base::client, std::move(self));
-        }
-        if (ec)
-          break;
+        BOOST_REQUESTS_YIELD this_->next_layer_.async_handshake(asio::ssl::stream_base::client, std::move(self));
       }
-
-      st->alock.reset();
-      if (this_->use_ssl_)
-      {
-        BOOST_ASIO_CORO_YIELD async_write_request(this_->next_layer_, method, path, headers, src, std::move(self));
-      }
-      else
-      {
-        BOOST_ASIO_CORO_YIELD async_write_request(this_->next_layer_.next_layer(), method, path, headers, src, std::move(self));
-      }
-
-      if (ec == asio::error::broken_pipe || ec == asio::error::connection_reset)
-        goto retry ;
-      else if (ec)
-        break;
-
-      // release after acquire!
-      BOOST_REQUESTS_AWAIT_LOCK(this_->read_mtx_, st->lock);
-      // END OF write impl
-
-      str.emplace(this_->get_executor(), this_); // , req.get_allocator().resource()
-      str->parser_ = std::make_unique<http::response_parser<http::buffer_body>>(http::response_header{http::fields(headers.get_allocator())});
-      str->parser_->body_limit(boost::none);
-
-      if (method == http::verb::head || method == http::verb::connect)
-        str->parser_->skip(true);
-
-      if (this_->use_ssl_)
-      {
-        BOOST_ASIO_CORO_YIELD beast::http::async_read_header(this_->next_layer_, this_->buffer_, *str->parser_, std::move(self));
-      }
-      else
-      {
-        BOOST_ASIO_CORO_YIELD beast::http::async_read_header(this_->next_layer_.next_layer(), this_->buffer_, *str->parser_, std::move(self));
-      }
-
       if (ec)
         break;
+    }
 
+    if (this_->use_ssl_)
+    {
+      BOOST_REQUESTS_YIELD async_write_request(this_->next_layer_, method, path, headers, src, std::move(self));
+    }
+    else
+    {
+      BOOST_REQUESTS_YIELD async_write_request(this_->next_layer_.next_layer(), method, path, headers, src, std::move(self));
+    }
+
+    if (ec)
+      break;
+
+    str.emplace(this_->get_executor(), this_); // , req.get_allocator().resource()
+    str->parser_ = std::make_unique<http::response_parser<http::buffer_body>>(http::response_header{http::fields(headers.get_allocator())});
+    str->parser_->body_limit(boost::none);
+
+    if (method == http::verb::head || method == http::verb::connect)
+      str->parser_->skip(true);
+
+    if (this_->use_ssl_)
+    {
+      BOOST_REQUESTS_YIELD beast::http::async_read_header(this_->next_layer_, this_->buffer_, *str->parser_, std::move(self));
+    }
+    else
+    {
+      BOOST_REQUESTS_YIELD beast::http::async_read_header(this_->next_layer_.next_layer(), this_->buffer_, *str->parser_, std::move(self));
+    }
+
+    if (ec)
+    {
+      lock_ = {};
+      return self.complete(error_code{}, stream{get_executor(), nullptr});
+    }
+
+    if (!this_->read_mtx_.try_lock())
+    {
+      BOOST_REQUESTS_YIELD this_->read_mtx_.async_lock(std::move(self));
+      if (ec)
+        return self.complete(ec, *std::move(str));
+      lock_ = {this_->read_mtx_, std::adopt_lock};
+    }
+
+
+    if (jar)
+    {
+      auto cookie_itr = str->headers().find(http::field::set_cookie);
+      if (cookie_itr != str->headers().end())
       {
-        if (jar)
+        auto f = requests::parse_set_cookie_field(cookie_itr->value());
+        if (f)
+          jar->set(*f, this_->host());
+        else
         {
-          auto cookie_itr = str->headers().find(http::field::set_cookie);
-          if (cookie_itr != str->headers().end())
-          {
-            auto f = requests::parse_set_cookie_field(cookie_itr->value());
-            if (f)
-              jar->set(*f, this_->host());
-            else
-            {
-              ec = f.error();
-              return self.complete(ec, *std::move(str));
-            }
-          }
-        }
-
-        auto rc = str->parser_->get().base().result();
-        if ((opts.redirect < redirect_mode::endpoint) ||
-            ((rc != http::status::moved_permanently) && (rc != http::status::found) &&
-             (rc != http::status::temporary_redirect) && (rc != http::status::permanent_redirect)))
-        {
-          // GO
-          str->lock_ = std::move(st->lock);
-          str->history_ = std::move(st->history);
+          ec = f.error();
           return self.complete(ec, *std::move(str));
         }
       }
-
-      if (method != http::verb::head)
-      {
-        BOOST_ASIO_CORO_YIELD str->async_read(st->buf, std::move(self));
-      }
-      if (ec)
-        break;
-      state->history.emplace_back(std::move(str->parser_->get().base()), std::move(st->buf));
-      st->lock = {};
-      str.reset();
-
-      auto & res = state->history.back().base();
-
-      // read the body to put into history
-      auto loc_itr = res.find(http::field::location);
-      if (loc_itr == res.end())
-      {
-        BOOST_REQUESTS_ASSIGN_EC(ec, error::invalid_redirect);
-        break ;
-      }
-
-      const auto url = interpret_location(path, loc_itr->value());
-      if (url.has_error())
-      {
-        ec = url.error();
-        break;
-      }
-      // we don't need to use should_redirect, bc we're on the same host.
-      if (url->has_authority() &&
-          this_->host_ == url->encoded_host() &&
-          !same_endpoint_on_host(*url, this_->endpoint()))
-      {
-        BOOST_REQUESTS_ASSIGN_EC(ec, error::forbidden_redirect);
-        break ;
-      }
-
-      if (--opts.max_redirects == 0)
-      {
-        BOOST_REQUESTS_ASSIGN_EC(ec, error::too_many_redirects);
-        break ;
-      }
-
-      path = url->encoded_resource();
-      if (!url->encoded_host_and_port().empty())
-        headers.set(http::field::host, url->encoded_host_and_port());
-
-      if (jar && headers.count(http::field::host) > 0u)
-      {
-        auto cc = jar->get(headers[http::field::host], this_->use_ssl_, url->encoded_path());
-        if (!cc.empty())
-          headers.set(http::field::cookie, cc);
-        else
-          headers.erase(http::field::cookie);
-      }
-      else
-        headers.erase(http::field::cookie);
-
     }
-
-    stream str_{this_->get_executor(), nullptr};
-    str_.history_ = std::move(st->history);
-    return self.complete(ec, std::move(str_));
-
   }
   // coro is complete
   if (is_complete())
   {
-      state.reset();
-      self.complete(ec, stream{this_->get_executor(), nullptr});
+      lock_ = {};
+      return self.complete(ec, *std::move(str));
   }
 }
 
 
 void connection_impl::connect(endpoint_type ep, system::error_code & ec)
 {
-  auto wlock = detail::lock(write_mtx_, ec);
-  if (ec)
-    return;
-
-  auto rlock = detail::lock(read_mtx_, ec);
-  if (ec)
-    return;
-
+  detail::lock_guard lw{write_mtx_}, lr{read_mtx_};
   next_layer_.next_layer().connect(endpoint_ = ep, ec);
 
   if (use_ssl_ && !ec)
@@ -565,14 +396,7 @@ void connection_impl::connect(endpoint_type ep, system::error_code & ec)
 
 void connection_impl::close(system::error_code & ec)
 {
-  auto wlock = detail::lock(write_mtx_, ec);
-  if (ec)
-    return;
-
-  auto rlock = detail::lock(read_mtx_, ec);
-  if (ec)
-    return;
-
+  detail::lock_guard lw{write_mtx_}, lr{read_mtx_};
   if (use_ssl_)
     next_layer_.shutdown(ec);
 
@@ -612,81 +436,64 @@ void connection_impl::do_async_close_(asio::any_completion_handler<void(system::
 
 struct connection_impl::async_connect_op : asio::coroutine
 {
-  using lock_type = detail::lock_guard;
-  struct state_t
-  {
-    lock_type read_lock, write_lock;
-  };
-  using allocator_type = asio::any_completion_handler_allocator<void, void(error_code)>;
-  std::unique_ptr<state_t, alloc_deleter<state_t, allocator_type>> state;
+  constexpr static const char * op_name = "connection_impl::async_connect_op";
 
   connection_impl * this_;
   endpoint_type ep;
 
+  detail::lock_guard write_lock, read_lock;
+
   template<typename Self>
   void operator()(Self && self, system::error_code ec = {})
   {
-    auto st = state.get();
-    if (!ec)
-      BOOST_ASIO_CORO_REENTER(this)
+    BOOST_ASIO_CORO_REENTER(this)
+    {
+      BOOST_REQUESTS_AWAIT_LOCK(this_->write_mtx_, write_lock);
+      BOOST_REQUESTS_AWAIT_LOCK(this_->read_mtx_, read_lock);
+      BOOST_REQUESTS_YIELD this_->next_layer_.next_layer().async_connect(this_->endpoint_ = ep, std::move(self));
+      if (this_->use_ssl_)
       {
-        BOOST_REQUESTS_AWAIT_LOCK(this_->write_mtx_, st->write_lock);
-        BOOST_REQUESTS_AWAIT_LOCK(this_->read_mtx_,  st->read_lock);
-        if (this_->use_ssl_)
-        {
-          BOOST_ASIO_CORO_YIELD this_->next_layer_.async_handshake(asio::ssl::stream_base::client, std::move(self));
-        }
+        BOOST_REQUESTS_YIELD this_->next_layer_.async_handshake(asio::ssl::stream_base::client, std::move(self));
       }
+    }
     // coro is complete
     if (is_complete())
-    {
-      state.reset();
       self.complete(ec);
-    }
   }
 };
 
 struct connection_impl::async_close_op : asio::coroutine
 {
-  using lock_type = detail::lock_guard;
-  struct state_t
-  {
-    lock_type read_lock, write_lock;
-  };
+  constexpr static const char * op_name =  "connection_impl::async_close_op";
   using allocator_type = asio::any_completion_handler_allocator<void, void(error_code)>;
-  std::unique_ptr<state_t, alloc_deleter<state_t, allocator_type>> state;
 
   connection_impl * this_;
   endpoint_type ep;
 
+  detail::lock_guard write_lock, read_lock;
+
   template<typename Self>
   void operator()(Self && self, system::error_code ec = {})
   {
-    auto st = state.get();
-    if (!ec)
-      BOOST_ASIO_CORO_REENTER(this)
+    BOOST_ASIO_CORO_REENTER(this)
+    {
+      BOOST_REQUESTS_AWAIT_LOCK(this_->write_mtx_, write_lock);
+      BOOST_REQUESTS_AWAIT_LOCK(this_->read_mtx_, read_lock);
+      if (!ec && this_->use_ssl_)
       {
-          BOOST_REQUESTS_AWAIT_LOCK(this_->write_mtx_, st->write_lock);
-          BOOST_REQUESTS_AWAIT_LOCK(this_->read_mtx_,  st->read_lock);
-          if (!ec && this_->use_ssl_)
-          {
-            BOOST_ASIO_CORO_YIELD this_->next_layer_.async_shutdown(std::move(self));
-          }
-          if (this_->next_layer_.next_layer().is_open())
-            this_->next_layer_.next_layer().close(ec);
+        BOOST_REQUESTS_YIELD this_->next_layer_.async_shutdown(std::move(self));
       }
+      if (this_->next_layer_.next_layer().is_open())
+        this_->next_layer_.next_layer().close(ec);
+    }
     // coro is complete
     if (is_complete())
-    {
-      state.reset();
       self.complete(ec);
-    }
   }
 };
 
 void connection_impl::do_close_(system::error_code & ec)
 {
-  auto wlock = detail::lock(write_mtx_, ec);
   if (ec)
     return;
 
@@ -709,34 +516,37 @@ void connection_impl::remove_from_pool_()
     ptr->drop_connection_(this);
 }
 
-BOOST_REQUESTS_DECL
 void connection_impl::async_connect_impl(asio::any_completion_handler<void(error_code)> handler,
                                          connection_impl * this_, endpoint_type ep)
 {
   return asio::async_compose<asio::any_completion_handler<void(error_code)>, void(error_code)>(
-      async_connect_op{{},
-                       allocate_unique<async_connect_op::state_t>(asio::get_associated_allocator(handler)),
-                       this_, ep}, handler, this_->get_executor());
+      async_connect_op{{}, this_, ep}, handler, this_->get_executor());
 }
 
-BOOST_REQUESTS_DECL
 void connection_impl::async_close_impl(asio::any_completion_handler<void(error_code)> handler,
                                        connection_impl * this_)
 {
   return asio::async_compose<asio::any_completion_handler<void(error_code)>, void(error_code)>(
-      async_close_op{{},
-                     allocate_unique<async_close_op::state_t>(asio::get_associated_allocator(handler)),
-                     this_}, handler, this_->get_executor());
+      async_close_op{{}, this_}, handler, this_->get_executor());
 }
 
-BOOST_REQUESTS_DECL
 void connection_impl::async_ropen_impl(asio::any_completion_handler<void(error_code, stream)> handler,
-                             connection_impl * this_, http::verb method,
-                             urls::pct_string_view path, http::fields & headers,
-                             source & src, request_options opt, cookie_jar * jar)
+                                       connection_impl * this_, http::verb method,
+                                       urls::pct_string_view path, http::fields & headers,
+                                       source & src, cookie_jar * jar)
 {
   return asio::async_compose<asio::any_completion_handler<void(error_code, stream)>, void(error_code, stream)>(
-      async_ropen_op{asio::get_associated_allocator(handler), this_, method, path, headers, src, std::move(opt), jar},
+      async_ropen_op{this_, method, path, headers, src, jar},
+      handler, this_->get_executor());
+}
+
+void connection_impl::async_ropen_impl_url(asio::any_completion_handler<void(error_code, stream)> handler,
+                                           connection_impl * this_, http::verb method,
+                                           urls::url_view url, http::fields & headers,
+                                           source & src, cookie_jar * jar)
+{
+  return asio::async_compose<asio::any_completion_handler<void(error_code, stream)>, void(error_code, stream)>(
+      async_ropen_op{this_, method, url, headers, src, jar},
       handler, this_->get_executor());
 }
 

@@ -69,6 +69,8 @@ namespace detail
 template<typename Stream>
 struct async_write_to_file_op : asio::coroutine
 {
+  constexpr static const char * op_name = "async_write_to_file_op";
+
   using executor_type = typename std::decay_t<Stream>::executor_type;
   executor_type get_executor() {return state->str.get_executor(); }
 
@@ -102,35 +104,34 @@ struct async_write_to_file_op : asio::coroutine
   void operator()(Self && self, system::error_code ec = {}, std::size_t n = 0u)
   {
     auto st = state.get();
-    if (!ec)
-        BOOST_ASIO_CORO_REENTER(this)
-        {
-          st->f.open(file.string().c_str(), asio::file_base::write_only | asio::file_base::create, ec);
-          if (ec)
-          {
-            st->written = 0u;
-            break;
-          }
+    BOOST_ASIO_CORO_REENTER(this)
+    {
+      st->f.open(file.string().c_str(), asio::file_base::write_only | asio::file_base::create, ec);
+      if (ec)
+      {
+        st->written = 0u;
+        break;
+      }
 
-          while (!st->str.done() && !ec)
-          {
-            // KDM: this could be in parallel to write using parallel_group.
-            BOOST_ASIO_CORO_YIELD {
-              auto b = asio::buffer(st->buffer);
-              st->str.async_read_some(b, std::move(self));
-            }
-
-            if (n == 0 && ec)
-              break;
-
-            st->ec_read = exchange(ec, {});
-            BOOST_ASIO_CORO_YIELD asio::async_write(st->f, asio::buffer(st->buffer, n), std::move(self));
-
-            st->written += n;
-            if (st->ec_read && !ec)
-              ec = st->ec_read;
-          }
+      while (!st->str.done() && !ec)
+      {
+        // KDM: this could be in parallel to write using parallel_group.
+        BOOST_REQUESTS_YIELD {
+          auto b = asio::buffer(st->buffer);
+          st->str.async_read_some(b, std::move(self));
         }
+
+        if (n == 0 && ec)
+          break;
+
+        st->ec_read = exchange(ec, {});
+        BOOST_REQUESTS_YIELD asio::async_write(st->f, asio::buffer(st->buffer, n), std::move(self));
+
+        st->written += n;
+        if (st->ec_read && !ec)
+          ec = st->ec_read;
+      }
+    }
     if (is_complete())
     {
         state.reset();
@@ -182,6 +183,8 @@ namespace detail
 template<typename Stream>
 struct async_write_to_file_op : asio::coroutine
 {
+  constexpr static const char * op_name = "async_write_to_file_op";
+
   using executor_type = typename std::decay_t<Stream>::executor_type;
   executor_type get_executor() {return state->str.get_executor(); }
 
@@ -212,25 +215,22 @@ struct async_write_to_file_op : asio::coroutine
                   system::error_code ec = {}, std::size_t n = 0u)
   {
     auto st = state.get();
-    if (!ec)
     BOOST_ASIO_CORO_REENTER(this)
     {
       state->f.open(file.string().c_str(), beast::file_mode::write_new, ec);
       if (ec)
       {
         state->written = 0u;
-        BOOST_ASIO_CORO_YIELD {
+        BOOST_REQUESTS_YIELD {
           auto exec = asio::get_associated_immediate_executor(self, state->str.get_executor());
           asio::dispatch(exec, std::move(self));
         }
         break;
       }
 
-
       while (!ec && !state->str.done())
       {
-        BOOST_ASIO_CORO_YIELD state->str.async_read_some(asio::buffer(state->buffer), std::move(self));
-
+        BOOST_REQUESTS_YIELD state->str.async_read_some(asio::buffer(state->buffer), std::move(self));
         if (n == 0 && ec)
           break;
 
@@ -361,6 +361,8 @@ namespace detail
 template<typename Connection>
 struct async_download_op : asio::coroutine
 {
+
+  constexpr static const char * op_name = "async_download_op";
   using executor_type = typename Connection::executor_type;
   executor_type get_executor() {return state->str.get_executor(); }
 
@@ -397,33 +399,32 @@ struct async_download_op : asio::coroutine
   void operator()(Self && self, system::error_code ec = {}, optional<stream> s = none)
   {
     auto st = state.get();
-    if (!ec)
-        BOOST_ASIO_CORO_REENTER(this)
-        {
-          BOOST_ASIO_CORO_YIELD st->conn.async_ropen(http::verb::get, st->target, empty{},
-                                                     std::move(st->req), std::move(self));
-          if (ec)
-          {
-            st->rb.history = std::move(*s).history();
-            st->rb.headers = std::move(*s).headers();
-            break;
-          }
-          st->str_ = *std::move(s);
-          if (filesystem::exists(st->download_path, ec) && filesystem::is_directory(st->download_path, ec) && !st->target.segments().empty())
-            st->rb.download_path = st->download_path / st->target.segments().back(); // so we can download to a folder
-          else
-            st->rb.download_path = std::move(st->download_path);
-          ec.clear();
-          if (!ec)
-          {
-            BOOST_ASIO_CORO_YIELD async_write_to_file(*st->str_, st->rb.download_path,
-                              asio::deferred([](system::error_code ec, std::size_t){return asio::deferred.values(ec);}))
-                    (std::move(self));
-          }
+    BOOST_ASIO_CORO_REENTER(this)
+    {
+      BOOST_REQUESTS_YIELD st->conn.async_ropen(http::verb::get, st->target, empty{},
+                                                 std::move(st->req), std::move(self));
+      if (ec)
+      {
+        st->rb.history = std::move(*s).history();
+        st->rb.headers = std::move(*s).headers();
+        break;
+      }
+      st->str_ = *std::move(s);
+      if (filesystem::exists(st->download_path, ec) && filesystem::is_directory(st->download_path, ec) && !st->target.segments().empty())
+        st->rb.download_path = st->download_path / st->target.segments().back(); // so we can download to a folder
+      else
+        st->rb.download_path = std::move(st->download_path);
+      ec.clear();
+      if (!ec)
+      {
+        BOOST_REQUESTS_YIELD async_write_to_file(*st->str_, st->rb.download_path,
+                          asio::deferred([](system::error_code ec, std::size_t){return asio::deferred.values(ec);}))
+                (std::move(self));
+      }
 
-          st->rb.history = std::move(*st->str_).history();
-          st->rb.headers = std::move(*st->str_).headers();
-        }
+      st->rb.history = std::move(*st->str_).history();
+      st->rb.headers = std::move(*st->str_).headers();
+    }
     if (is_complete())
     {
         state.reset();

@@ -8,7 +8,6 @@
 #ifndef STRING_MAKER_HPP
 #define STRING_MAKER_HPP
 
-
 #include "doctest.h"
 #include <boost/core/demangle.hpp>
 #include <boost/core/detail/string_view.hpp>
@@ -18,7 +17,6 @@
 #include <boost/asio/multiple_exceptions.hpp>
 #include <boost/system/result.hpp>
 #include <boost/json.hpp>
-
 
 namespace doctest
 {
@@ -164,14 +162,19 @@ struct tracker_t
   boost::source_location loc;
   bool called = false;
   bool moved_from = false;
+
   tracker_t(
       Handler && handler,
       const boost::source_location & loc = BOOST_CURRENT_LOCATION)
-      : handler(std::forward<Handler>(handler)), loc(loc) {}
+      : handler(std::forward<Handler>(handler)), loc(loc)
+  {
+    BOOST_ASIO_HANDLER_LOCATION((loc.file_name(), loc.line(), loc.function_name()));
+  }
 
   template<typename ... Args>
   void operator()(Args && ... args)
   {
+    BOOST_ASIO_HANDLER_LOCATION((loc.file_name(), loc.line(), loc.function_name()));
     called = true;
     std::move(handler)(std::forward<Args>(args)...);
   }
@@ -185,7 +188,10 @@ struct tracker_t
   {
     if (!moved_from)
     {
-      doctest::detail::ResultBuilder rb(doctest::assertType::DT_CHECK, loc.file_name(), loc.line(), loc.function_name());
+      std::string dm = boost::core::demangle(typeid(handler).name());
+      doctest::detail::ResultBuilder rb(doctest::assertType::DT_CHECK,
+                                          loc.file_name(), loc.line(),
+                                          dm.c_str());
       rb.setResult(doctest::detail::Result{called, "called"});
       DOCTEST_ASSERT_LOG_AND_REACT(rb);
     }

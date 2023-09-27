@@ -36,14 +36,15 @@ bool should_redirect(redirect_mode mode,
                      urls::url_view target,
                      const public_suffix_list & pse)
 {
-    if (mode == redirect_mode::any)
-        return true;
-
     // TODO: handle encoding/decoding
     const auto target_domain = target.encoded_host();
     const auto current_domain = current.encoded_host();
     switch (mode)
     {
+        case redirect_mode::none:
+            return false;
+        case redirect_mode::any:
+            return true;
         case redirect_mode::private_domain:
         {
             // find the match of the domains
@@ -94,20 +95,20 @@ bool should_redirect(redirect_mode mode,
     }
 }
 
-bool same_endpoint_on_host(const urls::url_view current, const asio::ip::tcp::endpoint ep)
+bool same_endpoint_on_host(const urls::url_view current, const asio::ip::tcp::endpoint  &ep)
 {
   return get_port(current) == ep.port();
 }
 
 
 bool same_endpoint_on_host(const urls::url_view current,
-               const asio::local::stream_protocol::endpoint ep)
+               const asio::local::stream_protocol::endpoint &ep)
 {
-  return false; // domain socket can only redirect locally
+  return true; // domain socket can only redirect locally
 }
 
 
-bool same_endpoint_on_host(const urls::url_view current, const asio::generic::stream_protocol::endpoint ep)
+bool same_endpoint_on_host(const urls::url_view current, const asio::generic::stream_protocol::endpoint  &ep)
 {
   if (ep.protocol() == asio::local::stream_protocol())
   {

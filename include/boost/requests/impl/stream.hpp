@@ -107,6 +107,7 @@ std::size_t stream::read(DynamicBuffer & buffer, system::error_code & ec)
 template<typename DynamicBuffer>
 struct stream::async_read_op : asio::coroutine
 {
+  constexpr static const char * op_name = "stream::async_read_op";
   using executor_type = asio::any_io_executor;
   executor_type get_executor() {return this_->get_executor(); }
 
@@ -117,15 +118,12 @@ struct stream::async_read_op : asio::coroutine
   {
   }
 
-  using lock_type = detail::lock_guard;
-  lock_type lock;
   system::error_code ec_;
   std::size_t res = 0u;
 
   template<typename Self>
   void operator()(Self && self, error_code ec = {}, std::size_t n = 0u)
   {
-    if (!ec)
     BOOST_ASIO_CORO_REENTER(this)
     {
       if (!this_->parser_)
@@ -141,7 +139,7 @@ struct stream::async_read_op : asio::coroutine
 
       while (!ec && !this_->parser_->is_done())
       {
-        BOOST_ASIO_CORO_YIELD this_->async_read_some(
+        BOOST_REQUESTS_YIELD this_->async_read_some(
             buffer.prepare(this_->parser_->content_length_remaining().value_or(BOOST_REQUESTS_CHUNK_SIZE)),
             std::move(self));
         buffer.commit(n);
@@ -159,7 +157,7 @@ struct stream::async_read_op : asio::coroutine
         if (this_->parser_->get().keep_alive())
         {
           std::swap(ec, ec_);
-          BOOST_ASIO_CORO_YIELD this_->impl_->do_async_close_(std::move(self));
+          BOOST_REQUESTS_YIELD this_->impl_->do_async_close_(std::move(self));
           std::swap(ec, ec_);
         }
       }

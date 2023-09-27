@@ -41,8 +41,6 @@ void stream::dump(system::error_code & ec)
     boost::system::error_code ec_;
     impl_->do_close_(ec_);
   }
-  /*else
-    impl_->do_return_();*/
 }
 
 
@@ -56,6 +54,8 @@ stream::~stream()
 
 struct stream::async_read_some_op : asio::coroutine
 {
+  constexpr static const char * op_name = "stream::async_read_some_op";
+
   using executor_type = asio::any_io_executor;
   executor_type get_executor() {return this_->get_executor(); }
 
@@ -87,7 +87,6 @@ struct stream::async_read_some_op : asio::coroutine
 template<typename Self>
 void stream::async_read_some_op::operator()(Self && self, system::error_code ec, std::size_t res)
 {
-  if (!ec)
     BOOST_ASIO_CORO_REENTER(this)
     {
       if (!this_->parser_)
@@ -103,7 +102,7 @@ void stream::async_read_some_op::operator()(Self && self, system::error_code ec,
       this_->parser_->get().body().data = buffer.data();
       this_->parser_->get().body().size = buffer.size();
 
-      BOOST_ASIO_CORO_YIELD this_->impl_->do_async_read_some_(*this_->parser_, std::move(self));
+      BOOST_REQUESTS_YIELD this_->impl_->do_async_read_some_(*this_->parser_, std::move(self));
       if (!this_->parser_->is_done())
       {
         this_->parser_->get().body().more = true;
@@ -116,7 +115,12 @@ void stream::async_read_some_op::operator()(Self && self, system::error_code ec,
         if (!this_->parser_->get().keep_alive())
         {
           ec_ = ec ;
-          BOOST_ASIO_CORO_YIELD this_->impl_->do_async_close_(std::move(self));
+          // we already hold the write-mutex
+          if (this_->impl_->uses_ssl())
+            BOOST_REQUESTS_YIELD this_->impl_->next_layer_.async_shutdown(std::move(self));
+
+          if (this_->impl_->next_layer_.next_layer().is_open())
+            this_->impl_->next_layer_.next_layer().close(ec);
           ec = ec_;
         }
       }
@@ -140,6 +144,8 @@ void stream::async_read_some_impl(
 
 struct stream::async_dump_op : asio::coroutine
 {
+  constexpr static const char * op_name = "stream::async_dump_op";
+
   using executor_type = asio::any_io_executor;
   executor_type get_executor() {return this_->get_executor(); }
 
@@ -161,7 +167,7 @@ void stream::async_dump_op::operator()(Self && self, system::error_code ec, std:
   {
     if (!this_->parser_ || !this_->parser_->is_done())
     {
-      BOOST_ASIO_CORO_YIELD asio::dispatch(
+      BOOST_REQUESTS_YIELD asio::dispatch(
             asio::get_associated_immediate_executor(self, this_->get_executor()),
             std::move(self));
       ec = ec_;
@@ -173,13 +179,13 @@ void stream::async_dump_op::operator()(Self && self, system::error_code ec, std:
       this_->parser_->get().body().data = buffer;
       this_->parser_->get().body().size = BOOST_REQUESTS_CHUNK_SIZE;
 
-      BOOST_ASIO_CORO_YIELD this_->impl_->do_async_read_some_(*this_->parser_, std::move(self));
+      BOOST_REQUESTS_YIELD this_->impl_->do_async_read_some_(*this_->parser_, std::move(self));
     }
 
     if (ec || !this_->parser_->get().keep_alive())
     {
       ec_ = ec ;
-      BOOST_ASIO_CORO_YIELD this_->impl_->do_async_close_(std::move(self));
+      BOOST_REQUESTS_YIELD this_->impl_->do_async_close_(std::move(self));
       ec = ec_;
     }
   }

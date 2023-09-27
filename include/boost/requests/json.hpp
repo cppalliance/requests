@@ -639,6 +639,7 @@ namespace detail
 template<typename Stream>
 struct async_read_json_op : asio::coroutine
 {
+  constexpr static const char * op_name = "async_read_json_op";
   using executor_type = typename Stream::executor_type;
   executor_type get_executor() {return str.get_executor(); }
 
@@ -664,7 +665,7 @@ struct async_read_json_op : asio::coroutine
     {
       while (!state->sp.done() && !str.done() && !ec)
       {
-        BOOST_ASIO_CORO_YIELD str.async_read_some(asio::buffer(state->buffer), std::move(self));
+        BOOST_REQUESTS_YIELD str.async_read_some(asio::buffer(state->buffer), std::move(self));
         if (ec)
           return self.complete(ec, nullptr);
         state->sp.write_some(state->buffer, n, ec);
@@ -700,6 +701,8 @@ inline void async_read_json_impl(
 template<typename Stream>
 struct async_read_optional_json_op : asio::coroutine
 {
+  constexpr static const char * op_name = "async_read_optional_json_op";
+
   using executor_type = typename Stream::executor_type;
   executor_type get_executor() {return str.get_executor(); }
 
@@ -716,7 +719,7 @@ struct async_read_optional_json_op : asio::coroutine
   {
     BOOST_ASIO_CORO_REENTER(this)
     {
-      BOOST_ASIO_CORO_YIELD str.async_read_some(asio::buffer(buffer), std::move(self));
+      BOOST_REQUESTS_YIELD str.async_read_some(asio::buffer(buffer), std::move(self));
       if (ec || (n == 0  && str.done()))
         return self.complete(ec, boost::none);
       sp.write_some(buffer.data(), n, ec);
@@ -725,7 +728,7 @@ struct async_read_optional_json_op : asio::coroutine
 
       while (!sp.done() && !str.done())
       {
-        BOOST_ASIO_CORO_YIELD str.async_read_some(asio::buffer(buffer), std::move(self));
+        BOOST_REQUESTS_YIELD str.async_read_some(asio::buffer(buffer), std::move(self));
         if (ec)
           return self.complete(ec, boost::none);
         sp.write_some(buffer.data(), n, ec);
@@ -795,9 +798,10 @@ namespace detail
 template<typename Connection, typename Value = json::value, typename RequestBody = empty>
 struct async_request_json_op : asio::coroutine
 {
+  constexpr static const char * op_name = "async_request_json_op";
+
   using executor_type = typename Connection::executor_type;
   executor_type get_executor() {return conn.get_executor(); }
-
 
   Connection & conn;
   http::verb method;
@@ -851,7 +855,7 @@ struct async_request_json_op : asio::coroutine
   {
     BOOST_ASIO_CORO_REENTER(this)
     {
-      BOOST_ASIO_CORO_YIELD conn.async_ropen(method, target,
+      BOOST_REQUESTS_YIELD conn.async_ropen(method, target,
                              value_from(std::forward<RequestBody>(state->request_body),
                                         std::is_same<empty, std::decay_t<RequestBody>>{}),
                              std::move(state->req), std::move(self));
@@ -860,7 +864,7 @@ struct async_request_json_op : asio::coroutine
         state->str_.emplace(std::move(variant2::get<1>(s)));
         state->rb.headers = std::move(*state->str_).headers();
         state->rb.history = std::move(*state->str_).history();
-        BOOST_ASIO_CORO_YIELD async_read_json(*state->str_, state->ptr, std::move(self));
+        BOOST_REQUESTS_YIELD async_read_json(*state->str_, state->ptr, std::move(self));
         if (ec)
           break;
       }
@@ -887,6 +891,8 @@ struct async_request_json_op : asio::coroutine
 template<typename Connection, typename Value = json::value, typename RequestBody = empty>
 struct async_request_optional_json_op : asio::coroutine
 {
+  constexpr static const char * op_name = "async_request_optional_json_op";
+
   using executor_type = typename Connection::executor_type;
   executor_type get_executor() {return conn.get_executor(); }
 
@@ -931,7 +937,7 @@ struct async_request_optional_json_op : asio::coroutine
   {
     BOOST_ASIO_CORO_REENTER(this)
     {
-      BOOST_ASIO_CORO_YIELD conn.async_ropen(method, target,
+      BOOST_REQUESTS_YIELD conn.async_ropen(method, target,
                              ::boost::json::value_from(std::forward<RequestBody>(state->request_body), state->ptr),
                              std::move(state->req), std::move(self));
       if (!ec)
@@ -939,7 +945,7 @@ struct async_request_optional_json_op : asio::coroutine
         state->str_.emplace(std::move(variant2::get<1>(s)));
         state->rb.headers = std::move(*state->str_).headers();
         state->rb.history = std::move(*state->str_).history();
-        BOOST_ASIO_CORO_YIELD async_read_json(*state->str_, state->ptr, std::move(self));
+        BOOST_REQUESTS_YIELD async_read_json(*state->str_, state->ptr, std::move(self));
       }
       else
       {

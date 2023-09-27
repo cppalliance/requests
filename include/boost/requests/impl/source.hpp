@@ -5,6 +5,7 @@
 #ifndef BOOST_REQUESTS_IMPL_SOURCE_HPP
 #define BOOST_REQUESTS_IMPL_SOURCE_HPP
 
+#include <boost/requests/detail/define.hpp>
 #include <boost/requests/source.hpp>
 
 #include <boost/asio/any_completion_handler.hpp>
@@ -175,6 +176,7 @@ namespace detail
 template<typename Stream>
 struct async_write_request_op : asio::coroutine
 {
+  constexpr static const char * op_name = "async_write_request_op";
   using executor_type = typename Stream::executor_type;
   executor_type get_executor() const {return stream.get_executor();}
 
@@ -223,58 +225,57 @@ struct async_write_request_op : asio::coroutine
                   system::error_code ec = {}, std::size_t n = 0u)
   {
     auto st = state.get();
-    if (!ec)
-      BOOST_ASIO_CORO_REENTER(this)
+    BOOST_ASIO_CORO_REENTER(this)
+    {
       {
+        const auto itr = header.find(beast::http::field::content_type);
+        if (itr == header.end())
         {
-          const auto itr = header.find(beast::http::field::content_type);
-          if (itr == header.end())
-          {
-            auto def = st->src.default_content_type();
-            if (!def.empty())
-              header.set(beast::http::field::content_type, def);
-          }
+          auto def = st->src.default_content_type();
+          if (!def.empty())
+            header.set(beast::http::field::content_type, def);
         }
-        st->src.reset();
+      }
+      st->src.reset();
 
-        if (st->sz)
+      if (st->sz)
+      {
+        if (*st->sz == 0)
         {
-          if (*st->sz == 0)
-          {
-            st->freq.template emplace<1>(method, target, 11, http::empty_body::value_type(), std::move(header)).prepare_payload();
-            BOOST_ASIO_CORO_YIELD beast::http::async_write(stream, variant2::get<1>(st->freq), std::move(self));
-            header = std::move(variant2::get<1>(st->freq).base());
-          }
-          else
-          {
-            st->freq.template emplace<2>(method, target, 11, st->src, std::move(header)).prepare_payload();
-            BOOST_ASIO_CORO_YIELD beast::http::async_write(stream, variant2::get<2>(st->freq), std::move(self));
-            header = std::move(variant2::get<2>(st->freq).base());
-          }
-
+          st->freq.template emplace<1>(method, target, 11, http::empty_body::value_type(), std::move(header)).prepare_payload();
+          BOOST_REQUESTS_YIELD beast::http::async_write(stream, variant2::get<1>(st->freq), std::move(self));
+          header = std::move(variant2::get<1>(st->freq).base());
         }
         else
         {
-          st->init = st->src.read_some(st->prebuffer, sizeof(st->prebuffer), ec);
-          if (ec)
-          {
-            n = 0u;
-            break;
-          }
-
-          st->freq.template emplace<3>(method, target, 11,
-                       detail::source_body::value_type{st->src,
-                                                       asio::buffer(st->prebuffer, st->init.first),
-                                                       st->init.second}, std::move(header));
-
-          if (!st->init.second)
-            variant2::get<3>(st->freq).set(beast::http::field::content_length, std::to_string(st->init.first));
-          else
-            variant2::get<3>(st->freq).prepare_payload();
-          BOOST_ASIO_CORO_YIELD beast::http::async_write(stream, variant2::get<3>(st->freq), std::move(self));
-          header = std::move(variant2::get<3>(st->freq).base());
+          st->freq.template emplace<2>(method, target, 11, st->src, std::move(header)).prepare_payload();
+          BOOST_REQUESTS_YIELD beast::http::async_write(stream, variant2::get<2>(st->freq), std::move(self));
+          header = std::move(variant2::get<2>(st->freq).base());
         }
+
       }
+      else
+      {
+        st->init = st->src.read_some(st->prebuffer, sizeof(st->prebuffer), ec);
+        if (ec)
+        {
+          n = 0u;
+          break;
+        }
+
+        st->freq.template emplace<3>(method, target, 11,
+                     detail::source_body::value_type{st->src,
+                                                     asio::buffer(st->prebuffer, st->init.first),
+                                                     st->init.second}, std::move(header));
+
+        if (!st->init.second)
+          variant2::get<3>(st->freq).set(beast::http::field::content_length, std::to_string(st->init.first));
+        else
+          variant2::get<3>(st->freq).prepare_payload();
+        BOOST_REQUESTS_YIELD beast::http::async_write(stream, variant2::get<3>(st->freq), std::move(self));
+        header = std::move(variant2::get<3>(st->freq).base());
+      }
+    }
     if (is_complete())
     {
       state.reset();

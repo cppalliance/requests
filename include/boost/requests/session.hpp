@@ -43,9 +43,8 @@ struct session
     };
 
     /// Constructor.
-    explicit session(const executor_type &ex) : mutex_(ex)
+    explicit session(const executor_type &ex) : executor_(ex)
     {
-      sslctx_.set_verify_mode(asio::ssl::verify_peer);
       sslctx_.set_default_verify_paths();
     }
 
@@ -54,17 +53,15 @@ struct session
     explicit session(ExecutionContext &context,
                      typename asio::constraint<
                                    asio::is_convertible<ExecutionContext &, asio::execution_context &>::value
-                           >::type = 0)
-            : mutex_(context.get_executor())
+                           >::type = 0) : executor_(context.get_executor())
     {
-      sslctx_.set_verify_mode(asio::ssl::verify_peer);
       sslctx_.set_default_verify_paths();
     }
 
     /// Get the executor associated with the object.
     executor_type get_executor() BOOST_ASIO_NOEXCEPT
     {
-        return mutex_.get_executor();
+        return executor_;
     }
 
           struct request_options & options()       {return options_;}
@@ -153,9 +150,12 @@ struct session
                 http::fields & headers,
                 CompletionToken && completion_token);
 
+
+
   private:
     asio::ssl::context sslctx_{asio::ssl::context_base::tls_client};
-    detail::mutex mutex_;
+    asio::any_io_executor executor_;
+    std::mutex mutex_;
 
     struct request_options options_{default_options()};
 
