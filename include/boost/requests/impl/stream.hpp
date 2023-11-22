@@ -42,10 +42,15 @@ std::size_t stream::read_some(const MutableBuffer & buffer, system::error_code &
 
   parser_->get().body().data = itr->data();
   parser_->get().body().size = itr->size();
+  if (parser_->chunked())
+  {
+    impl_->handle_chunked_.chunked_body = {};
+    impl_->handle_chunked_.buffer_space = itr->size();
+  }
 
   auto res = impl_->do_read_some_(*parser_, ec);
-
-
+  if (parser_->chunked())
+    res = asio::buffer_copy(*itr, asio::buffer(impl_->handle_chunked_.chunked_body, impl_->handle_chunked_.chunked_body.size()));
   if (!parser_->is_done())
   {
     parser_->get().body().more = true;
@@ -84,7 +89,14 @@ std::size_t stream::read(DynamicBuffer & buffer, system::error_code & ec)
   std::size_t res = 0u;
   while (!ec && !parser_->is_done())
   {
-    auto n = read_some(buffer.prepare(parser_->content_length_remaining().value_or(BOOST_REQUESTS_CHUNK_SIZE)), ec);
+    auto max_size = (std::min)(parser_->content_length_remaining().value_or(BOOST_REQUESTS_CHUNK_SIZE),
+                               buffer.max_size() - buffer.size());
+    if (buffer.max_size() - buffer.size() == 0u)
+    {
+      BOOST_REQUESTS_ASSIGN_EC(ec, beast::http::error::need_buffer);
+      return res;
+    }
+    auto n = read_some(buffer.prepare(max_size), ec);
     buffer.commit(n);
     res += n;
   }
@@ -139,9 +151,12 @@ struct stream::async_read_op : asio::coroutine
 
       while (!ec && !this_->parser_->is_done())
       {
-        BOOST_REQUESTS_YIELD this_->async_read_some(
-            buffer.prepare(this_->parser_->content_length_remaining().value_or(BOOST_REQUESTS_CHUNK_SIZE)),
-            std::move(self));
+        BOOST_REQUESTS_YIELD
+        {
+          auto max_size = (std::min)(this_->parser_->content_length_remaining().value_or(BOOST_REQUESTS_CHUNK_SIZE),
+                                     buffer.max_size() - buffer.size());
+          this_->async_read_some(buffer.prepare(max_size), std::move(self));
+        }
         buffer.commit(n);
         res += n;
       }

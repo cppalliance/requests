@@ -18,6 +18,7 @@
 #if defined(BOOST_ASIO_HAS_FILE)
 #include <boost/asio/basic_stream_file.hpp>
 #else
+#include "request.hpp"
 #include <boost/beast/core/file.hpp>
 #endif
 
@@ -308,27 +309,28 @@ struct download_response : response_base
 template<typename Connection>
 inline auto download(Connection & conn,
                      urls::url_view target,
-                     typename Connection::request_type req,
+                     detail::request_type<Connection> req,
                      filesystem::path download_path,
                      system::error_code & ec) -> download_response
 {
-  auto ro = conn.ropen(http::verb::get, target, empty{}, std::move(req), ec);
+  auto rh = request_stream(conn, http::verb::get, target, empty{}, std::move(req), ec);
+  auto & ro = rh.first;
   if (ec)
-    return download_response{std::move(ro).headers(), std::move(ro).history(), {}};
+    return download_response{std::move(ro).headers(), std::move(rh.second), {}};
 
   if (filesystem::exists(download_path, ec) && filesystem::is_directory(download_path, ec) && !target.empty())
     download_path /= target.segments().back(); // so we can download to a folder
   ec.clear();
   if (!ec)
     write_to_file(ro, download_path, ec);
-  return download_response{std::move(ro).headers(), std::move(ro).history(), std::move(download_path)};
+  return download_response{std::move(ro).headers(), std::move(rh.second), std::move(download_path)};
 }
 
 
 template<typename Connection>
 inline auto download(Connection & conn,
                      urls::url_view target,
-                     typename Connection::request_type req,
+                     detail::request_type<Connection> req,
                      filesystem::path download_path) -> download_response
 {
   boost::system::error_code ec;
@@ -371,7 +373,7 @@ struct async_download_op : asio::coroutine
   {
     Connection & conn;
     urls::url_view target;
-    typename Connection::request_type req;
+    detail::request_type<Connection> req;
     filesystem::path download_path;
 
     download_response rb{};
@@ -379,7 +381,7 @@ struct async_download_op : asio::coroutine
 
     state_t(Connection * conn,
             urls::url_view target,
-            typename Connection::request_type req,
+            detail::request_type<Connection> req,
             filesystem::path download_path)
         : conn(*conn), target(target), req(std::move(req)), download_path(std::move(download_path)) {}
   };
@@ -390,26 +392,29 @@ struct async_download_op : asio::coroutine
 
   async_download_op(allocator_type alloc, Connection * conn,
                     urls::url_view target,
-                    typename Connection::request_type req,
+                    detail::request_type<Connection> req,
                     filesystem::path download_path)
       : state(allocate_unique<state_t>(alloc, conn, target, req, std::move(download_path)))
   {}
 
   template<typename Self>
-  void operator()(Self && self, system::error_code ec = {}, optional<stream> s = none)
+  void operator()(Self && self,
+                  system::error_code ec = {},
+                  variant2::variant<variant2::monostate, stream, std::size_t> s = variant2::monostate{},
+                  history hist = {})
   {
     auto st = state.get();
     BOOST_ASIO_CORO_REENTER(this)
     {
-      BOOST_REQUESTS_YIELD st->conn.async_ropen(http::verb::get, st->target, empty{},
-                                                 std::move(st->req), std::move(self));
+      BOOST_REQUESTS_YIELD async_request_stream(st->conn, http::verb::get, st->target, empty{},
+                                                std::move(st->req), std::move(self));
+      st->rb.history = std::move(hist);
       if (ec)
       {
-        st->rb.history = std::move(*s).history();
-        st->rb.headers = std::move(*s).headers();
+        st->rb.headers = std::move(variant2::get<1>(s)).headers();
         break;
       }
-      st->str_ = *std::move(s);
+      st->str_.emplace(std::move(variant2::get<1>(s)));
       if (filesystem::exists(st->download_path, ec) && filesystem::is_directory(st->download_path, ec) && !st->target.segments().empty())
         st->rb.download_path = st->download_path / st->target.segments().back(); // so we can download to a folder
       else
@@ -422,13 +427,13 @@ struct async_download_op : asio::coroutine
                 (std::move(self));
       }
 
-      st->rb.history = std::move(*st->str_).history();
       st->rb.headers = std::move(*st->str_).headers();
     }
     if (is_complete())
     {
+        auto rr = std::move(st->rb);
         state.reset();
-        self.complete(ec, st->rb);
+        self.complete(ec, std::move(rr));
     }
   }
 };
@@ -436,7 +441,7 @@ struct async_download_op : asio::coroutine
 template<typename Connection>
 void async_download_impl(
     asio::any_completion_handler<void (boost::system::error_code, download_response)> handler,
-    Connection * conn, urls::url_view target, typename Connection::request_type req, filesystem::path download_path)
+    Connection * conn, urls::url_view target, detail::request_type<Connection> req, filesystem::path download_path)
 {
   return asio::async_compose<asio::any_completion_handler<void (boost::system::error_code, download_response)>,
                              void(boost::system::error_code, download_response)>(
@@ -455,7 +460,7 @@ template<typename Connection,
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, download_response))
 async_download(Connection & conn,
                urls::url_view target,
-               typename Connection::request_type req,
+               detail::request_type<Connection> req,
                filesystem::path download_path,
                CompletionToken && completion_token = typename Connection::default_token())
 {

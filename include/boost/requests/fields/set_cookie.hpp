@@ -25,7 +25,7 @@ struct set_cookie
         BOOST_REQUESTS_DECL bool operator()(const core::string_view & ra) const;
     };
 
-    using attributes_type = urls::grammar::range<urls::string_view>;
+    using attributes_type = urls::grammar::range<core::string_view>;
     using extensions_type = range_detail::filtered_range<extensions_only, const attributes_type>;
 
 

@@ -78,7 +78,7 @@ struct token_rule_2_t
           urls::grammar::error::mismatch);
 
     it = (urls::grammar::find_if_not)(++it, end, csr_);
-    return urls::string_view(it0, it - it0);
+    return core::string_view(it0, it - it0);
   }
 
 private:

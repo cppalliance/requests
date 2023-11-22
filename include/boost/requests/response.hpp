@@ -180,6 +180,9 @@ struct response : response_base
   }
 };
 
+using history = response_base::history_type;
+
+
 }
 }
 

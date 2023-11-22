@@ -58,6 +58,8 @@ struct basic_string_source final : source
   }
 };
 
+using string_source = basic_string_source<char, std::char_traits<char>, std::allocator<char>>;
+
 template<typename Char, typename Traits, typename Allocator>
 inline source_ptr tag_invoke(
     make_source_tag, std::basic_string<Char, Traits, Allocator> data)

@@ -16,6 +16,7 @@
 #include <boost/smart_ptr/allocate_unique.hpp>
 #include <boost/variant2/variant.hpp>
 
+
 namespace boost
 {
 namespace requests
@@ -145,6 +146,7 @@ std::size_t write_request(
     {
       http::request<detail::fixed_source_body> req(method, target, 11, src, std::move(header));
       req.prepare_payload();
+
       auto n =  beast::http::write(stream, req, ec);
       header = std::move(req.base());
       return n;

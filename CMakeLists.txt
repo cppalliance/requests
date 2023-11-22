@@ -45,7 +45,7 @@ endif()
 find_package(Threads REQUIRED)
 
 if (NOT BOOST_REQUESTS_BUILD_INLINE)
-    find_package(Boost REQUIRED atomic container filesystem system json url)
+    find_package(Boost REQUIRED atomic container filesystem system json url unit_test_framework context)
     include_directories(include)
 endif()
 
@@ -74,10 +74,8 @@ endif()
 add_library(boost_requests
         src/detail/condition_variable.cpp
         src/detail/connection_impl.cpp
-        src/detail/mutex.cpp
         src/fields/keep_alive.cpp
         src/fields/link.cpp
-        src/fields/location.cpp
         src/fields/set_cookie.cpp
         src/rfc/dates.cpp
         src/rfc/link.cpp
@@ -90,9 +88,11 @@ add_library(boost_requests
         src/connection_pool.cpp
         src/cookie_jar.cpp
         src/error.cpp
+        src/json.cpp
         src/mime_types.cpp
         src/public_suffix.cpp
         src/redirect.cpp
+        src/request.cpp
         src/request_options.cpp
         src/session.cpp
         src/stream.cpp)

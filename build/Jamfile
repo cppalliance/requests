@@ -33,6 +33,7 @@ alias requests_sources :
             connection_pool.cpp
             cookie_jar.cpp
             error.cpp
+            json.cpp
             mime_types.cpp
             public_suffix.cpp
             redirect.cpp

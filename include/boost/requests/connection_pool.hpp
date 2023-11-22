@@ -26,16 +26,9 @@ struct endpoint_hash
   }
 };
 
-struct connection_deleter
-{
-  constexpr connection_deleter() = default;
-  BOOST_REQUESTS_DECL
-  void operator()(connection_impl * ptr);
-};
-
 }
 
-struct connection_pool : private detail::connection_owner
+struct connection_pool
 {
     /// The type of the executor associated with the object.
     typedef asio::any_io_executor executor_type;
@@ -102,6 +95,7 @@ struct connection_pool : private detail::connection_owner
     /// Move constructor
     BOOST_REQUESTS_DECL
     connection_pool(connection_pool && lhs) ;
+
     BOOST_REQUESTS_DECL
     ~connection_pool();
     void lookup(urls::url_view av)
@@ -119,106 +113,49 @@ struct connection_pool : private detail::connection_owner
     async_lookup(urls::url_view av,
                  CompletionToken && completion_token );
 
-
-    std::size_t limit() const {return limit_;}
+    std::size_t limit()  const {return limit_;}
     std::size_t active() const {return conns_.size();}
+    std::size_t free()   const {return free_conns_.size();}
 
-    using request_type = request_parameters;
-
-    BOOST_REQUESTS_DECL connection get_connection(error_code & ec);
-    connection get_connection()
+    BOOST_REQUESTS_DECL connection borrow_connection(error_code & ec);
+    connection borrow_connection()
     {
       boost::system::error_code ec;
-      auto res = get_connection(ec);
+      auto res = borrow_connection(ec);
       if (ec)
-        throw_exception(system::system_error(ec, "get_connection"));
+        throw_exception(system::system_error(ec, "borrow_connection"));
+      return res;
+    }
+
+    BOOST_REQUESTS_DECL connection steal_connection(error_code & ec);
+    connection steal_connection()
+    {
+      boost::system::error_code ec;
+      auto res = steal_connection(ec);
+      if (ec)
+        throw_exception(system::system_error(ec, "steal_connection"));
       return res;
     }
 
     template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, connection)) CompletionToken>
     BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, connection))
-      async_get_connection(CompletionToken && completion_token);
-
-    template<typename RequestBody>
-    auto ropen(beast::http::verb method,
-               urls::url_view path,
-               RequestBody && body, request_parameters req,
-               system::error_code & ec) -> stream
-    {
-      auto conn = get_connection(ec);
-      if (!ec && !conn )
-        BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::not_found);
-      if (ec)
-        return stream{get_executor(), nullptr};
-
-      BOOST_ASSERT(conn);
-      return conn.ropen(method, path, std::forward<RequestBody>(body), std::move(req), ec);
-    }
-
-    template<typename RequestBody>
-    auto ropen(beast::http::verb method,
-               urls::url_view path,
-               RequestBody && body, request_parameters req) -> stream
-    {
-      boost::system::error_code ec;
-      auto res = ropen(method, path, std::forward<RequestBody>(body), std::move(req), ec);
-      if (ec)
-        throw_exception(system::system_error(ec, "open"));
-      return res;
-    }
-
-    auto ropen(beast::http::verb method,
-               urls::pct_string_view path,
-               http::fields & headers,
-               source & src,
-               cookie_jar * jar,
-               system::error_code & ec) -> stream
-    {
-      auto conn = get_connection(ec);
-      if (!ec && !conn)
-        BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::not_found);
-      if (ec)
-        return stream{get_executor(), nullptr};
-
-      BOOST_ASSERT(conn);
-      return conn.ropen(method, path, headers, src, jar, ec);
-    }
-
-    auto ropen(beast::http::verb method,
-               urls::pct_string_view path,
-               http::fields & headers,
-               source & src,
-               cookie_jar * jar) -> stream
-    {
-      boost::system::error_code ec;
-      auto res = ropen(method, path, headers, src,  jar, ec);
-      if (ec)
-        throw_exception(system::system_error(ec, "open"));
-      return res;
-    }
+      async_borrow_connection(CompletionToken && completion_token);
 
 
-    template<typename RequestBody,
-             typename CompletionToken>
-    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                       void (boost::system::error_code, stream))
-    async_ropen(beast::http::verb method,
-                urls::url_view path,
-                RequestBody && body, request_parameters req,
-                CompletionToken && completion_token);
-
-    template<typename CompletionToken>
-    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                       void (boost::system::error_code, stream))
-    async_ropen(beast::http::verb method,
-                urls::pct_string_view path,
-                http::fields & headers,
-                source & src,
-                request_options opt,
-                cookie_jar * jar,
-                CompletionToken && completion_token);
+    template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, connection)) CompletionToken>
+    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, connection))
+        async_steal_connection(CompletionToken && completion_token);
 
     bool uses_ssl() const {return use_ssl_;}
+
+    BOOST_REQUESTS_DECL
+    void return_connection(connection conn);
+
+    BOOST_REQUESTS_DECL
+    void remove_connection(const connection &conn);
+
+    const std::vector<endpoint_type> & endpoints() const { return endpoints_; };
+
   private:
     bool use_ssl_{true};
     asio::ssl::context & context_;
@@ -229,36 +166,30 @@ struct connection_pool : private detail::connection_owner
     std::size_t limit_;
 
     boost::unordered_multimap<endpoint_type,
-                              std::unique_ptr<detail::connection_impl, detail::connection_deleter>,
+                              std::shared_ptr<detail::connection_impl>,
                               detail::endpoint_hash> conns_;
 
-    std::vector<detail::connection_impl*> free_conns_;
+    std::vector<std::shared_ptr<detail::connection_impl>> free_conns_;
 
     struct async_lookup_op;
+    template<bool Steal>
     struct async_get_connection_op;
-    struct async_ropen_op;
 
-    BOOST_REQUESTS_DECL
-    void return_connection_(detail::connection_impl * conn) override;
-    BOOST_REQUESTS_DECL
-    void drop_connection_(const detail::connection_impl * conn) override;
 
     friend struct connection;
     friend struct stream;
     friend struct detail::connection_impl;
 
     BOOST_REQUESTS_DECL
-    static void async_ropen_impl(asio::any_completion_handler<void(error_code, stream)> handler,
-                                 connection_pool * this_, http::verb method,
-                                 urls::pct_string_view path, http::fields & headers,
-                                 source & src, request_options opt, cookie_jar * jar);
-
-
-    BOOST_REQUESTS_DECL
-    static void async_get_connection_impl(
+    static void async_borrow_connection_impl(
                                  asio::any_completion_handler<void(error_code, connection)> handler,
                                  connection_pool * this_);
 
+
+    BOOST_REQUESTS_DECL
+    static void async_steal_connection_impl(
+                                 asio::any_completion_handler<void(error_code, connection)> handler,
+                                 connection_pool * this_);
 
     BOOST_REQUESTS_DECL
     static void async_lookup_impl(
@@ -276,60 +207,34 @@ struct connection_pool::defaulted : connection_pool
   using connection = typename requests::connection::defaulted<Token>;
 
   using connection_pool::async_lookup;
-  using connection_pool::async_get_connection;
 
   auto async_lookup(urls::url_view av)
   {
     return connection_pool::async_lookup(av, default_token());
   }
 
-
-  auto
-  async_get_connection()
+  template<typename CompletionToken>
+  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, typename detail::defaulted_helper<connection>, Token>::type))
+  async_borrow_connection(CompletionToken && completion_token)
   {
-    return async_get_connection(default_token());
-  }
-
-  template<typename RequestBody,
-            typename CompletionToken>
-  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, stream))
-  async_ropen(beast::http::verb method,
-              urls::url_view path,
-              RequestBody && body, request_parameters req,
-              CompletionToken && completion_token)
-  {
-    return connection_pool::async_ropen(method, path, std::forward<RequestBody>(body), std::move(req),
-                                        detail::with_defaulted_token<Token>(std::forward<CompletionToken>(completion_token)));
+    return connection_pool::async_borrow_connection(detail::with_defaulted_token<Token>(std::forward<CompletionToken>(completion_token)));
   }
 
   template<typename CompletionToken>
-  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, stream))
-  async_ropen(beast::http::verb method,
-              urls::pct_string_view path,
-              http::fields & headers,
-              source & src,
-              request_options opt,
-              cookie_jar * jar,
-              CompletionToken && completion_token )
+  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, typename detail::defaulted_helper<connection, Token>::type))
+  async_steal_connection(CompletionToken && completion_token)
   {
-    return connection_pool::async_ropen(method, path, headers, src, std::move(opt), jar,
-                                        detail::with_defaulted_token<Token>(std::forward<CompletionToken>(completion_token)));
+    return connection_pool::async_steal_connection(detail::with_defaulted_token<Token>(std::forward<CompletionToken>(completion_token)));
   }
 
-  template<typename RequestBody>
-  auto async_ropen(beast::http::verb method,
-                   urls::url_view path,
-                   RequestBody && body, request_parameters req)
+  auto async_borrow_connection()
   {
-    return async_ropen(method, path, std::forward<RequestBody>(body), std::move(req), default_token());
+    return this->async_borrow_connection(default_token());
   }
 
-  template<typename RequestBody>
-  auto async_ropen(http::request<RequestBody> & req,
-                   request_options opt,
-                   cookie_jar * jar = nullptr)
+  auto async_steal_connection()
   {
-    return async_ropen(req, std::move(opt), jar, default_token());
+    return this->async_steal_connection(default_token());
   }
 
 };

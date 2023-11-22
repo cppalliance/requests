@@ -9,7 +9,6 @@
 #define BOOST_REQUESTS_STREAM_HPP
 
 #include <boost/requests/detail/config.hpp>
-#include <boost/requests/detail/lock_guard.hpp>
 #include <boost/requests/fields/keep_alive.hpp>
 #include <boost/requests/http.hpp>
 #include <boost/requests/response.hpp>
@@ -143,7 +142,7 @@ struct stream
 
   bool done() const {return !parser_ ||  parser_->is_done();}
   explicit stream(executor_type executor, std::nullptr_t ) : executor_{executor}, impl_(nullptr) {}
-  explicit stream(executor_type executor, boost::intrusive_ptr<detail::connection_impl> impl)
+  explicit stream(executor_type executor, std::shared_ptr<detail::connection_impl> impl)
       : executor_{executor},
         impl_(std::move(impl))
   {}
@@ -160,8 +159,7 @@ struct stream
   }
  private:
   executor_type executor_;
-  boost::intrusive_ptr<detail::connection_impl> impl_;
-  detail::lock_guard lock_;
+  std::shared_ptr<detail::connection_impl> impl_;
 
   std::unique_ptr<http::response_parser<http::buffer_body>> parser_;
 

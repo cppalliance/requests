@@ -24,6 +24,9 @@ void stream::dump(system::error_code & ec)
   {
     parser_->get().body().data = data;
     parser_->get().body().size = sizeof(data);
+    if (parser_->chunked())
+      impl_->handle_chunked_.buffer_space = sizeof(data);
+
     impl_->do_read_some_(*parser_, ec);
 
     if (!ec && !parser_->is_done())
@@ -101,8 +104,17 @@ void stream::async_read_some_op::operator()(Self && self, system::error_code ec,
 
       this_->parser_->get().body().data = buffer.data();
       this_->parser_->get().body().size = buffer.size();
+      if (this_->parser_->chunked())
+      {
+        this_->impl_->handle_chunked_.chunked_body = {};
+        this_->impl_->handle_chunked_.buffer_space = buffer.size();
+      }
 
       BOOST_REQUESTS_YIELD this_->impl_->do_async_read_some_(*this_->parser_, std::move(self));
+      if (this_->parser_->chunked())
+        res = asio::buffer_copy(buffer,
+                                asio::buffer(this_->impl_->handle_chunked_.chunked_body,
+                                             this_->impl_->handle_chunked_.chunked_body.size()));
       if (!this_->parser_->is_done())
       {
         this_->parser_->get().body().more = true;
@@ -178,7 +190,7 @@ void stream::async_dump_op::operator()(Self && self, system::error_code ec, std:
     {
       this_->parser_->get().body().data = buffer;
       this_->parser_->get().body().size = BOOST_REQUESTS_CHUNK_SIZE;
-
+      this_->impl_->handle_chunked_.buffer_space = BOOST_REQUESTS_CHUNK_SIZE;
       BOOST_REQUESTS_YIELD this_->impl_->do_async_read_some_(*this_->parser_, std::move(self));
     }
 

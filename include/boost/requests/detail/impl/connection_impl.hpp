@@ -88,20 +88,18 @@ connection_impl::async_ropen(beast::http::verb method,
       std::ref(headers), std::ref(src), jar);
 }
 
+
 template<typename CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
                                    void (boost::system::error_code, stream))
-connection_impl::async_ropen(beast::http::verb method,
-                             urls::url_view path,
-                             http::fields & headers,
-                             source & src,
-                             cookie_jar * jar,
-                             CompletionToken && completion_token)
+connection_impl::async_upgrade(urls::pct_string_view path,
+                               http::fields & headers,
+                               cookie_jar * jar,
+                               CompletionToken && completion_token)
 {
-  return asio::async_initiate<CompletionToken, void (boost::system::error_code, stream)>(
-      &async_ropen_impl_url, completion_token,
-      this, method, path,
-      std::ref(headers), std::ref(src), jar);
+  return asio::async_initiate<CompletionToken, void (boost::system::error_code, websocket)>(
+      &async_upgrade_impl, completion_token,
+      this, path, std::ref(headers), jar);
 }
 
 }

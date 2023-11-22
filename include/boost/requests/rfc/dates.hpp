@@ -55,7 +55,7 @@ struct date_1123_t
             char const*& it,
             char const* end
     ) const noexcept ->
-    urls::error_types::result<value_type>;
+    system::result<value_type>;
 
 };
 
@@ -107,7 +107,7 @@ struct date_850_t
       char const*& it,
       char const* end
   ) const noexcept ->
-      urls::error_types::result<value_type>;
+      system::result<value_type>;
 
 };
 
@@ -153,7 +153,7 @@ struct date_asctime_t
       char const*& it,
       char const* end
   ) const noexcept ->
-      urls::error_types::result<value_type>;
+      system::result<value_type>;
 
 };
 
@@ -172,7 +172,7 @@ struct http_date_t
       char const*& it,
       char const* end
   ) const noexcept ->
-      urls::error_types::result<value_type>;
+      system::result<value_type>;
 
 };
 

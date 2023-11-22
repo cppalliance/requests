@@ -17,7 +17,7 @@ namespace boost {
 namespace requests {
 struct stream;
 
-struct connection : private detail::connection_owner
+struct connection
 {
   /// The type of the next layer.
   typedef asio::ssl::stream<asio::generic::stream_protocol::socket> next_layer_type;
@@ -73,14 +73,14 @@ struct connection : private detail::connection_owner
   /// Construct a stream.
   template<typename ExecutorOrContext>
   explicit connection(ExecutorOrContext && exec_or_ctx, asio::ssl::context & ctx)
-      : impl_(new detail::connection_impl(std::forward<ExecutorOrContext>(exec_or_ctx), ctx)) {}
+      : impl_(std::make_shared<detail::connection_impl>(std::forward<ExecutorOrContext>(exec_or_ctx), ctx)) {}
 
   template<typename ExecutionContext>
   explicit connection(ExecutionContext &context,
                       typename asio::constraint<
                           asio::is_convertible<ExecutionContext &, asio::execution_context &>::value
                           >::type = 0)
-      : impl_(new detail::connection_impl(context)) {}
+      : impl_(std::make_shared<detail::connection_impl>(context)) {}
 
   explicit connection(asio::any_io_executor exec) : impl_(new detail::connection_impl(std::move(exec))) {}
 
@@ -148,28 +148,6 @@ struct connection : private detail::connection_owner
   core::string_view host() const {return impl_->host();}
   constexpr static redirect_mode supported_redirect_mode() {return redirect_mode::endpoint;}
 
-  using request_type = request_parameters;
-
-  template<typename RequestBody>
-  auto ropen(beast::http::verb method,
-             urls::url_view path,
-             RequestBody && body,
-             request_parameters req,
-             system::error_code & ec) -> stream
-  {
-    return impl_->ropen(method, path, std::forward<RequestBody>(body), std::move(req), ec);
-  }
-
-  template<typename RequestBody>
-  auto ropen(beast::http::verb method,
-             urls::url_view path,
-             RequestBody && body,
-             request_parameters req) -> stream
-  {
-    return impl_->ropen(method, path, std::forward<RequestBody>(body), std::move(req));
-  }
-
-  BOOST_REQUESTS_DECL
   auto ropen(beast::http::verb method,
              urls::pct_string_view path,
              http::fields & headers,
@@ -180,7 +158,6 @@ struct connection : private detail::connection_owner
     return impl_->ropen(method, path, headers, src, jar, ec);
   }
 
-  BOOST_REQUESTS_DECL
   auto ropen(beast::http::verb method,
              urls::pct_string_view path,
              http::fields & headers,
@@ -188,20 +165,6 @@ struct connection : private detail::connection_owner
              cookie_jar * jar) -> stream
   {
     return impl_->ropen(method, path, headers, src, jar);
-  }
-
-  template<typename RequestBody,
-            typename CompletionToken>
-  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
-                                     void (boost::system::error_code, stream))
-  async_ropen(beast::http::verb method,
-              urls::url_view path,
-              RequestBody && body,
-              request_parameters req,
-              CompletionToken && completion_token)
-  {
-    return impl_->async_ropen(method, path, std::forward<RequestBody>(body),
-                             std::move(req), std::forward<CompletionToken>(completion_token));
   }
 
   template<typename CompletionToken>
@@ -212,28 +175,48 @@ struct connection : private detail::connection_owner
               urls::pct_string_view path,
               http::fields & headers,
               source & src,
-              request_options opt,
               cookie_jar * jar,
               CompletionToken && completion_token)
   {
-    return impl_->async_ropen(method, path, headers, src, std::move(opt), jar, std::forward<CompletionToken>(completion_token));
+    return impl_->async_ropen(method, path, headers, src, jar, std::forward<CompletionToken>(completion_token));
   }
   bool uses_ssl() const {return impl_->uses_ssl();}
   void use_ssl(bool use_ssl = true) {impl_->use_ssl(use_ssl);}
 
   operator bool() const {return impl_ != nullptr;}
 
+  websocket upgrade(
+      urls::pct_string_view path,
+      http::fields & headers,
+      cookie_jar * jar,
+      system::error_code & ec) &&
+  {
+    return impl_->upgrade(path, headers, jar, ec);
+  }
+
+
+  websocket upgrade(
+      urls::pct_string_view path,
+      http::fields & headers,
+      cookie_jar * jar) &&
+  {
+    return impl_->upgrade(path, headers, jar);
+  }
+
+  template<typename CompletionToken>
+  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, websocket))
+  async_upgrade(urls::pct_string_view path,
+                http::fields & headers,
+                cookie_jar * jar,
+                CompletionToken && completion_token) &&
+  {
+    return impl_->async_upgrade(path, headers, jar, std::forward<CompletionToken>(completion_token));
+  }
 
  private:
-  explicit connection(boost::intrusive_ptr<detail::connection_impl> impl) : impl_(std::move(impl)) {}
+  explicit connection(std::shared_ptr<detail::connection_impl> impl) : impl_(std::move(impl)) {}
 
-  boost::intrusive_ptr<detail::connection_impl> impl_;
-
-  BOOST_REQUESTS_DECL
-  void return_connection_(detail::connection_impl * conn) override {}
-  BOOST_REQUESTS_DECL
-  void drop_connection_(const detail::connection_impl * conn) override {}
-
+  std::shared_ptr<detail::connection_impl> impl_;
 
   friend struct connection_pool;
   friend struct stream;
@@ -318,6 +301,8 @@ struct connection::defaulted : connection
   {
     return this->async_ropen(req, std::move(opt), jar, default_token());
   }
+
+
 
 };
 

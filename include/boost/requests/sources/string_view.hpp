@@ -60,6 +60,8 @@ struct basic_string_view_source final : source
   }
 };
 
+using string_view_source = basic_string_view_source<char>;
+
 template<std::size_t N>
 source_ptr tag_invoke(make_source_tag, const char (&data)[N])
 {

@@ -151,7 +151,7 @@ date_1123_t::parse(
     char const*& it,
     char const* end
 ) const noexcept ->
-    urls::error_types::result<value_type>
+    system::result<value_type>
 {
   namespace ug = boost::urls::grammar;
   using namespace detail;
@@ -194,7 +194,7 @@ date_850_t::parse(
     char const*& it,
     char const* end
 ) const noexcept ->
-    urls::error_types::result<value_type>
+    system::result<value_type>
 {
   namespace ug = boost::urls::grammar;
   using namespace detail;
@@ -231,7 +231,7 @@ date_asctime_t::parse(
     char const*& it,
     char const* end
 ) const noexcept ->
-    urls::error_types::result<value_type>
+    system::result<value_type>
 {
   namespace ug = boost::urls::grammar;
   using namespace detail;
@@ -284,7 +284,7 @@ http_date_t::parse(
     char const*& it,
     char const* end
 ) const noexcept ->
-    urls::error_types::result<value_type>
+    system::result<value_type>
 {
   namespace ug = boost::urls::grammar;
   auto res = ug::parse(it, end, ug::variant_rule(date_1123, date_850, date_asctime ));

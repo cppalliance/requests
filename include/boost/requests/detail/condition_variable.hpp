@@ -38,9 +38,9 @@ struct condition_variable
 
   template<typename CompletionToken>
   auto
-  async_wait(std::unique_lock<std::mutex> & lock, CompletionToken && tk)
+  async_wait(std::mutex & mtx, CompletionToken && tk)
   {
-    return asio::async_compose<CompletionToken, void(system::error_code)>(async_wait_op{this, lock}, tk, timer_);
+    return asio::async_compose<CompletionToken, void(system::error_code)>(async_wait_op{this, mtx}, tk, timer_);
   }
 
   condition_variable& operator=(const condition_variable&) = delete;
@@ -80,7 +80,7 @@ struct condition_variable
   struct async_wait_op
   {
     condition_variable * this_;
-    std::unique_lock<std::mutex> & lock;
+    std::mutex & mtx;
     std::weak_ptr<int> indicator;
 
     template<typename Self>
@@ -88,13 +88,13 @@ struct condition_variable
     {
       indicator = this_->shutdown_indicator_;
       this_->timer_.async_wait(std::move(self));
-      lock.unlock();
+      mtx.unlock();
     }
 
     template<typename Self>
     void operator()(Self && self, system::error_code ec)
     {
-      lock.lock();
+      mtx.lock();
       if (!indicator.expired() && self.get_cancellation_state().cancelled() == asio::cancellation_type::none)
         ec.clear();
       self.complete(ec);

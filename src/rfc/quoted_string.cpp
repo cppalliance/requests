@@ -18,7 +18,7 @@ quoted_string_t::parse(
     char const*& it,
     char const* end
 ) const noexcept ->
-    urls::error_types::result<value_type>
+    system::result<value_type>
 {
   namespace ug = boost::urls::grammar;
 

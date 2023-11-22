@@ -15,21 +15,10 @@
 namespace boost {
 namespace requests {
 
-struct field_entry
-{
-  http::field field = http::field::unknown;
-  core::string_view key;
-  core::string_view value;
-  std::string buffer;
 
-  field_entry() = default;
-  field_entry(http::field field, core::string_view value) : field(field), value(value) {}
-  field_entry(core::string_view key, core::string_view value) : key(key), value(value) {}
 
-};
-
-inline field_entry basic_auth(core::string_view username,
-                              core::string_view password)
+inline http::header basic_auth(core::string_view username,
+                               core::string_view password)
 {
   auto sz = beast::detail::base64::encoded_size(username.size() + 1 + password.size());
   std::string res;
@@ -39,38 +28,26 @@ inline field_entry basic_auth(core::string_view username,
   const auto data = std::string(username) + ":" + std::string(password);
   beast::detail::base64::encode(&*itr, data.data(), data.size());
 
-  field_entry fe;
+  http::header fe;
   fe.field = http::field::authorization;
   fe.value = fe.buffer = std::move(res);
   return fe;
 }
 
 
-inline field_entry bearer(core::string_view token)
+inline http::header bearer(core::string_view token)
 {
-  field_entry fe;
+  http::header fe;
   fe.field = http::field::authorization;
   fe.value = fe.buffer = "Bearer " + std::string(token);
   return fe;
 }
 
-inline auto headers(std::initializer_list<field_entry> fields)
-  -> beast::http::fields
+
+
+struct request_parameters
 {
-  beast::http::fields f;
-  for (const auto & init : fields)
-    if (init.field != http::field::unknown)
-      f.set(init.field, init.value);
-    else
-      f.set(init.key, init.value);
-  return f;
-}
-
-
-struct request_parameters {
-  //Allocator
-  using fields_type = beast::http::fields;
-  fields_type fields;
+  http::headers headers;
   request_options opts{};
   cookie_jar * jar = nullptr;
 };
