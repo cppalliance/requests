@@ -213,7 +213,12 @@ struct async_request_stream_op : asio::coroutine
               request_parameters req,
               asio::any_io_executor executor)
           : s{std::move(executor), nullptr},
-            method(method), path(path), source(std::move(source)), req(std::move(req)) {}
+            method(method), source(std::move(source)), req(std::move(req))
+      {
+        // cache the string view
+        base.set_encoded_path(path);
+        path = base.encoded_path();
+      }
 
       stream s;
       source_ptr source;
@@ -336,7 +341,11 @@ struct async_request_stream_pool_op : asio::coroutine
               request_parameters req,
               asio::any_io_executor executor)
           : c{std::move(executor)},
-            method(method), path(path), source(std::move(source)), req(std::move(req)) {}
+            method(method), source(std::move(source)), req(std::move(req))
+      {
+        base.set_encoded_path(path);
+        path = base.encoded_path();
+      }
 
       connection c;
       stream s{c.get_executor(), nullptr};
@@ -478,7 +487,7 @@ struct async_request_stream_session_op : asio::coroutine
       urls::url new_url;
 
       http::verb method;
-      urls::url_view url;
+      urls::url url;
       request_options opts;
       http::headers headers;
 

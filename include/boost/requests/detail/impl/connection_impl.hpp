@@ -12,7 +12,6 @@
 #include <boost/requests/detail/config.hpp>
 #include <boost/requests/detail/defaulted.hpp>
 #include <boost/requests/detail/ssl.hpp>
-#include <boost/requests/fields/location.hpp>
 #include <boost/requests/request_parameters.hpp>
 #include <boost/requests/stream.hpp>
 #include <boost/requests/source.hpp>

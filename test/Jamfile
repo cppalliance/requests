@@ -16,11 +16,6 @@ requirements <include>../../..
 ;
 
 import testing ;
-
-
-alias asio     : ../../beast//lib-asio ;
-alias asio-ssl : ../../beast//lib-asio-ssl ;
-alias beast    : ../../beast//lib-beast ;
-alias ssl      : ../../beast//ssl ;
+using openssl ;
 
 run [ glob-tree *.cpp ] /boost//json /boost//url ssl asio asio-ssl beast /openssl//ssl ;

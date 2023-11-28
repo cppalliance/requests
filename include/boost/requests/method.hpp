@@ -24,7 +24,7 @@ constexpr bind_optional_request<http::verb::patch>   patch;
 constexpr bind_request<         http::verb::put>     put;
 constexpr bind_optional_request<http::verb::delete_> delete_;
 constexpr bind_empty_request<   http::verb::connect> connect;
-constexpr bind_request<         http::verb::options> options;
+constexpr bind_empty_request<   http::verb::options> options;
 constexpr bind_request<         http::verb::trace>   trace;
 
 
@@ -35,7 +35,7 @@ constexpr bind_optional_async_request<http::verb::patch>   async_patch;
 constexpr bind_async_request<         http::verb::put>     async_put;
 constexpr bind_optional_async_request<http::verb::delete_> async_delete;
 constexpr bind_empty_async_request<   http::verb::connect> async_connect;
-constexpr bind_async_request<         http::verb::options> async_options;
+constexpr bind_empty_async_request<   http::verb::options> async_options;
 constexpr bind_async_request<         http::verb::trace>   async_trace;
 
 }

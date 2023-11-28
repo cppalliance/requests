@@ -33,7 +33,7 @@ int main(int argc, char * argv[])
 
   // tag::motivatingExample[]
   auto r = requests::get(urls::url_view("https://httpbin.org/basic-auth/user/pass"),
-                         requests::headers({requests::basic_auth("user", "pass")}));
+                         requests::http::headers({requests::basic_auth("user", "pass")}));
 
   std::cout << r.result_code() << std::endl;
   // 200
@@ -43,7 +43,7 @@ int main(int argc, char * argv[])
   std::cout << r.string_view() << std::endl;
   // {"authenticated": true, ...
 
-  std::cout << as_json(r) << std::endl;
+  std::cout << requests::as_json(r) << std::endl;
   // {'authenticated': True, ...}
   // end::motivatingExample[]
   return 0;

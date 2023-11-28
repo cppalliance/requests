@@ -33,7 +33,7 @@ int main(int argc, char * argv[])
 {
   asio::io_context ctx;
   auto fr = requests::async_get(urls::url_view("https://httpbin.org/basic-auth/user/pass"),
-                                requests::headers({requests::basic_auth("user", "pass")}),
+                                requests::http::headers({requests::basic_auth("user", "pass")}),
                                 asio::bind_executor(ctx, asio::use_future));
 
   ctx.run();
@@ -47,7 +47,7 @@ int main(int argc, char * argv[])
   std::cout << r.string_view() << std::endl;
   // {"authenticated": true, ...
 
-  std::cout << as_json(r) << std::endl;
+  std::cout << requests::as_json(r) << std::endl;
   // {'authenticated': True, ...}
 
   return 0;
