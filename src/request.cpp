@@ -213,11 +213,8 @@ struct async_request_stream_op : asio::coroutine
               request_parameters req,
               asio::any_io_executor executor)
           : s{std::move(executor), nullptr},
-            method(method), source(std::move(source)), req(std::move(req))
+            method(method), source(std::move(source)), base(path), req(std::move(req))
       {
-        // cache the string view
-        base.set_encoded_path(path);
-        path = base.encoded_path();
       }
 
       stream s;
@@ -227,7 +224,6 @@ struct async_request_stream_op : asio::coroutine
       urls::url base, new_url;
 
       http::verb method;
-      urls::pct_string_view path;
       request_parameters req;
 
       beast::flat_buffer buffer;
@@ -256,10 +252,11 @@ struct async_request_stream_op : asio::coroutine
     {
       reenter(this)
       {
-        yield conn.async_ropen(state->method, state->path, state->req.headers, *state->source, state->req.jar, std::move(self));
+        yield conn.async_ropen(state->method, state->base.encoded_resource(), state->req.headers, *state->source, state->req.jar, std::move(self));
         if (!ec)
           state->s = std::move(variant2::get<2>(arg));
-        while (is_redirect(state->s.headers().result()))
+
+        while (is_redirect(state->s.headers().result()) && !ec)
         {
           yield state->s.async_read(state->buffer, std::move(self));
           {
@@ -282,7 +279,6 @@ struct async_request_stream_op : asio::coroutine
               state->base.set_scheme("unix");
             else
               state->base.set_scheme("unknown");
-            state->base.set_path(state->path);
             auto ref = urls::parse_uri_reference(loc_itr->value());
             if (ref.has_error())
             {
@@ -311,10 +307,10 @@ struct async_request_stream_op : asio::coroutine
               break ;
             }
 
-            state->path = state->new_url.encoded_resource();
+            state->base = std::move(state->new_url);
             state->source->reset();
           }
-          yield conn.async_ropen(state->method, state->path, state->req.headers, *state->source, state->req.jar, std::move(self));
+          yield conn.async_ropen(state->method, state->base.encoded_resource(), state->req.headers, *state->source, state->req.jar, std::move(self));
           state->s = std::move(variant2::get<2>(arg));
         }
       }
@@ -341,10 +337,8 @@ struct async_request_stream_pool_op : asio::coroutine
               request_parameters req,
               asio::any_io_executor executor)
           : c{std::move(executor)},
-            method(method), source(std::move(source)), req(std::move(req))
+            method(method), source(std::move(source)), base(path), req(std::move(req))
       {
-        base.set_encoded_path(path);
-        path = base.encoded_path();
       }
 
       connection c;
@@ -355,7 +349,6 @@ struct async_request_stream_pool_op : asio::coroutine
       urls::url base, new_url;
 
       http::verb method;
-      urls::pct_string_view path;
       request_parameters req;
 
       beast::flat_buffer buffer;
@@ -389,7 +382,7 @@ struct async_request_stream_pool_op : asio::coroutine
           goto pool_unavailable;
         state->c = variant2::get<3>(std::move(arg));
 
-        yield state->c.async_ropen(state->method, state->path, state->req.headers, *state->source, state->req.jar, std::move(self));
+        yield state->c.async_ropen(state->method, state->base.encoded_resource(), state->req.headers, *state->source, state->req.jar, std::move(self));
         while (is_redirect(state->s.headers().result()))
         {
           yield state->s.async_read(state->buffer, std::move(self));
@@ -414,7 +407,6 @@ struct async_request_stream_pool_op : asio::coroutine
               state->base.set_scheme("unix");
             else
               state->base.set_scheme("unknown");
-            state->base.set_path(state->path);
             auto ref = urls::parse_uri_reference(loc_itr->value());
             if (ref.has_error())
             {
@@ -442,10 +434,10 @@ struct async_request_stream_pool_op : asio::coroutine
               break ;
             }
 
-            state->path = state->new_url.encoded_resource();
+            state->base = std::move(state->new_url);
             state->source->reset();
           }
-          yield state->c.async_ropen(state->method, state->path, state->req.headers, *state->source, state->req.jar, std::move(self));
+          yield state->c.async_ropen(state->method, state->base.encoded_resource(), state->req.headers, *state->source, state->req.jar, std::move(self));
           state->s = std::move(variant2::get<2>(arg));
         }
       }
@@ -529,6 +521,7 @@ struct async_request_stream_session_op : asio::coroutine
         yield state->c.async_ropen(state->method, state->url.encoded_resource(),
                                    state->headers, *state->source, &sess.jar(), std::move(self));
         state->s = std::move(variant2::get<2>(arg));
+
         while (is_redirect(state->s.headers().result()))
         {
 

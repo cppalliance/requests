@@ -108,13 +108,20 @@ struct async_read_json_op : asio::coroutine
       {
         BOOST_REQUESTS_YIELD str.async_read_some(asio::buffer(state->buffer), std::move(self));
         if (ec)
+        {
+          state.reset();
           return self.complete(ec, nullptr);
+        }
         state->sp.write_some(state->buffer, n, ec);
       }
       if (!ec)
         state->sp.finish(ec);
       if (ec)
+      {
+        state.reset();
         return self.complete(ec, nullptr);
+      }
+
 
       auto r = state->sp.release();
       state.reset();

@@ -154,9 +154,9 @@ BOOST_COROUTINE_TEST_CASE(async_http)
 
   // headers
   {
-    auto hdr = request(hc, requests::http::verb::get, urls::url_view("/headers"),
-                       requests::empty{},
-                       {requests::http::headers({{"Test-Header", "it works"}}), {false}});
+    auto hdr = async_request(hc, requests::http::verb::get, urls::url_view("/headers"),
+                             requests::empty{},
+                             {requests::http::headers({{"Test-Header", "it works"}}), {false}}, yield);
 
     BOOST_CHECK_HTTP_RESULT(hdr.headers);
     auto hd = as_json(hdr).at("headers");
