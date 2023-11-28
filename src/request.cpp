@@ -293,9 +293,9 @@ struct async_request_stream_op : asio::coroutine
             }
 
             if (state->new_url.has_authority() &&
-                (conn.host() != state->new_url.encoded_host() ||
+                ((conn.host() != state->new_url.encoded_host()) ||
                 !same_endpoint_on_host(state->new_url, conn.endpoint())) ||
-                state->req.opts.redirect == requests::redirect_mode::none)
+                (state->req.opts.redirect == requests::redirect_mode::none))
             {
               BOOST_REQUESTS_ASSIGN_EC(ec, error::forbidden_redirect);
               break ;

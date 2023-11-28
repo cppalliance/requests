@@ -18,4 +18,33 @@ requirements <include>../../..
 import testing ;
 using openssl ;
 
-run [ glob-tree *.cpp ] /boost//json /boost//url ssl asio asio-ssl beast /openssl//ssl ;
+run main_test.cpp
+    fixtures/server.cpp
+    unit/detail/condition_variable.cpp
+    unit/connection.cpp
+    unit/connection_pool.cpp
+    unit/cookie_grammar.cpp
+    unit/cookie_jar.cpp
+    unit/fixed_token_rule.cpp
+    unit/form.cpp
+    unit/keep_alive.cpp
+    unit/link.cpp
+    unit/quoted_string.cpp
+    unit/raw_string.cpp
+    unit/redirect.cpp
+    unit/request_stream.cpp
+    unit/rfc.cpp
+    unit/service.cpp
+    unit/session.cpp
+    unit/source.cpp
+    unit/token_rule.cpp
+    /boost//requests /boost//context /boost//json /boost//url /boost//unit_test_framework /boost//filesystem /openssl//ssl /openssl//crypto 
+    : : : : unit-tests  ;
+
+run main_test.cpp
+    fixtures/httpbin.cpp
+    httpbin/cookie.cpp
+    httpbin/json.cpp
+    httpbin/method.cpp 
+    /boost//requests /boost//context /boost//json /boost//url /boost//unit_test_framework /boost//filesystem /openssl//ssl /openssl//crypto 
+    : : : : httpbin-tests  ;

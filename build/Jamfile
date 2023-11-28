@@ -17,10 +17,8 @@ project boost/requests
 alias requests_sources :
             detail/condition_variable.cpp
             detail/connection_impl.cpp
-            detail/mutex.cpp
             fields/keep_alive.cpp
             fields/link.cpp
-            fields/location.cpp
             fields/set_cookie.cpp
             rfc/dates.cpp
             rfc/link.cpp
@@ -38,6 +36,7 @@ alias requests_sources :
             public_suffix.cpp
             redirect.cpp
             request_options.cpp
+            request.cpp
             session.cpp
             stream.cpp
             ;
