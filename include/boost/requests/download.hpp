@@ -8,20 +8,20 @@
 #ifndef BOOST_REQUESTS_DOWNLOAD_HPP
 #define BOOST_REQUESTS_DOWNLOAD_HPP
 
-#include <boost/asio/buffer.hpp>
 #include <boost/requests/detail/config.hpp>
-#include <boost/requests/detail/faux_coroutine.hpp>
 #include <boost/requests/http.hpp>
 #include <boost/requests/service.hpp>
+#include <boost/asio/buffer.hpp>
+#include <boost/asio/dispatch.hpp>
 #include <boost/url/url_view.hpp>
 
 #if defined(BOOST_ASIO_HAS_FILE)
 #include <boost/asio/basic_stream_file.hpp>
 #else
+#include "request.hpp"
 #include <boost/beast/core/file.hpp>
 #endif
 
-#include <boost/asio/yield.hpp>
 
 namespace boost
 {
@@ -70,55 +70,74 @@ namespace detail
 template<typename Stream>
 struct async_write_to_file_op : asio::coroutine
 {
+  constexpr static const char * op_name = "async_write_to_file_op";
+
   using executor_type = typename std::decay_t<Stream>::executor_type;
-  executor_type get_executor() {return str.get_executor(); }
+  executor_type get_executor() {return state->str.get_executor(); }
 
   using completion_signature_type = void(system::error_code, std::size_t);
   using step_signature_type       = void(system::error_code, std::size_t);
 
-  Stream str;
-  asio::basic_stream_file<typename std::decay_t<Stream>::executor_type>  f{str.get_executor()};
-  const std::filesystem::path & file;
-  char buffer[BOOST_REQUESTS_CHUNK_SIZE];
+  const filesystem::path & file;
 
-  std::size_t written = 0u;
-  system::error_code ec_read;
+  struct state_t
+  {
+    state_t(Stream * str) : str(*str)) {}
+
+    Stream & str;
+    asio::basic_stream_file<typename std::decay_t<Stream>::executor_type>  f{str.get_executor()};
+    char buffer[BOOST_REQUESTS_CHUNK_SIZE];
+
+    std::size_t written = 0u;
+    system::error_code ec_read;
+  };
+
+  using allocator_type = asio::any_completion_handler_allocator<void, void(error_code)>;
+  std::unique_ptr<state_t, alloc_deleter<state_t, allocator_type>> state;
 
   template<typename Stream_>
-  async_write_to_file_op(Stream_ && str, const std::filesystem::path & pt)
-      : str(std::forward<Stream>(str)), file(pt)
+  async_write_to_file_op(allocator_type alloc, Stream_ * str, const filesystem::path & pt)
+      : file(pt), state(allocate_unique<state_t>(alloc, str))
   {
   }
 
-  std::size_t resume(requests::detail::faux_token_t<step_signature_type> self,
-                     system::error_code & ec, std::size_t n = 0u)
+  template<typename Self>
+  void operator()(Self && self, system::error_code ec = {}, std::size_t n = 0u)
   {
-    reenter(this)
+    auto st = state.get();
+    BOOST_ASIO_CORO_REENTER(this)
     {
-      f.open(file.string().c_str(), asio::file_base::write_only | asio::file_base::create, ec);
+      st->f.open(file.string().c_str(), asio::file_base::write_only | asio::file_base::create, ec);
       if (ec)
-        return 0u;
+      {
+        st->written = 0u;
+        break;
+      }
 
-      while (!str.done() && !ec)
+      while (!st->str.done() && !ec)
       {
         // KDM: this could be in parallel to write using parallel_group.
-        yield {
-          auto b = asio::buffer(buffer);
-          str.async_read_some(b, std::move(self));
+        BOOST_REQUESTS_YIELD {
+          auto b = asio::buffer(st->buffer);
+          st->str.async_read_some(b, std::move(self));
         }
 
         if (n == 0 && ec)
-          return written;
+          break;
 
-        ec_read = exchange(ec, {});
-        yield asio::async_write(f, asio::buffer(buffer, n), std::move(self));
+        st->ec_read = exchange(ec, {});
+        BOOST_REQUESTS_YIELD asio::async_write(st->f, asio::buffer(st->buffer, n), std::move(self));
 
-        written += n;
-        if (ec_read && !ec)
-          ec = ec_read;
+        st->written += n;
+        if (st->ec_read && !ec)
+          ec = st->ec_read;
       }
     }
-    return written;
+    if (is_complete())
+    {
+        state.reset();
+        self.complete(ec, st->written);
+    }
   }
 };
 
@@ -165,47 +184,82 @@ namespace detail
 template<typename Stream>
 struct async_write_to_file_op : asio::coroutine
 {
+  constexpr static const char * op_name = "async_write_to_file_op";
+
   using executor_type = typename std::decay_t<Stream>::executor_type;
-  executor_type get_executor() {return str.get_executor(); }
+  executor_type get_executor() {return state->str.get_executor(); }
 
   using completion_signature_type = void(system::error_code, std::size_t);
   using step_signature_type       = void(system::error_code, std::size_t);
 
-  Stream &str;
-  beast::file f;
   const filesystem::path & file;
-  char buffer[BOOST_REQUESTS_CHUNK_SIZE];
 
-  std::size_t written = 0u;
-
-  async_write_to_file_op(Stream * str, const filesystem::path & pt) : str(*str), file(pt) {}
-
-  std::size_t resume(requests::detail::faux_token_t<step_signature_type> self,
-                     system::error_code & ec, std::size_t n = 0u)
+  struct state_t
   {
-    reenter(this)
+    state_t(Stream * str) : str(*str) {}
+    Stream &str;
+    beast::file f;
+    char buffer[BOOST_REQUESTS_CHUNK_SIZE];
+
+    std::size_t written = 0u;
+  };
+
+  using allocator_type = asio::any_completion_handler_allocator<void, void(error_code, std::size_t)>;
+  std::unique_ptr<state_t, alloc_deleter<state_t, allocator_type>> state;
+
+
+  async_write_to_file_op(allocator_type alloc, Stream * str, const filesystem::path & pt)
+        : file(pt), state(allocate_unique<state_t>(alloc, str))  {}
+
+  template<typename Self>
+  void operator()(Self && self,
+                  system::error_code ec = {}, std::size_t n = 0u)
+  {
+    auto st = state.get();
+    BOOST_ASIO_CORO_REENTER(this)
     {
-      f.open(file.string().c_str(), beast::file_mode::write_new, ec);
+      state->f.open(file.string().c_str(), beast::file_mode::write_new, ec);
       if (ec)
-        return 0u;
-
-      while (!str.done() && !ec)
       {
-        yield str.async_read_some(asio::buffer(buffer), std::move(self));
+        state->written = 0u;
+        BOOST_REQUESTS_YIELD {
+          auto exec = asio::get_associated_immediate_executor(self, state->str.get_executor());
+          asio::dispatch(exec, std::move(self));
+        }
+        break;
+      }
 
+      while (!ec && !state->str.done())
+      {
+        BOOST_REQUESTS_YIELD state->str.async_read_some(asio::buffer(state->buffer), std::move(self));
         if (n == 0 && ec)
-          return written;
+          break;
 
         system::error_code ec_read = exchange(ec, {});
-        written += f.write(buffer, n, ec);
+        state->written += state->f.write(state->buffer, n, ec);
 
         if (ec_read && !ec)
           ec = ec_read;
       }
     }
-    return written;
+    if (is_complete())
+    {
+      state.reset();
+      self.complete(ec, st->written);
+    }
   }
 };
+
+template<typename Stream>
+void async_write_to_file_impl(
+    asio::any_completion_handler<void(boost::system::error_code, std::size_t)> handler,
+    Stream * str, const filesystem::path & file)
+{
+  return asio::async_compose<asio::any_completion_handler<void(boost::system::error_code, std::size_t)>,
+                             void(boost::system::error_code, std::size_t)>(
+      detail::async_write_to_file_op<Stream>{asio::get_associated_allocator(handler), str, file},
+      handler, str->get_executor());
+}
 
 }
 
@@ -220,8 +274,9 @@ BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_c
 async_write_to_file(Stream & str, const filesystem::path & file,
                     CompletionToken && completion_token BOOST_ASIO_DEFAULT_COMPLETION_TOKEN( typename Stream::executor_type))
 {
-  return requests::detail::faux_run<
-      detail::async_write_to_file_op<Stream>>(std::forward<CompletionToken>(completion_token), &str, file);
+  return asio::async_initiate<CompletionToken, void(boost::system::error_code, std::size_t)>(
+      &detail::async_write_to_file_impl<Stream>,
+      completion_token, &str, file);
 }
 
 template<typename Stream>
@@ -238,7 +293,7 @@ struct download_response : response_base
 {
   filesystem::path download_path;
 
-  download_response(allocator_type allocator = {}) : response_base(allocator) {}
+  download_response() = default;
 
   download_response(http::response_header header, response_base::history_type history, filesystem::path file) : response_base(std::move(header), std::move(history)), download_path(std::move(file)) {}
   download_response(response_base         header, filesystem::path file) : response_base(std::move(header)), download_path(std::move(file)) {}
@@ -253,28 +308,29 @@ struct download_response : response_base
 
 template<typename Connection>
 inline auto download(Connection & conn,
-                     urls::url_view target,
-                     typename Connection::request_type req,
+                     detail::target_view<Connection> target,
+                     detail::request_type<Connection> req,
                      filesystem::path download_path,
                      system::error_code & ec) -> download_response
 {
-  auto ro = conn.ropen(http::verb::get, target, empty{}, std::move(req), ec);
+  auto rh = request_stream(conn, http::verb::get, target, empty{}, std::move(req), ec);
+  auto & ro = rh.first;
   if (ec)
-    return download_response{std::move(ro).headers(), std::move(ro).history(), {}};
+    return download_response{std::move(ro).headers(), std::move(rh.second), {}};
 
-  if (filesystem::exists(download_path, ec) && filesystem::is_directory(download_path) && !target.empty())
+  if (filesystem::exists(download_path, ec) && filesystem::is_directory(download_path, ec) && !target.empty())
     download_path /= target.segments().back(); // so we can download to a folder
-
+  ec.clear();
   if (!ec)
     write_to_file(ro, download_path, ec);
-  return download_response{std::move(ro).headers(), std::move(ro).history(), std::move(download_path)};
+  return download_response{std::move(ro).headers(), std::move(rh.second), std::move(download_path)};
 }
 
 
 template<typename Connection>
 inline auto download(Connection & conn,
                      urls::url_view target,
-                     typename Connection::request_type req,
+                     detail::request_type<Connection> req,
                      filesystem::path download_path) -> download_response
 {
   boost::system::error_code ec;
@@ -307,58 +363,93 @@ namespace detail
 template<typename Connection>
 struct async_download_op : asio::coroutine
 {
+
+  constexpr static const char * op_name = "async_download_op";
   using executor_type = typename Connection::executor_type;
-  executor_type get_executor() {return conn.get_executor(); }
+  executor_type get_executor() {return state->str.get_executor(); }
 
-  Connection & conn;
-  urls::url_view target;
-  typename Connection::request_type req;
-  filesystem::path download_path;
 
-  async_download_op(Connection * conn,
-                    urls::url_view target,
-                    typename Connection::request_type req,
-                    filesystem::path download_path)
-      : conn(*conn), target(target), req(std::move(req)), download_path(std::move(download_path)) {}
-
-  download_response rb{req.get_allocator()};
-  optional<stream> str_;
-
-  using completion_signature_type = void(system::error_code, download_response);
-  using step_signature_type       = void(system::error_code, optional<stream>);
-
-  download_response & resume(requests::detail::faux_token_t<step_signature_type> self,
-                          system::error_code & ec,
-                          optional<stream> s = none)
+  struct state_t
   {
-    reenter(this)
+    Connection & conn;
+    urls::url_view target;
+    detail::request_type<Connection> req;
+    filesystem::path download_path;
+
+    download_response rb{};
+    optional<stream> str_;
+
+    state_t(Connection * conn,
+            urls::url_view target,
+            detail::request_type<Connection> req,
+            filesystem::path download_path)
+        : conn(*conn), target(target), req(std::move(req)), download_path(std::move(download_path)) {}
+  };
+
+  using allocator_type = asio::any_completion_handler_allocator<void, void(error_code, download_response)>;
+  std::unique_ptr<state_t, alloc_deleter<state_t, allocator_type>> state;
+
+
+  async_download_op(allocator_type alloc, Connection * conn,
+                    urls::url_view target,
+                    detail::request_type<Connection> req,
+                    filesystem::path download_path)
+      : state(allocate_unique<state_t>(alloc, conn, target, req, std::move(download_path)))
+  {}
+
+  template<typename Self>
+  void operator()(Self && self,
+                  system::error_code ec = {},
+                  variant2::variant<variant2::monostate, stream, std::size_t> s = variant2::monostate{},
+                  history hist = {})
+  {
+    auto st = state.get();
+    BOOST_ASIO_CORO_REENTER(this)
     {
-      yield conn.async_ropen(http::verb::get, target, empty{}, std::move(req), std::move(self));
+      BOOST_REQUESTS_YIELD async_request_stream(st->conn, http::verb::get, st->target, empty{},
+                                                std::move(st->req), std::move(self));
+      st->rb.history = std::move(hist);
       if (ec)
       {
-        rb.history = std::move(*s).history();
-        rb.headers = std::move(*s).headers();
-        return rb;
+        st->rb.headers = std::move(variant2::get<1>(s)).headers();
+        break;
       }
-      str_ = std::move(s);
-      if (filesystem::exists(download_path, ec) && filesystem::is_directory(download_path, ec) && !target.segments().empty())
-        rb.download_path = download_path / target.segments().back(); // so we can download to a folder
+      st->str_.emplace(std::move(variant2::get<1>(s)));
+      if (filesystem::exists(st->download_path, ec) && filesystem::is_directory(st->download_path, ec) && !st->target.segments().empty())
+        st->rb.download_path = st->download_path / st->target.segments().back(); // so we can download to a folder
       else
-        rb.download_path = std::move(download_path);
-
+        st->rb.download_path = std::move(st->download_path);
+      ec.clear();
       if (!ec)
       {
-        yield async_write_to_file(*str_, rb.download_path,
+        BOOST_REQUESTS_YIELD async_write_to_file(*st->str_, st->rb.download_path,
                           asio::deferred([](system::error_code ec, std::size_t){return asio::deferred.values(ec);}))
                 (std::move(self));
       }
 
-      rb.history = std::move(*str_).history();
-      rb.headers = std::move(*str_).headers();
+      st->rb.headers = std::move(*st->str_).headers();
     }
-    return rb;
+    if (is_complete())
+    {
+        auto rr = std::move(st->rb);
+        state.reset();
+        self.complete(ec, std::move(rr));
+    }
   }
 };
+
+template<typename Connection>
+void async_download_impl(
+    asio::any_completion_handler<void (boost::system::error_code, download_response)> handler,
+    Connection * conn, urls::url_view target, detail::request_type<Connection> req, filesystem::path download_path)
+{
+  return asio::async_compose<asio::any_completion_handler<void (boost::system::error_code, download_response)>,
+                             void(boost::system::error_code, download_response)>(
+      detail::async_download_op<Connection>{
+          asio::get_associated_allocator(handler),
+          conn, target, std::move(req), std::move(download_path)},
+      handler, conn->get_executor());
+}
 
 }
 
@@ -369,13 +460,13 @@ template<typename Connection,
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code, download_response))
 async_download(Connection & conn,
                urls::url_view target,
-               typename Connection::request_type req,
+               detail::request_type<Connection> req,
                filesystem::path download_path,
                CompletionToken && completion_token = typename Connection::default_token())
 {
-  return detail::faux_run<detail::async_download_op<Connection>>(
-          std::forward<CompletionToken>(completion_token),
-          &conn, target, std::move(req), std::move(download_path));
+  return asio::async_initiate<CompletionToken, void(boost::system::error_code, download_response)>(
+      &detail::async_download_impl<Connection>, completion_token,
+      &conn, target, std::move(req), std::move(download_path));
 }
 
 namespace detail
@@ -414,6 +505,5 @@ async_download(urls::url_view path,
 }
 }
 
-#include <boost/asio/unyield.hpp>
 
 #endif // BOOST_REQUESTS_DOWNLOAD_HPP

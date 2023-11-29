@@ -21,10 +21,6 @@ endif()
 
 option(BOOST_REQUESTS_BUILD_INLINE "Configure as if part of the boost source tree" ${BOOST_REQUESTS_SHOULD_BE_INLINE})
 
-
-if(BOOST_REQUESTS_IS_ROOT)
-    include(CTest)
-endif()
 if(NOT BOOST_SUPERPROJECT_VERSION)
     option(BOOST_REQUESTS_INSTALL "Install boost::requests files" ON)
     option(BOOST_REQUESTS_BUILD_TESTS "Build boost::requests tests" ${BUILD_TESTING})
@@ -38,19 +34,36 @@ if(BOOST_REQUESTS_IS_ROOT AND BOOST_REQUESTS_BUILD_INLINE)
     #
     # Building inside Boost tree, but as a separate project e.g. on Travis or
     # other CI, or when producing Visual Studio Solution and Projects.
-
-    set(BOOST_INCLUDE_LIBRARIES REQUESTS)
-    set(BOOST_EXCLUDE_LIBRARIES REQUESTS)
+    set(BOOST_INCLUDE_LIBRARIES requests)
+    set(BOOST_EXCLUDE_LIBRARIES requests)
 
     set(CMAKE_FOLDER _deps)
     add_subdirectory(../.. _deps/boost EXCLUDE_FROM_ALL)
     unset(CMAKE_FOLDER)
 endif()
 
+find_package(Threads REQUIRED)
+
 if (NOT BOOST_REQUESTS_BUILD_INLINE)
-    find_package(Threads REQUIRED)
-    find_package(Boost REQUIRED atomic container filesystem system json url)
+    find_package(Boost REQUIRED atomic container filesystem system json url unit_test_framework context)
     include_directories(include)
+endif()
+
+
+#-------------------------------------------------------------------------------
+#
+# OpenSSL
+#
+#-------------------------------------------------------------------------------
+
+
+if (APPLE AND NOT DEFINED ENV{OPENSSL_ROOT_DIR})
+    find_program(HOMEBREW brew)
+    if (NOT HOMEBREW STREQUAL "HOMEBREW-NOTFOUND")
+        execute_process(COMMAND brew --prefix openssl
+                OUTPUT_VARIABLE OPENSSL_ROOT_DIR
+                OUTPUT_STRIP_TRAILING_WHITESPACE)
+    endif()
 endif()
 
 find_package(OpenSSL)
@@ -58,11 +71,55 @@ if (NOT MSVC)
     link_libraries(${OPENSSL_LIBRARIES})
 endif()
 
-add_library(boost_requests src/src.cpp)
+add_library(boost_requests
+        src/detail/condition_variable.cpp
+        src/detail/connection_impl.cpp
+        src/fields/keep_alive.cpp
+        src/fields/link.cpp
+        src/fields/set_cookie.cpp
+        src/rfc/dates.cpp
+        src/rfc/link.cpp
+        src/rfc/quoted_string.cpp
+        src/sources/buffer.cpp
+        src/sources/empty.cpp
+        src/sources/file.cpp
+        src/sources/form.cpp
+        src/sources/json.cpp
+        src/connection_pool.cpp
+        src/cookie_jar.cpp
+        src/error.cpp
+        src/json.cpp
+        src/mime_types.cpp
+        src/public_suffix.cpp
+        src/redirect.cpp
+        src/request.cpp
+        src/request_options.cpp
+        src/session.cpp
+        src/stream.cpp)
 target_include_directories(boost_requests PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
-target_link_libraries(boost_requests PUBLIC
-        Boost::container Boost::url Boost::system Boost::json
-        OpenSSL::SSL OpenSSL::Crypto Threads::Threads)
+
+
+if (BOOST_ASYNC_BUILD_INLINE)
+    target_link_libraries(
+        boost_requests
+            PUBLIC
+                Boost::beast)
+endif()
+
+target_link_libraries(
+        boost_requests
+        PUBLIC
+        Boost::container
+        Boost::filesystem
+        Boost::json
+        Boost::system
+        Boost::url
+        OpenSSL::SSL
+        OpenSSL::Crypto
+        Threads::Threads)
+
+
+target_compile_definitions(boost_requests PRIVATE BOOST_REQUESTS_SOURCE=1)
 target_compile_definitions(boost_requests PUBLIC BOOST_REQUESTS_SEPARATE_COMPILATION=1 BOOST_FILESYSTEM_NO_DEPRECATED=1)
 add_library(Boost::requests ALIAS boost_requests)
 
@@ -80,6 +137,9 @@ if(BOOST_REQUESTS_INSTALL AND NOT BOOST_SUPERPROJECT_VERSION)
             )
 endif()
 
+if (OPENSSL_FOUND)
+    include_directories(${OPENSSL_INCLUDE_DIR})
+endif()
 
 if(BOOST_REQUESTS_BUILD_TESTS)
     add_subdirectory(test)

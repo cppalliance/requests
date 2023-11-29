@@ -6,7 +6,8 @@
 #define BOOST_REQUESTS_SOURCES_JSON_HPP
 
 #include <boost/requests/source.hpp>
-#include <boost/json/fwd.hpp>
+#include <boost/json/value.hpp>
+#include <boost/json/serializer.hpp>
 
 namespace boost
 {
@@ -29,23 +30,6 @@ struct json_source : source
   core::string_view default_content_type() override {return "application/json";}
 };
 
-template<typename Json>
-auto tag_invoke(const make_source_tag&, Json && f)
-    -> std::enable_if_t<
-        std::is_same<std::decay_t<Json>, json::value>::value ||
-        std::is_same<std::decay_t<Json>, json::array>::value ||
-        std::is_same<std::decay_t<Json>, json::object>::value ||
-        std::is_same<std::decay_t<Json>, json::string>::value,
-        json_source>
-{
-  return {std::forward<Json>(f)};
-}
-
 }
 }
-
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/sources/impl/json.ipp>
-#endif
-
 #endif //BOOST_REQUESTS_SOURCES_JSON_HPP

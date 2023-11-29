@@ -18,7 +18,6 @@
 #include <boost/beast/http/parser.hpp>
 #include <boost/beast/http/status.hpp>
 #include <boost/beast/http/verb.hpp>
-#include <boost/container/pmr/polymorphic_allocator.hpp>
 
 namespace boost {
 namespace requests {
@@ -30,21 +29,36 @@ using boost::beast::http::status_class;
 using boost::beast::http::to_status_class;
 using boost::beast::http::to_string;
 using boost::beast::http::verb;
-using fields = boost::beast::http::basic_fields<boost::container::pmr::polymorphic_allocator<char>>;
+using boost::beast::http::fields;
 
-using file_body   = beast::http::file_body;
-using empty_body   = beast::http::empty_body;
-using string_body = beast::http::string_body;
-using buffer_body = beast::http::buffer_body;
+struct header
+{
+  http::field field = http::field::unknown;
+  core::string_view key;
+  core::string_view value;
+  std::string buffer;
 
-using request_header  = beast::http::request_header <fields>;
-using response_header = beast::http::response_header<fields>;
+  header() = default;
+  header(http::field field, core::string_view value) : field(field), value(value) {}
+  header(core::string_view key, core::string_view value) : key(key), value(value) {}
+};
 
-template<typename Body> using request  = beast::http::request <Body, fields>;
-template<typename Body> using response = beast::http::response<Body, fields>;
+struct headers : fields
+{
+  headers(std::initializer_list<header> fields)
+  {
+    for (const auto & init : fields)
+      if (init.field != http::field::unknown)
+        set(init.field, init.value);
+      else
+        set(init.key, init.value);
+  }
+  headers(fields && fl) : fields(std::move(fl)) {}
+  using fields::fields;
+  using fields::operator=;
+};
 
-template<typename Body> using request_parser  = beast::http::request_parser <Body, boost::container::pmr::polymorphic_allocator<char>>;
-template<typename Body> using response_parser = beast::http::response_parser<Body, boost::container::pmr::polymorphic_allocator<char>>;
+using response_header = beast::http::response_header<boost::beast::http::fields>;
 
 }
 

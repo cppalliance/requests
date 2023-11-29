@@ -4,33 +4,41 @@ project boost/requests
       <define>BOOST_FILESYSTEM_NO_DEPRECATED=1
       <link>shared:<define>BOOST_REQUESTS_DYN_LINK=1
       <link>static:<define>BOOST_REQUESTS_STATIC_LINK=1
-      <define>BOOST_REQUESTS_SOURCE
+      <define>BOOST_REQUESTS_SOURCE=1
       <define>BOOST_FILESYSTEM_NO_DEPRECATED=1
+      <define>BOOST_JSON_SOURCE
     : usage-requirements
       <link>shared:<define>BOOST_REQUESTS_DYN_LINK=1
       <link>static:<define>BOOST_REQUESTS_STATIC_LINK=1
     : source-location ../src
     ;
 
-alias requests_deps
-   : usage-requirements
-     <library>/boost//container/<warnings-as-errors>off
-   ;
 
-alias requests_sources
-   : src.cpp
-   : usage-requirements
-     <library>/boost//container/<warnings-as-errors>off
-   ;
-
-explicit requests_deps requests_sources ;
-
-
-lib boost_requests
-   : requests_sources
-   : usage-requirements
-      <library>/boost//container/<warnings-as-errors>off
-
-   ;
-
+alias requests_sources :
+            detail/condition_variable.cpp
+            detail/connection_impl.cpp
+            fields/keep_alive.cpp
+            fields/link.cpp
+            fields/set_cookie.cpp
+            rfc/dates.cpp
+            rfc/link.cpp
+            rfc/quoted_string.cpp
+            sources/buffer.cpp
+            sources/empty.cpp
+            sources/file.cpp
+            sources/form.cpp
+            sources/json.cpp
+            connection_pool.cpp
+            cookie_jar.cpp
+            error.cpp
+            json.cpp
+            mime_types.cpp
+            public_suffix.cpp
+            redirect.cpp
+            request_options.cpp
+            request.cpp
+            session.cpp
+            stream.cpp
+            ;
+lib boost_requests : requests_sources /openssl//ssl ;
 boost-install boost_requests ;

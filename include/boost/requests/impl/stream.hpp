@@ -8,13 +8,13 @@
 #ifndef BOOST_REQUESTS_IMPL_STREAM_HPP
 #define BOOST_REQUESTS_IMPL_STREAM_HPP
 
+#include <boost/requests/stream.hpp>
+#include <boost/requests/detail/connection_impl.hpp>
+
+#include <boost/asio/compose.hpp>
 #include <boost/asio/read_until.hpp>
 #include <boost/asio/redirect_error.hpp>
-#include <boost/beast/core/buffer_ref.hpp>
-#include <boost/requests/keep_alive.hpp>
-#include <boost/requests/stream.hpp>
 
-#include <boost/asio/yield.hpp>
 
 namespace boost
 {
@@ -42,10 +42,15 @@ std::size_t stream::read_some(const MutableBuffer & buffer, system::error_code &
 
   parser_->get().body().data = itr->data();
   parser_->get().body().size = itr->size();
+  if (parser_->chunked())
+  {
+    impl_->handle_chunked_.chunked_body = {};
+    impl_->handle_chunked_.buffer_space = itr->size();
+  }
 
   auto res = impl_->do_read_some_(*parser_, ec);
-
-
+  if (parser_->chunked())
+    res = asio::buffer_copy(*itr, asio::buffer(impl_->handle_chunked_.chunked_body, impl_->handle_chunked_.chunked_body.size()));
   if (!parser_->is_done())
   {
     parser_->get().body().more = true;
@@ -55,8 +60,7 @@ std::size_t stream::read_some(const MutableBuffer & buffer, system::error_code &
   else
   {
     parser_->get().body().more = false;
-    bool should_close = interpret_keep_alive_response(impl_->keep_alive_set_, parser_->get(), ec);
-    if (should_close)
+    if (!parser_->get().keep_alive())
     {
       boost::system::error_code ec_;
       impl_->do_close_(ec_);
@@ -85,7 +89,14 @@ std::size_t stream::read(DynamicBuffer & buffer, system::error_code & ec)
   std::size_t res = 0u;
   while (!ec && !parser_->is_done())
   {
-    auto n = read_some(buffer.prepare(parser_->content_length_remaining().value_or(BOOST_REQUESTS_CHUNK_SIZE)), ec);
+    auto max_size = (std::min)(parser_->content_length_remaining().value_or(BOOST_REQUESTS_CHUNK_SIZE),
+                               buffer.max_size() - buffer.size());
+    if (buffer.max_size() - buffer.size() == 0u)
+    {
+      BOOST_REQUESTS_ASSIGN_EC(ec, beast::http::error::need_buffer);
+      return res;
+    }
+    auto n = read_some(buffer.prepare(max_size), ec);
     buffer.commit(n);
     res += n;
   }
@@ -95,8 +106,7 @@ std::size_t stream::read(DynamicBuffer & buffer, system::error_code & ec)
   else
   {
     parser_->get().body().more = false;
-    bool should_close = interpret_keep_alive_response(impl_->keep_alive_set_, parser_->get(), ec);
-    if (should_close)
+    if (!parser_->get().keep_alive())
     {
       boost::system::error_code ec_;
       impl_->do_close_(ec_);
@@ -109,30 +119,24 @@ std::size_t stream::read(DynamicBuffer & buffer, system::error_code & ec)
 template<typename DynamicBuffer>
 struct stream::async_read_op : asio::coroutine
 {
+  constexpr static const char * op_name = "stream::async_read_op";
   using executor_type = asio::any_io_executor;
   executor_type get_executor() {return this_->get_executor(); }
 
   stream * this_;
   DynamicBuffer & buffer;
 
-  template<typename DynamicBuffer_>
-  async_read_op(stream * this_, DynamicBuffer_ && buffer) : this_(this_), buffer(buffer)
+  async_read_op(stream * this_, DynamicBuffer & buffer) : this_(this_), buffer(buffer)
   {
   }
 
-  using lock_type = detail::lock_guard;
-  lock_type lock;
   system::error_code ec_;
   std::size_t res = 0u;
 
-
-  using completion_signature_type = void(system::error_code, std::size_t);
-  using step_signature_type       = void(system::error_code, std::size_t);
-
-  std::size_t resume(requests::detail::faux_token_t<step_signature_type> self,
-                     system::error_code & ec, std::size_t n = 0u)
+  template<typename Self>
+  void operator()(Self && self, error_code ec = {}, std::size_t n = 0u)
   {
-    reenter(this)
+    BOOST_ASIO_CORO_REENTER(this)
     {
       if (!this_->parser_)
         BOOST_REQUESTS_ASSIGN_EC(ec, asio::error::not_connected)
@@ -147,9 +151,12 @@ struct stream::async_read_op : asio::coroutine
 
       while (!ec && !this_->parser_->is_done())
       {
-        yield this_->async_read_some(
-            buffer.prepare(this_->parser_->content_length_remaining().value_or(BOOST_REQUESTS_CHUNK_SIZE)),
-            std::move(self));
+        BOOST_REQUESTS_YIELD
+        {
+          auto max_size = (std::min)(this_->parser_->content_length_remaining().value_or(BOOST_REQUESTS_CHUNK_SIZE),
+                                     buffer.max_size() - buffer.size());
+          this_->async_read_some(buffer.prepare(max_size), std::move(self));
+        }
         buffer.commit(n);
         res += n;
       }
@@ -162,17 +169,16 @@ struct stream::async_read_op : asio::coroutine
       else
       {
         this_->parser_->get().body().more = false;
-        if (interpret_keep_alive_response(this_->impl_->keep_alive_set_, this_->parser_->get(), ec))
+        if (this_->parser_->get().keep_alive())
         {
           std::swap(ec, ec_);
-          yield this_->impl_->do_async_close_(std::move(self));
+          BOOST_REQUESTS_YIELD this_->impl_->do_async_close_(std::move(self));
           std::swap(ec, ec_);
         }
       }
-
-      return res;
     }
-    return 0u;
+    if (is_complete())
+      self.complete(ec, res);
   }
 
 };
@@ -186,42 +192,10 @@ stream::async_read(
     DynamicBuffer & buffers,
     CompletionToken && token)
 {
-  return detail::faux_run<async_read_op<DynamicBuffer>>(std::forward<CompletionToken>(token), this, buffers);
+  return asio::async_compose<CompletionToken, void(error_code, std::size_t)>(
+          async_read_op<DynamicBuffer>{this, buffers},
+          token, get_executor());
 }
-
-struct stream::async_read_some_op : asio::coroutine
-{
-  using executor_type = asio::any_io_executor;
-  executor_type get_executor() {return this_->get_executor(); }
-
-  stream * this_;
-  asio::mutable_buffer buffer;
-
-  template<typename MutableBufferSequence>
-  async_read_some_op(stream * this_, const MutableBufferSequence & buffer) : this_(this_)
-  {
-    auto itr = boost::asio::buffer_sequence_begin(buffer);
-    const auto end = boost::asio::buffer_sequence_end(buffer);
-
-    while (itr != end)
-    {
-      if (itr->size() != 0u)
-      {
-        this->buffer = *itr;
-        break;
-      }
-    }
-  }
-  system::error_code ec_;
-
-  using completion_signature_type = void(system::error_code, std::size_t);
-  using step_signature_type       = void(system::error_code, std::size_t);
-
-  BOOST_REQUESTS_DECL
-  std::size_t resume(requests::detail::faux_token_t<step_signature_type> self,
-                     system::error_code & ec, std::size_t res = 0u);
-
-};
 
 template<
     typename MutableBufferSequence,
@@ -231,47 +205,36 @@ stream::async_read_some(
     const MutableBufferSequence & buffers,
     CompletionToken && token)
 {
-  return detail::faux_run<async_read_some_op>(std::forward<CompletionToken>(token), this, buffers);
+  return asio::async_initiate<CompletionToken, void(error_code, std::size_t)>(
+      [this](asio::any_completion_handler<void(error_code, std::size_t)> handler,
+         const MutableBufferSequence & buffers)
+      {
+        auto itr = boost::asio::buffer_sequence_begin(buffers);
+        const auto end = boost::asio::buffer_sequence_end(buffers);
+
+        asio::mutable_buffer buffer;
+        while (itr != end)
+        {
+          if (itr->size() != 0u)
+          {
+            buffer = *itr;
+            break;
+          }
+        }
+        async_read_some_impl(std::move(handler), buffer);
+      }, token, buffers);
 }
 
 
-struct stream::async_dump_op : asio::coroutine
-{
-  using executor_type = asio::any_io_executor;
-  executor_type get_executor() {return this_->get_executor(); }
-
-  stream * this_;
-
-  char buffer[BOOST_REQUESTS_CHUNK_SIZE];
-  system::error_code ec_;
-
-  async_dump_op(stream * this_) : this_(this_) {}
-
-  using completion_signature_type = void(system::error_code);
-  using step_signature_type       = void(system::error_code, std::size_t);
-
-  BOOST_REQUESTS_DECL
-  void resume(requests::detail::faux_token_t<step_signature_type> self,
-              system::error_code ec = {}, std::size_t n = 0u);
-};
 
 template<BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code)) CompletionToken>
 BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (boost::system::error_code))
 stream::async_dump(CompletionToken && token)
 {
-  return detail::faux_run<async_dump_op>(std::forward<CompletionToken>(token), this);
+  return asio::async_initiate<CompletionToken, void(error_code)>(&async_dump_impl, token, this);
 }
-
-
-
 
 }
 }
-
-#include <boost/asio/unyield.hpp>
-
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/impl/stream.ipp>
-#endif
 
 #endif // BOOST_REQUESTS_IMPL_STREAM_HPP

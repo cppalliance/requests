@@ -86,10 +86,4 @@ auto unquote_string(
 }
 }
 
-
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/rfc/impl/quoted_string.ipp>
-#endif
-
-
 #endif // BOOST_REQUESTS_RFC_QUOTED_STRING_HPP

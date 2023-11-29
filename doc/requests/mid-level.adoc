@@ -66,16 +66,15 @@ or can pass in an `http::request` by reference.
 
 [source,cpp]
 ----
-auto s = requests::default_session().ropen(
-    requests::http::get, 
-    urls::url_view("https://boost.org/index.html"), 
-    requests::empty{});
+auto s = request_stream(requests::default_session(),
+                        requests::http::get,
+                        urls::url_view("https://boost.org/index.html"),
+                        requests::empty{});
 ----
-
 
 
 ## compile time optimization
 
-The library optimizes compile times as much as possible without to much overhead. 
+The library optimizes compile times as much as possible without too much overhead.
 Because of that, everything uses a `asio::generic::socket` with an `asio::any_io_executor`,
 to avoid templating everything.

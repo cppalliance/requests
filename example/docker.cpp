@@ -26,13 +26,13 @@ int main(int argc, char * argv[])
   sock.connect(asio::local::stream_protocol::endpoint{url.path()});
   sock.set_host("localhost");
 
-  auto res = requests::json::get<json::array>(sock, urls::url_view{"/containers/json"});
+  auto res = requests::json::get(sock, urls::url_view{"/containers/json"});
 
   // list all containers
   std::cout << "Response: " << res.headers << std::endl;
-  std::cout << "Amount of containers: " << res.value.size() << std::endl;
+  std::cout << "Amount of containers: " << res.value.as_array().size() << std::endl;
 
-  for (auto val : res.value)
+  for (auto val : res.value.as_array())
     std::cout << "Container[" << val.at("Id") << "]: " << json::serialize(val.at("Names")) << std::endl;
 
 

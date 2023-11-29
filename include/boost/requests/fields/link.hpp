@@ -79,10 +79,4 @@ BOOST_REQUESTS_DECL system::result<urls::grammar::range<link>> parse_link_field(
 }
 }
 
-
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/fields/impl/link.ipp>
-#endif
-
-
 #endif // BOOST_REQUESTS_FIELDS_LINK_HPP

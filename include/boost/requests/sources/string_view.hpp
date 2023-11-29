@@ -60,39 +60,41 @@ struct basic_string_view_source final : source
   }
 };
 
+using string_view_source = basic_string_view_source<char>;
+
 template<std::size_t N>
-basic_string_view_source<char> tag_invoke(make_source_tag, const char (&data)[N])
+source_ptr tag_invoke(make_source_tag, const char (&data)[N])
 {
-  return basic_string_view_source<char>(data);
+  return std::make_shared<basic_string_view_source<char>>(data);
 }
 
 template<typename Char>
-basic_string_view_source<Char> tag_invoke(make_source_tag, const core::basic_string_view<Char> & data)
+source_ptr tag_invoke(make_source_tag, const core::basic_string_view<Char> & data)
 {
-  return basic_string_view_source<Char>(std::move(data));
+  return std::make_shared<basic_string_view_source<Char>>(std::move(data));
 }
 
 template<typename Char>
-basic_string_view_source<Char> tag_invoke(make_source_tag, core::basic_string_view<Char> && data) = delete;
+source_ptr tag_invoke(make_source_tag, core::basic_string_view<Char> && data) = delete;
 
 template<typename Char, typename Traits>
-basic_string_view_source<Char> tag_invoke(make_source_tag, const boost::basic_string_view<Char, Traits> & data)
+source_ptr tag_invoke(make_source_tag, const boost::basic_string_view<Char, Traits> & data)
 {
-  return basic_string_view_source<Char>(std::move(data));
+  return std::make_shared<basic_string_view_source<Char>>(std::move(data));
 }
 
 template<typename Char, typename Traits>
-basic_string_view_source<Char> tag_invoke(make_source_tag, boost::basic_string_view<Char, Traits> && data) = delete;
+source_ptr tag_invoke(make_source_tag, boost::basic_string_view<Char, Traits> && data) = delete;
 
 #if defined(__cpp_lib_string_view)
 template<typename Char, typename Traits>
-basic_string_view_source<Char> tag_invoke(make_source_tag, const std::basic_string_view<Char, Traits> & data)
+source_ptr tag_invoke(make_source_tag, const std::basic_string_view<Char, Traits> & data)
 {
-  return basic_string_view_source<Char>(core::basic_string_view<Char>(data.data(), data.size()));
+  return std::make_shared<basic_string_view_source<Char>>(core::basic_string_view<Char>(data.data(), data.size()));
 }
 
 template<typename Char, typename Traits>
-basic_string_view_source<Char> tag_invoke(make_source_tag, std::basic_string_view<Char, Traits> && data) = delete;
+source_ptr tag_invoke(make_source_tag, std::basic_string_view<Char, Traits> && data) = delete;
 #endif
 
 }

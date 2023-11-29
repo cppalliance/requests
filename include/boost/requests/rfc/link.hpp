@@ -49,8 +49,4 @@ constexpr link_value_t link_value{};
 }
 }
 
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/rfc/impl/link.ipp>
-#endif
-
 #endif // BOOST_REQUESTS_RFC_LINK_HPP

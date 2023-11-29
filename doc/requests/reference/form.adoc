@@ -20,7 +20,7 @@ The form class is a utility class to sent `application/x-www-form-urlencoded` da
 
 [source,cpp]
 ----
-requests::post(urls::url_view("https://httpbin.org/post"),
+requests::post("https://httpbin.org/post",
                requests::form{{"foo", "42"}, {"bar", "21"}});
 ----
 

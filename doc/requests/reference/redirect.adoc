@@ -38,6 +38,8 @@ bool same_endpoint_on_host(const urls::url_view current, const asio::ip::tcp::en
 /// Check if the endpoint is the same as the endpoint
 bool same_endpoint_on_host(const urls::url_view current, const asio::local::stream_protocol::endpoint);
 
+/// Check if a status is a redirect
+bool is_redirect(http::status rc);
 
 }
 ----

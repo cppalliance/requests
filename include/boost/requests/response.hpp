@@ -16,7 +16,6 @@
 #include <boost/beast/http/message.hpp>
 #include <boost/beast/http/string_body.hpp>
 #include <boost/config.hpp>
-#include <boost/container/pmr/polymorphic_allocator.hpp>
 #include <boost/core/span.hpp>
 #include <boost/requests/error.hpp>
 #include <boost/requests/fields/link.hpp>
@@ -27,6 +26,7 @@
 #include <memory>
 #include <scoped_allocator>
 #include <string>
+#include <type_traits>
 
 namespace boost
 {
@@ -35,7 +35,7 @@ namespace requests
 
 struct response_base
 {
-  using allocator_type = container::pmr::polymorphic_allocator<char>;
+  using allocator_type = std::allocator<char>;
   using buffer_type    = beast::basic_flat_buffer<allocator_type>;
   using body_type      = beast::http::basic_dynamic_body<buffer_type>;
 
@@ -44,24 +44,27 @@ struct response_base
   int          result_code() const {return headers.result_int(); }
   http::status result()      const {return headers.result(); }
 
-  using string_body_type = typename beast::http::basic_string_body<char, std::char_traits<char>, allocator_type>;
-  using vector_alloc = boost::container::pmr::polymorphic_allocator<typename http::response<body_type>>;
-  using history_type = std::vector<typename http::response<body_type>, vector_alloc>;
-  history_type history{vector_alloc{headers.get_allocator()}};
+  using history_type = std::vector<typename beast::http::response<body_type>>;
+  history_type history{};
 
-  response_base(allocator_type alloc,         history_type history) : headers(alloc),             history(std::move(history)) {}
+  response_base(history_type history) : history(std::move(history)) {}
   response_base(http::response_header header, history_type history) : headers(std::move(header)), history(std::move(history)) {}
+  response_base(http::response_header header) : headers(std::move(header)) {}
 
-  response_base(allocator_type alloc        ) : headers(alloc),             history (vector_alloc{alloc}) {}
-  response_base(http::response_header header) : headers(std::move(header)), history (vector_alloc{headers.get_allocator()}) {}
+  response_base() = default;
 
   ~response_base() = default;
 
   response_base(const response_base & ) = default;
-  response_base(response_base && ) noexcept = default;
+  response_base(response_base && lhs) noexcept : headers(std::move(lhs.headers)), history(std::move(lhs.history)) {}
 
   response_base& operator=(const response_base & ) = default;
-  response_base& operator=(response_base && ) noexcept = default;
+  response_base& operator=(response_base && lhs) noexcept
+  {
+    headers = std::move(lhs.headers);
+    history = std::move(lhs.history);
+    return *this;
+  }
 
   bool ok () const
   {
@@ -129,17 +132,22 @@ struct response : response_base
 {
   buffer_type buffer{headers.get_allocator()};
 
-  response(allocator_type alloc = {}) : response_base(alloc), buffer(alloc) {}
+  response() = default;
   response(http::response_header header, buffer_type buffer) : response_base(std::move(header)), buffer(std::move(buffer)) {}
   response(response_base         header, buffer_type buffer) : response_base(std::move(header)), buffer(std::move(buffer)) {}
 
   response(http::response_header header, history_type history, buffer_type buffer) : response_base(std::move(header), std::move(history)), buffer(std::move(buffer)) {}
 
   response(const response & ) = default;
-  response(response && ) noexcept = default;
+  response(response && lhs) noexcept  : response_base(std::move(lhs)), buffer(std::move(lhs.buffer)) {}
 
   response& operator=(const response & ) = default;
-  response& operator=(response && ) noexcept = default;
+  response& operator=(response && lhs) noexcept
+  {
+    response_base::operator=(std::move(lhs));
+    buffer = std::move(lhs.buffer);
+    return *this;
+  }
 
   template<typename Char = char,
            typename CharTraits = std::char_traits<char>>
@@ -172,11 +180,10 @@ struct response : response_base
   }
 };
 
-}
-}
+using history = response_base::history_type;
 
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/impl/response.ipp>
-#endif
+
+}
+}
 
 #endif // BOOST_REQUESTS_RESPONSE_HPP

@@ -55,7 +55,7 @@ struct date_1123_t
             char const*& it,
             char const* end
     ) const noexcept ->
-    urls::error_types::result<value_type>;
+    system::result<value_type>;
 
 };
 
@@ -107,7 +107,7 @@ struct date_850_t
       char const*& it,
       char const* end
   ) const noexcept ->
-      urls::error_types::result<value_type>;
+      system::result<value_type>;
 
 };
 
@@ -153,7 +153,7 @@ struct date_asctime_t
       char const*& it,
       char const* end
   ) const noexcept ->
-      urls::error_types::result<value_type>;
+      system::result<value_type>;
 
 };
 
@@ -172,7 +172,7 @@ struct http_date_t
       char const*& it,
       char const* end
   ) const noexcept ->
-      urls::error_types::result<value_type>;
+      system::result<value_type>;
 
 };
 
@@ -182,9 +182,5 @@ constexpr http_date_t http_date;
 }
 }
 }
-
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/rfc/impl/dates.ipp>
-#endif
 
 #endif //BOOST_REQUESTS_RFC_DATES_HPP

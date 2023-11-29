@@ -26,8 +26,5 @@ BOOST_REQUESTS_DECL request_options & default_options();
 }
 }
 
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/impl/request_options.ipp>
-#endif
 
 #endif // BOOST_REQUESTS_REQUEST_OPTIONS_HPP

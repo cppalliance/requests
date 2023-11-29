@@ -5,11 +5,11 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#include <boost/requests/method.hpp>
-#include <boost/requests/json.hpp>
-#include <boost/requests/request_settings.hpp>
-#include <boost/requests/service.hpp>
 #include <boost/asio/use_future.hpp>
+#include <boost/requests/json.hpp>
+#include <boost/requests/method.hpp>
+#include <boost/requests/request_parameters.hpp>
+#include <boost/requests/service.hpp>
 
 #include <iostream>
 
@@ -22,11 +22,11 @@ int main(int argc, char * argv[])
   auto tk = asio::bind_executor(ctx, asio::use_future);
 
   auto fr1 = requests::async_get(    urls::url_view{"https://api.github.com/events"},                           {}, tk);
-  auto fr2 = requests::async_post(   urls::url_view{"https://httpbin.org/post"}, json::value{{"key", "value"}},{}, tk);
+  auto fr2 = requests::async_post(   urls::url_view{"https://httpbin.org/post"}, json::value{{"key", "value"}}, {}, tk);
   auto fr3 = requests::async_put(    urls::url_view{"https://httpbin.org/put"}, json::value{{"key","value"}},   {}, tk);
-  auto fr4 = requests::async_delete( urls::url_view{"https://httpbin.org/delete"},                           {}, tk);
-  auto fr5 = requests::async_head(   urls::url_view{"https://httpbin.org/get"},                                {}, tk);
-  auto fr6 = requests::async_options(urls::url_view{"https://httpbin.org/get"},                             {}, tk);
+  auto fr4 = requests::async_delete( urls::url_view{"https://httpbin.org/delete"},                              {}, tk);
+  auto fr5 = requests::async_head(   urls::url_view{"https://httpbin.org/get"},                                 {}, tk);
+  auto fr6 = requests::async_options(urls::url_view{"https://httpbin.org/get"},                                 {}, tk);
 
   ctx.run();
 

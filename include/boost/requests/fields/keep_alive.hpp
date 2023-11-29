@@ -31,10 +31,4 @@ BOOST_REQUESTS_DECL system::result<keep_alive>  parse_keep_alive_field(
 }
 }
 
-
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/fields/impl/keep_alive.ipp>
-#endif
-
-
 #endif //BOOST_REQUESTS_FIELDS_KEEP_ALIVE_HPP

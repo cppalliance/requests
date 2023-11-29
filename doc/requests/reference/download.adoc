@@ -18,22 +18,22 @@ auto async_write_to_file(Stream & str, const filesystem::path & file,
 /// Perform a get request and write the response body to a file
 template<typename Connection>
 inline auto download(Connection & conn,
-                     urls::url_view target,
-                     typename Connection::request_type req,
+                     /* target type of Connection */ target,
+                     /* request type of Connection */ req,
                      filesystem::path download_path,
                      system::error_code & ec) -> download_response;
 
 template<typename Connection>
 inline auto download(Connection & conn,
-                     urls::url_view target,
-                     typename Connection::request_type req,
+                     /* target type of Connection */ target,
+                     /* request type of Connection */ req,
                      filesystem::path download_path) -> download_response;
 
 template<typename Connection,
          asio::completion_token_for<void (boost::system::error_code, download_response)> CompletionToken>
 auto async_download(Connection & conn,
-               urls::url_view target,
-               typename Connection::request_type req,
+               /* target type of Connection */ target,
+               /* request type of Connection */ req,
                filesystem::path download_path,
                CompletionToken && token = asio::default_token_t<executor_type>())
 
@@ -52,3 +52,6 @@ auto async_download(urls::url_view path,
                     filesystem::path download_path,
                     CompletionToken && completion_token);
 ----
+
+The target type is `urls::url_view` for sessions, otherwise `urls::pct_string_view`.
+The request type is `requests::http::headers` for sessions, otherwise `request_parameters`.

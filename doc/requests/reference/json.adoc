@@ -7,106 +7,96 @@ namespace boost::requests::json
 {
 
 
-// read an entire body as json and convert the json value into `Value`.
-template<typename Value = value, typename Stream>
-Value read_json(Stream & str, json::storage_ptr ptr = {});
+// read an entire body as json and convert the json value into a `json::value`.
+json::value read_json(stream & str, json::storage_ptr ptr = {});
 
-template<typename Value = value, typename Stream>
-Value read_json(Stream & str, json::storage_ptr ptr, system::error_code & ec);
+json::value read_json(stream & str, json::storage_ptr ptr, system::error_code & ec);
 
-template<typename Value = value, typename Stream,
-         asio::completion_token_for<void (boost::system::error_code, Value)> CompletionToken
+template<asio::completion_token_for<void (boost::system::error_code, json::value)> CompletionToken
               asio::default_token_t<typename Stream::executor_type>>
 auto async_read_json(
-        Stream & str,
+        stream & str,
         json::storage_ptr ptr = {},
         CompletionToken && token asio::default_token_t<typename Stream::executor_type>());
 
 
-// read an entire body as json and convert the json value into `Value`
+// read an entire body as json and convert the json value into a `json::value`
 // if the response has a body. otherwise the result is empty.
-template<typename Value = value, typename Stream>
-optional<Value> read_optional_json(Stream & str, json::storage_ptr ptr = {});
+optional<json::value> read_optional_json(stream & str, json::storage_ptr ptr = {});
 
-template<typename Value = value, typename Stream>
-optional<Value> read_optional_json(Stream & str, json::storage_ptr ptr, system::error_code & ec);
+optional<json::value> read_optional_json(stream & str, json::storage_ptr ptr, system::error_code & ec);
 
-template<typename Value = value, typename Stream,
-          asio::completion_token_for<void (boost::system::error_code, optional<Value>)> CompletionToken
+template<asio::completion_token_for<void (boost::system::error_code, optional<json::value>)> CompletionToken
             asio::default_token_t<typename Stream::executor_type>>
 auto async_read_optional_json(
-        Stream & str,
+        stream & str,
         json::storage_ptr ptr = {},
         CompletionToken && token = asio::default_token_t<typename Stream::executor_type>());
 
 
 /// the response of a json request
-template<typename Value = value>
 struct response : response_base
 {
-  using allocator_type = container::pmr::polymorphic_allocator<char>;
+  using allocator_type = std::allocator<char>;
   using fields_type = http::fields;
 
-  response(allocator_type alloc,         history_type history, Value && value);
-  response(http::response_header header, history_type history, Value && value);
+  response(allocator_type alloc,         history_type history, json::value && value);
+  response(http::response_header header, history_type history, json::value && value);
 
-  response(allocator_type alloc        , Value && value = {});
-  response(http::response_header header, Value && value = {});
+  response(allocator_type alloc        , json::value && value = {});
+  response(http::response_header header, json::value && value = {});
 
-  using value_type = Value;
+  using value_type = json::value;
   value_type value;
 };
 
 // http-methods are , they follow the pattern below:
-template<typename Value = json::value,
-          typename RequestBody,
-          typename Connection>
+template<typename RequestBody, typename Connection>
 auto ~method~(Connection & conn,
-              urls::url_view target,
+              /* target type of Connection */  target,
               RequestBody && request_body, // omitted for some methods.
-              typename Connection::request_type req = {}) -> response<Value>;
+              /* request type of Connection */  req = {},
+              json::storage_ptr ptr = {}) -> response;
 
-template<typename Value = json::value,
-          typename RequestBody,
-          typename Connection>
+template<typename RequestBody, typename Connection>
 auto ~method~(Connection & conn,
-              urls::url_view target,
+              /* target type of Connection */  target,
               RequestBody && request_body, // omitted for some methods.
-              typename Connection::request_type req,
-              system::error_code & ec) -> response<Value>;
+              /* request type of Connection */ req,
+              json::storage_ptr ptr,
+              system::error_code & ec) -> response;
 
-template<typename Value = value,
-         typename Connection,
-         typename RequestBody,
-          asio::completion_token_for<void (boost::system::error_code, response<Value>)> CompletionToken
+template<typename Connection, typename RequestBody,
+          asio::completion_token_for<void (boost::system::error_code, response)> CompletionToken
               = asio::default_token_t<typename Connection::executor_type>>
 auto async_~method~(Connection & conn,
-        urls::url_view target,
+        /* target type of Connection */ target,
         RequestBody && request_body,
-        typename Connection::request_type req = {},
+        /* request type of Connection */ req = {},
+        json::storage_ptr ptr = {},
         CompletionToken && token = asio::default_token_t<typename Connection::executor_type>());
 
 // requests on the default_session
-template<typename Value = json::value,
-         typename RequestBody>
-auto ~method~(urls::url_view target,
-              RequestBody && request_body, // omitted for some methods.
-              http::fields req) -> response<Value>;
-
-template<typename Value = json::value,
-          typename RequestBody>
+template<typename RequestBody>
 auto ~method~(urls::url_view target,
               RequestBody && request_body, // omitted for some methods.
               http::fields req,
-              system::error_code & ec) -> response<Value>;
+              json::storage_ptr ptr = {}) -> response;
 
-template<typename Value = value,
-         typename RequestBody,
-          asio::completion_token_for<void (boost::system::error_code, response<Value>)> CompletionToken>
+template<typename RequestBody>
+auto ~method~(urls::url_view target,
+              RequestBody && request_body, // omitted for some methods.
+              http::fields req,
+              json::storage_ptr ptr,
+              system::error_code & ec) -> response;
+
+template<typename RequestBody,
+          asio::completion_token_for<void (boost::system::error_code, response)> CompletionToken>
 auto async_~method~(
         urls::url_view target,
         RequestBody && request_body,
         http::fields req,
+        json::storage_ptr ptr = {},
         CompletionToken && token);
 
 
@@ -131,3 +121,9 @@ Methods with an optional request body are overloaded.
 | *OPTIONS* | `options` | `async_options` | optional | never    |
 
 |===
+
+NOTE: The above functions are function objects, not functions.
+
+
+The target type is `urls::url_view` for sessions, otherwise `urls::pct_string_view`.
+The request type is `requests::http::headers` for sessions, otherwise `request_parameters`.

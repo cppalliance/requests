@@ -15,7 +15,7 @@ bool path_match(core::string_view full, core::string_view pattern);
 
 struct cookie_jar final
 {
-    using allocator_type = boost::container::pmr::polymorphic_allocator<char>;
+    using allocator_type = std::allocator<char>;
     // The set used to store the
     boost::unordered_set<cookie, cookie_hash, cookie_equal,
                          typename std::allocator_traits<allocator_type>::template rebind_alloc<cookie>> content;

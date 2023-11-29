@@ -17,16 +17,12 @@ requirements <include>../../..
     <boost.requests.use-std-fs>off:<source>/boost//filesystem
 ;
 
+using openssl ;
 
-alias asio     : ../../beast//lib-asio ;
-alias asio-ssl : ../../beast//lib-asio-ssl ;
-alias beast    : ../../beast//lib-beast ;
-
-
-import regex ; 
+import regex ;
 
 for local src in [ glob *.cpp : xml.cpp ]
 {
     local name = [ regex.match "([^.]*)\\..*" : $(src) ] ;
-    exe $(name) : $(src) /boost//json /boost//url asio beast asio-ssl ;
+    exe $(name) : $(src) /boost//requests /boost//json /boost//url /boost//program_options /openssl//ssl /openssl//crypto ;
 }

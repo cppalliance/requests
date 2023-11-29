@@ -31,8 +31,4 @@ BOOST_REQUESTS_DECL bool is_public_suffix(core::string_view value,
 }
 }
 
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/impl/public_suffix.ipp>
-#endif
-
 #endif //BOOST_REQUESTS_COOKIES_PUBLIC_SUFFIX_HPP

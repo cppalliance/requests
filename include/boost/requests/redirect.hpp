@@ -5,11 +5,13 @@
 #ifndef BOOST_REQUESTS_REDIRECT_HPP
 #define BOOST_REQUESTS_REDIRECT_HPP
 
+#include <boost/requests/http.hpp>
+#include <boost/requests/detail/config.hpp>
+#include <boost/requests/public_suffix.hpp>
+
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/local/stream_protocol.hpp>
 #include <boost/asio/generic/stream_protocol.hpp>
-#include <boost/requests/public_suffix.hpp>
-#include <boost/requests/detail/config.hpp>
 #include <boost/url/scheme.hpp>
 #include <boost/url/url_view.hpp>
 
@@ -45,20 +47,24 @@ BOOST_REQUESTS_DECL bool should_redirect(
 BOOST_REQUESTS_DECL std::uint16_t get_port(urls::url_view domain);
 
 /// Check if the endpoint is the same as the endpoint
-BOOST_REQUESTS_DECL bool same_endpoint_on_host(const urls::url_view current, const asio::ip::tcp::endpoint);
+BOOST_REQUESTS_DECL bool same_endpoint_on_host(const urls::url_view current, const asio::ip::tcp::endpoint &);
 
 /// Check if the endpoint is the same as the endpoint
-BOOST_REQUESTS_DECL bool same_endpoint_on_host(const urls::url_view current, const asio::local::stream_protocol::endpoint);
+BOOST_REQUESTS_DECL bool same_endpoint_on_host(const urls::url_view current, const asio::local::stream_protocol::endpoint &);
 
 /// Check if the endpoint is the same as the endpoint
-BOOST_REQUESTS_DECL bool same_endpoint_on_host(const urls::url_view current, const asio::generic::stream_protocol::endpoint);
+BOOST_REQUESTS_DECL bool same_endpoint_on_host(const urls::url_view current, const asio::generic::stream_protocol::endpoint &);
 
+/// Check if a status is a redirect
+inline bool is_redirect(http::status rc)
+{
+  return ((rc == http::status::moved_permanently)
+       ||  (rc == http::status::found)
+       || (rc == http::status::temporary_redirect)
+       || (rc == http::status::permanent_redirect));
+}
 
 }
 }
-
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/impl/redirect.ipp>
-#endif
 
 #endif //BOOST_REQUESTS_REDIRECT_HPP

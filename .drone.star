@@ -1,36 +1,207 @@
-# Use, modification, and distribution are
-# subject to the Boost Software License, Version 1.0. (See accompanying
-# file LICENSE.txt)
 #
-# Copyright Rene Rivera 2020.
+# Copyright (c) 2019-2023 Ruben Perez Hidalgo (rubenperez038 at gmail dot com)
+#
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+#
 
-# For Drone CI we use the Starlark scripting language to reduce duplication.
-# As the yaml syntax for Drone CI is rather limited.
-#
-#
-globalenv={'B2_CI_VERSION': '1', 'B2_VARIANT': 'release'}
-linuxglobalimage="cppalliance/droneubuntu1804:1"
-windowsglobalimage="cppalliance/dronevs2019"
-
-def main(ctx):
-  return [
-  linux_cxx("docs", "", packages="docbook docbook-xml docbook-xsl xsltproc libsaxonhe-java default-jre-headless flex libfl-dev bison unzip rsync mlocate", image="cppalliance/droneubuntu1804:1", buildtype="docs", buildscript="drone", environment={ "BOOST_REQUEST_HTTPBIN": "httpbin.cpp.al", "COMMENT": "docs"}, globalenv=globalenv),
-  linux_cxx("asan",         "g++-8",  packages="g++-8",  buildtype="boost", buildscript="drone", image=linuxglobalimage,                        environment={ "BOOST_REQUEST_HTTPBIN": "httpbin.cpp.al", 'COMMENT': 'asan',  'B2_VARIANT': 'debug', 'B2_TOOLSET': 'gcc-8',  'B2_CXXSTD': '14', 'B2_ASAN':  '1', 'B2_DEFINES': 'BOOST_NO_STRESS_TEST=1', 'DRONE_EXTRA_PRIVILEGED': 'True', 'DRONE_JOB_UUID': '356a192b79'}, globalenv=globalenv, privileged=True),
-  linux_cxx("ubsan",        "g++-8",  packages="g++-8",  buildtype="boost", buildscript="drone", image=linuxglobalimage,                        environment={ "BOOST_REQUEST_HTTPBIN": "httpbin.cpp.al", 'COMMENT': 'ubsan', 'B2_VARIANT': 'debug', 'B2_TOOLSET': 'gcc-8',  'B2_CXXSTD': '14', 'B2_UBSAN': '1', 'B2_DEFINES': 'BOOST_NO_STRESS_TEST=1', 'B2_LINKFLAGS': '-fuse-ld=gold',  'DRONE_JOB_UUID': '77de68daec'}, globalenv=globalenv),
-  linux_cxx("gcc 11 arm64", "g++-11", packages="g++-11", buildtype="boost", buildscript="drone", image="cppalliance/droneubuntu2004:multiarch", environment={ "BOOST_REQUEST_HTTPBIN": "httpbin.cpp.al",                                            'B2_TOOLSET': 'gcc-11', 'B2_CXXSTD': '14',                                                                                            'DRONE_JOB_UUID': '17ba079169m'}, arch="arm64", globalenv=globalenv),
-  linux_cxx("GCC 10, Debug + Coverage", "g++-10", packages="g++-10 libssl-dev libffi-dev binutils-gold gdb mlocate", 
-                                                                                                 image="cppalliance/droneubuntu2004:1", buildtype="boost", buildscript="drone", environment={ "BOOST_REQUEST_HTTPBIN": "httpbin.cpp.al", "GCOV": "gcov-10", "LCOV_VERSION": "1.15", "VARIANT": "process_coverage", "TOOLSET": "gcc", "COMPILER": "g++-10", "CXXSTD": "14", "DRONE_BEFORE_INSTALL" : "process_coverage", "CODECOV_TOKEN": {"from_secret": "codecov_token"}}, globalenv=globalenv, privileged=True),
-  # A set of jobs based on the earlier .travis.yml configuration:
-  linux_cxx("Default clang++ with libc++", "clang++-libc++", packages="libc++-dev mlocate", image="cppalliance/droneubuntu1604:1", buildtype="buildtype", buildscript="drone", environment={  "BOOST_REQUEST_HTTPBIN": "httpbin.cpp.al", "B2_TOOLSET": "clang-7", "B2_CXXSTD": "14", "VARIANT": "debug", "TOOLSET": "clang", "COMPILER": "clang++-libc++", "CXXSTD": "14", "CXX_FLAGS": "<cxxflags>-stdlib=libc++ <linkflags>-stdlib=libc++", "TRAVISCLANG" : "yes" }, globalenv=globalenv),
-  linux_cxx("Default g++", "g++", packages="mlocate", image="cppalliance/droneubuntu1604:1", buildtype="buildtype", buildscript="drone", environment={ "BOOST_REQUEST_HTTPBIN": "httpbin.cpp.al",  "VARIANT": "release", "TOOLSET": "gcc", "COMPILER": "g++", "CXXSTD": "14" }, globalenv=globalenv),
-  linux_cxx("Clang 3.8, UBasan", "clang++-3.8", packages="clang-3.8 libssl-dev mlocate", llvm_os="precise", llvm_ver="3.8", image="cppalliance/droneubuntu1604:1", buildtype="boost", buildscript="drone", environment={ "BOOST_REQUEST_HTTPBIN": "httpbin.cpp.al", "VARIANT": "process_ubasan", "TOOLSET": "clang", "COMPILER": "clang++-3.8", "CXXSTD": "14", "UBSAN_OPTIONS": 'print_stacktrace=1', "DRONE_BEFORE_INSTALL": "UBasan" }, globalenv=globalenv),
-  linux_cxx("gcc 6", "g++-6", packages="g++-6", buildtype="boost", buildscript="drone", image=linuxglobalimage, environment={ "BOOST_REQUEST_HTTPBIN": "httpbin.cpp.al", 'B2_TOOLSET': 'gcc-6', 'B2_CXXSTD': '14', 'DRONE_JOB_UUID': '902ba3cda1'}, globalenv=globalenv),
-  linux_cxx("clang 3.8", "clang++-3.8", packages="clang-3.8", buildtype="boost", buildscript="drone", image="cppalliance/droneubuntu1604:1", environment={ "BOOST_REQUEST_HTTPBIN": "httpbin.cpp.al", 'B2_TOOLSET': 'clang', 'COMPILER': 'clang++-3.8', 'B2_CXXSTD': '14', 'DRONE_JOB_UUID': '7b52009b64'}, globalenv=globalenv),
-  osx_cxx("clang", "g++", packages="", buildtype="boost",         buildscript="drone", environment={ "BOOST_REQUEST_HTTPBIN": "httpbin.cpp.al", 'B2_TOOLSET': 'clang', 'B2_CXXSTD': '14,17', 'DRONE_JOB_UUID': '91032ad7bb'}, globalenv=globalenv),
-  linux_cxx("coverity", "g++", packages="", buildtype="coverity", buildscript="drone", image=linuxglobalimage, environment={ "BOOST_REQUEST_HTTPBIN": "httpbin.cpp.al", 'COMMENT': 'Coverity Scan', 'B2_TOOLSET': 'clang', 'DRONE_JOB_UUID': '472b07b9fc'}, globalenv=globalenv),
-  windows_cxx("msvc-14.1", "", image="cppalliance/dronevs2017",   buildtype="boost", buildscript="drone", environment={ "BOOST_REQUEST_HTTPBIN": "httpbin.cpp.al", "VARIANT": "release", "TOOLSET": "msvc-14.1", "CXXSTD": "14", "DEFINE" : "BOOST_BEAST_USE_STD_STRING_VIEW", "ADDRESS_MODEL": "64"}),
-  windows_cxx("msvc-14.3", "", image="cppalliance/dronevs2022:1", buildtype="boost", buildscript="drone", environment={ "BOOST_REQUEST_HTTPBIN": "httpbin.cpp.al", "VARIANT": "release", "TOOLSET": "msvc-14.3", "CXXSTD": "14", "DEFINE" : "BOOST_BEAST_USE_STD_STRING_VIEW", "ADDRESS_MODEL": "64"}),
+deps = [
+    'libs/array',
+    'libs/align',
+    'libs/asio',
+    'libs/assert',
+    'libs/beast',
+    'libs/chrono',
+    'libs/config',
+    'libs/core',
+    'libs/date_time',
+    'libs/headers',
+    'libs/integer',
+    'libs/mpl',
+    'libs/numeric',
+    'libs/predef',
+    'libs/preprocessor',
+    'libs/ratio',
+    'libs/system',
+    'libs/static_assert',
+    'libs/smart_ptr',
+    'libs/test',
+    'libs/thread',
+    'libs/throw_exception',
+    'libs/utility',
+    'libs/type_traits',
+    'libs/winapi',
+    'tools/build',
+    'tools/boost_install',
+    'tools/boostdep'
     ]
 
-# from https://github.com/boostorg/boost-ci
-load("@boost_ci//ci/drone/:functions.star", "linux_cxx","windows_cxx","osx_cxx","freebsd_cxx")
+
+def git_boost_steps(branch, image="alpine/git", env_win_style=False):
+    return [{
+            "name": "boost ({})".format(branch),
+            "image": image,
+            "commands": [
+               "git clone -b {} --depth 1 https://github.com/boostorg/boost.git boost".format(branch)
+                ]
+        },
+        {
+            "name": "boost submodules",
+            "image": image,
+            "commands": [
+                "cd boost",
+                "git submodule update --init --depth 20 --jobs 8 " + " ".join(deps)
+            ]
+        },
+        {
+            "name": "clone",
+            "image": image,
+            "commands": [
+                "cd boost/libs",
+                "git clone {}".format("$Env:DRONE_REMOTE_URL" if env_win_style else "$DRONE_REMOTE_URL"),
+                "cd sam",
+                "git checkout {}".format("$Env:DRONE_COMMIT" if env_win_style else "$DRONE_COMMIT")
+            ]
+        }
+    ]
+
+
+def format_b2_args(**kwargs):
+    res = ""
+    for k in kwargs:
+        res += " {}={}".format(k.replace('_', '-'), kwargs[k])
+    return res
+
+
+def linux_build_steps(image, **kwargs):
+    args = format_b2_args(**kwargs)
+    return [
+        {
+            "name": "bootstrap",
+            "image": image,
+            "commands": [
+                "cd boost",
+                "./bootstrap.sh"
+            ]
+        },
+        {
+            "name": "build",
+            "image": image,
+            "commands" : [
+                "cd boost/libs/sam",
+                "../../b2 build -j8 " + args
+            ]
+        },
+        {
+            "name": "test",
+            "image": image,
+            "commands" : [
+                "cd boost/libs/sam",
+                "../../b2 test -j8 " + args
+            ]
+        },
+        {
+            "name": "bench",
+            "image": image,
+            "commands" : [
+                "cd boost/libs/sam",
+                "../../b2 bench -j8 " + args
+            ]
+        }]
+
+
+def windows_build_steps(image, **kwargs):
+    args = format_b2_args(**kwargs)
+    return [
+        {
+            "name": "bootstrap",
+            "image": image,
+            "commands": [
+                "cd boost",
+                ".\\\\bootstrap.bat"
+            ]
+        },
+        {
+            "name" : "build",
+            "image" : image,
+            "commands": [
+                "cd boost/libs/sam",
+                "..\\\\..\\\\b2 build -j8 " + args
+            ]
+        },
+        {
+            "name": "test",
+            "image": image,
+            "commands": [
+                "cd boost/libs/sam",
+                "..\\\\..\\\\b2 test -j8 " + args
+            ]
+        },
+        {
+            "name": "bench",
+            "image": image,
+            "commands": [
+                "cd boost/libs/sam",
+                "..\\\\..\\\\b2 bench -j8 " + args
+            ]
+        }]
+
+
+def linux(
+        name,
+        branch,
+        image,
+        **kwargs):
+
+    return {
+        "kind": "pipeline",
+        "type": "docker",
+        "name": name,
+        "clone": {"disable": True},
+        "platform": {
+            "os": "linux",
+            "arch": "amd64"
+        },
+        "steps": git_boost_steps(branch) + linux_build_steps(image, **kwargs)
+    }
+
+
+def windows(
+        name,
+        branch,
+        image,
+        **kwargs):
+
+    return {
+        "kind": "pipeline",
+        "type": "docker",
+        "name": name,
+        "clone": {"disable": True},
+        "platform": {
+            "os": "windows",
+            "arch": "amd64"
+        },
+        "steps": git_boost_steps(branch, image, True) + windows_build_steps(image, **kwargs)
+    }
+
+
+def main(ctx):
+    branch = ctx.build.branch
+    if ctx.build.event == 'tag' or (branch != 'master' and branch != 'refs/heads/master'):
+        branch = 'develop'
+
+    return [
+        linux("gcc-12",   branch, "docker.io/library/gcc:12",  variant="release", cxxstd="11,14,17,20"),
+        linux("gcc-12 (asan)",   branch, "docker.io/library/gcc:12",  variant="release", cxxstd="11,20", debug_symbols="on", address_sanitizer="on"),
+        linux("gcc-10",   branch, "docker.io/library/gcc:10",  variant="release", cxxstd="11,14,17,20"),
+        linux("gcc-8",    branch, "docker.io/library/gcc:8",   variant="release", cxxstd="11,14,17"),
+        linux("gcc-6",    branch, "docker.io/library/gcc:6",   variant="release", cxxstd="11,14"),
+        linux("clang",          branch, "docker.io/silkeh/clang", toolset='clang', variant="release", cxxstd="11,14,17,20"),
+        linux("clang (asan)",   branch, "docker.io/silkeh/clang", toolset='clang', variant="release", cxxstd="11,20", debug_symbols="on", address_sanitizer="on"),
+        linux("clang (tsan)",   branch, "docker.io/silkeh/clang", toolset='clang', variant="release", cxxstd="11,20", debug_symbols="on", thread_sanitizer="on"),
+        windows("msvc-14.2 (x64)", branch, "cppalliance/dronevs2019:1", variant="release", cxxstd="11,14,17,20", address_model="64"),
+        windows("msvc-14.2 (x32)", branch, "cppalliance/dronevs2019:1", variant="release", cxxstd="11,14,17,20", address_model="32"),
+        windows("msvc-14.3 (x64)", branch, "cppalliance/dronevs2022:1", variant="release", cxxstd="11,14,17,20", address_model="64"),
+        windows("msvc-14.3 (x32)", branch, "cppalliance/dronevs2022:1", variant="release", cxxstd="11,14,17,20", address_model="32")
+    ]
+

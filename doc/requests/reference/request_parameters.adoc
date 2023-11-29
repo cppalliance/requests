@@ -1,0 +1,38 @@
+## request_parameters.hpp
+[#reference::request_parameters]
+
+
+[source,cpp]
+----
+namespace boost::requests
+{
+
+/// A pair describing a header entry
+struct field_entry
+{
+  variant2::variant<http::field, core::string_view> key;
+  core::string_view value;
+  std::string buffer;
+};
+
+// helper to add basic authorization
+field_entry basic_auth(core::string_view username,
+                       core::string_view password);
+
+// helper to add bearer authorization
+field_entry bearer(core::string_view token);
+
+// helper to create headers from an initializer list.
+auto headers(std::initializer_list<field_entry> fields);
+
+// The full request settings used in the connection.
+struct request_parameters
+{
+  using fields_type = beast::http::fields;
+  fields_type fields;
+  request_options opts{};
+  cookie_jar * jar = nullptr;
+};
+
+}
+----

@@ -41,14 +41,10 @@ struct empty_source : source
   }
 };
 
-BOOST_REQUESTS_DECL empty_source &tag_invoke(const make_source_tag&, const empty &);
-BOOST_REQUESTS_DECL empty_source &tag_invoke(const make_source_tag&, const none_t &);
+BOOST_REQUESTS_DECL source_ptr tag_invoke(const make_source_tag&, const empty &);
+BOOST_REQUESTS_DECL source_ptr tag_invoke(const make_source_tag&, const none_t &);
 
 }
 }
-
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/sources/impl/empty.ipp>
-#endif
 
 #endif // BOOST_REQUESTS_SOURCES_EMPTY_HPP

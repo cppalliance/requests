@@ -25,7 +25,7 @@ struct set_cookie
         BOOST_REQUESTS_DECL bool operator()(const core::string_view & ra) const;
     };
 
-    using attributes_type = urls::grammar::range<urls::string_view>;
+    using attributes_type = urls::grammar::range<core::string_view>;
     using extensions_type = range_detail::filtered_range<extensions_only, const attributes_type>;
 
 
@@ -53,9 +53,5 @@ system::result<set_cookie> parse_set_cookie_field(core::string_view value);
 
 }
 }
-
-#if defined(BOOST_REQUESTS_HEADER_ONLY)
-#include <boost/requests/fields/impl/set_cookie.ipp>
-#endif
 
 #endif //BOOST_REQUESTS_COOKIES_SET_COOKIE_HPP

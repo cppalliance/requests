@@ -4,14 +4,13 @@
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
+#include <algorithm>
+#include <boost/container/flat_map.hpp>
 #include <boost/requests/json.hpp>
 #include <boost/requests/method.hpp>
-#include <boost/requests/request_settings.hpp>
-#include <boost/container/flat_map.hpp>
-#include <boost/container/pmr/monotonic_buffer_resource.hpp>
-#include <algorithm>
-#include <iostream>
+#include <boost/requests/request_parameters.hpp>
 #include <fstream>
+#include <iostream>
 
 using namespace boost;
 
@@ -41,13 +40,13 @@ int main(int argc, char * argv[])
   auto r = requests::get(u);
   if (r.ok())
   {
-    std::cerr << "Erorr getting events: " << r.headers << r.string_view() << std::endl;
+    std::cerr << "Error getting events: " << r.headers << r.string_view() << std::endl;
     return 1;
   }
 
   {
-    char buf[8096];
-    container::pmr::monotonic_buffer_resource res{buf, 8096};
+    unsigned char buf[8096];
+    json::monotonic_resource res{buf, 8096};
 
     auto j = as_json(r, &res);
     const json::array & arr = j.as_array();
@@ -66,8 +65,8 @@ int main(int argc, char * argv[])
       return 1;
     }
 
-    char buf[8096];
-    container::pmr::monotonic_buffer_resource res{buf, 8096};
+    unsigned char buf[8096];
+    json::monotonic_resource res{buf, 8096};
 
     auto j = as_json(r, &res);
     const json::array & arr = j.as_array();

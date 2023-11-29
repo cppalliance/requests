@@ -38,10 +38,8 @@ struct buffer_source : source
   core::string_view default_content_type() override {return "application/octet-stream";}
 };
 
-inline buffer_source tag_invoke(make_source_tag, asio::const_buffer cb)
-{
-  return buffer_source(cb);
-}
+BOOST_REQUESTS_DECL
+source_ptr tag_invoke(make_source_tag, asio::const_buffer cb);
 
 }
 }
