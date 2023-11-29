@@ -308,7 +308,7 @@ struct download_response : response_base
 
 template<typename Connection>
 inline auto download(Connection & conn,
-                     urls::url_view target,
+                     detail::target_view<Connection> target,
                      detail::request_type<Connection> req,
                      filesystem::path download_path,
                      system::error_code & ec) -> download_response

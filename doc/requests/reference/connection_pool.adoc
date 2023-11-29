@@ -38,13 +38,13 @@ struct connection_pool
     /// Construct a pool from an executor. 
     template<typename Exec, typename = std::enable_if_t<!detail::has_ssl_v<Stream>, Exec>>
     explicit connection_pool(Exec && exec,
-                                   std::size_t limit = BOOST_REQUESTS_DEFAULT_POOL_SIZE);
+                             std::size_t limit = BOOST_REQUESTS_DEFAULT_POOL_SIZE);
 
     /// Construct a pool from an executor and sslctx
     template<typename Exec>
     explicit connection_pool(Exec && exec,
-                                   asio::ssl::context & ctx,
-                                   std::size_t limit = BOOST_REQUESTS_DEFAULT_POOL_SIZE);
+                             asio::ssl::context & ctx,
+                             std::size_t limit = BOOST_REQUESTS_DEFAULT_POOL_SIZE);
 
     /// Move constructor
     connection_pool(connection_pool && ) = default;
@@ -61,67 +61,44 @@ struct connection_pool
     auto async_lookup(urls::authority_view av, CompletionToken && token = asio::default_token_t<executor_type>());
 
     /// Get the maximum amount of active connections.
-    std::size_t limit() const {return limit_;}
+    std::size_t limit() const;
     /// Get the amount of active connections.
-    std::size_t active() const {return conns_.size();}
+    std::size_t active() const;
+    /// Get the number of connected connections available
+    std::size_t free() const;
 
-    /// Used by free functions, such as `get`.
-    using request_type = request_settings;
+    /// Get an open connection that shall be returned later
+    connection_type borrow_connection(error_code & ec);
+    /// Get an open connection that shall be returned later
+    connection_type borrow_connection();
 
-    /// Get an open connection
-    std::shared_ptr<connection_type> get_connection(error_code & ec);
-    /// Get an open connection
-    std::shared_ptr<connection_type> get_connection();
-
-    /// Get an open connection asynchronously
-    template<completion_handler_for<void (system::error_code, std::shared_ptr<connection_type>>>
+    /// Get an open connection asynchronously that shall be returned later
+    template<completion_handler_for<void (system::error_code, connection_type>>
                 CompletionToken = default_token_type<CompletionToken>>
-    auto async_get_connection(CompletionToken && completion_token = default_token<executor_type>);
+    auto async_borrow_connection(CompletionToken && completion_token = default_token<executor_type>);
 
-    /// Build a request internally and initiate it on the least used connection, or connect a new one.
-    template<typename RequestBody>
-    auto ropen(beast::http::verb method,
-               urls::url_view path,
-               RequestBody && body,
-               request_settings req,
-               system::error_code & ec) -> stream;
+    /// Get an open connection that  must not be returned later
+    connection_type steal_connection(error_code & ec);
+    /// Get an open connection that  must not be returned later
+    connection_type steal_connection();
 
-    template<typename RequestBody>
-    auto ropen(beast::http::verb method,
-               urls::url_view path,
-               RequestBody && body,
-               request_settings req) -> stream;
+    /// Get an open connection asynchronously that must not be returned later
+    template<completion_handler_for<void (system::error_code, connection_type>>
+                CompletionToken = default_token_type<CompletionToken>>
+    auto async_steal_connection(CompletionToken && completion_token = default_token<executor_type>);
 
-    /// Send a preexisting request on the least used connection, or connect a new one
-    template<typename RequestBody,
-             typename CompletionToken
-                  = asio::default_token_t<executor_type>>
-    auto async_ropen(beast::http::verb method,
-                     urls::url_view path,
-                     RequestBody && body,
-                     request_settings req,
-                     CompletionToken && token = asio::default_token_t<executor_type>());
+    // Check if it's using ssl
+    bool uses_ssl() cons;
 
-    template<typename RequestBody>
-    auto ropen(http::request<RequestBody> & req,
-               request_options opt,
-               cookie_jar * jar,
-               system::error_code & ec) -> stream;
+    // Return a previously borrowed connection
+    void return_connection(connection conn);
 
-    template<typename RequestBody>
-    auto ropen(beast::http::verb method,
-               urls::url_view path,
-               http::request<RequestBody> & req,
-               request_options opt,
-               cookie_jar * jar) -> stream;
+    // Remove a previously borrowed connection
+    void remove_connection(const connection &conn);
 
-    template<typename RequestBody,
-             typename CompletionToken
-                  = asio::default_token_t<executor_type>>
-    auto async_ropen(http::request<RequestBody> & req,
-                     request_options opt,
-                     cookie_jar * jar = nullptr,
-                     CompletionToken && token = asio::default_token_t<executor_type>());
+    // List all the endpoints used by the pool
+    const std::vector<endpoint_type> & endpoints() const;
+
 };
 
 ----

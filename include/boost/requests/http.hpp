@@ -56,22 +56,9 @@ struct headers : fields
   headers(fields && fl) : fields(std::move(fl)) {}
   using fields::fields;
   using fields::operator=;
-
 };
 
-using file_body   = beast::http::file_body;
-using empty_body   = beast::http::empty_body;
-using string_body = beast::http::string_body;
-using buffer_body = beast::http::buffer_body;
-
-using request_header  = beast::http::request_header <boost::beast::http::fields>;
 using response_header = beast::http::response_header<boost::beast::http::fields>;
-
-template<typename Body> using request  = beast::http::request <Body, boost::beast::http::fields>;
-template<typename Body> using response = beast::http::response<Body, boost::beast::http::fields>;
-
-template<typename Body> using request_parser  = beast::http::request_parser <Body>;
-template<typename Body> using response_parser = beast::http::response_parser<Body>;
 
 }
 

@@ -44,7 +44,7 @@ struct response_base
   int          result_code() const {return headers.result_int(); }
   http::status result()      const {return headers.result(); }
 
-  using history_type = std::vector<typename http::response<body_type>>;
+  using history_type = std::vector<typename beast::http::response<body_type>>;
   history_type history{};
 
   response_base(history_type history) : history(std::move(history)) {}

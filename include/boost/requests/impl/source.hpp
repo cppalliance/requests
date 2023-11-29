@@ -135,7 +135,7 @@ std::size_t write_request(
   {
     if (*sz == 0)
     {
-      http::request<http::empty_body> req(method, target, 11, http::empty_body::value_type(), std::move(header));
+      beast::http::request<beast::http::empty_body> req(method, target, 11, beast::http::empty_body::value_type(), std::move(header));
       req.prepare_payload();
 
       auto n =  beast::http::write(stream, req, ec);
@@ -144,7 +144,7 @@ std::size_t write_request(
     }
     else
     {
-      http::request<detail::fixed_source_body> req(method, target, 11, src, std::move(header));
+      beast::http::request<detail::fixed_source_body> req(method, target, 11, src, std::move(header));
       req.prepare_payload();
 
       auto n =  beast::http::write(stream, req, ec);
@@ -156,7 +156,7 @@ std::size_t write_request(
   {
     char prebuffer[BOOST_REQUESTS_CHUNK_SIZE];
     auto init = src.read_some(prebuffer, sizeof(prebuffer), ec);
-    http::request<detail::source_body> req(method, target, 11,
+    beast::http::request<detail::source_body> req(method, target, 11,
                                            detail::source_body::value_type{src,
                                                                            asio::const_buffer(prebuffer, init.first),
                                                                            init.second}, std::move(header));
@@ -200,9 +200,9 @@ struct async_write_request_op : asio::coroutine
 
     optional<std::size_t> sz = src.size();
     variant2::variant<variant2::monostate,
-                      http::request<http::empty_body>,
-                      http::request<detail::fixed_source_body>,
-                      http::request<detail::source_body>> freq;
+                      beast::http::request<beast::http::empty_body>,
+                      beast::http::request<detail::fixed_source_body>,
+                      beast::http::request<detail::source_body>> freq;
 
     char prebuffer[BOOST_REQUESTS_CHUNK_SIZE];
     std::pair<std::size_t, bool> init;
@@ -244,7 +244,7 @@ struct async_write_request_op : asio::coroutine
       {
         if (*st->sz == 0)
         {
-          st->freq.template emplace<1>(method, target, 11, http::empty_body::value_type(), std::move(header)).prepare_payload();
+          st->freq.template emplace<1>(method, target, 11, beast::http::empty_body::value_type(), std::move(header)).prepare_payload();
           BOOST_REQUESTS_YIELD beast::http::async_write(stream, variant2::get<1>(st->freq), std::move(self));
           header = std::move(variant2::get<1>(st->freq).base());
         }

@@ -22,7 +22,7 @@ int main(int argc, char * argv[])
 
 This C++14 library provides facilities to easily perform http requests, often with single function calls. 
 
-It is still in development.
+This library is in alpha.
 
 Read the docs [here](doc/requests.adoc).
 

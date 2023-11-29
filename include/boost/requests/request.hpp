@@ -288,7 +288,7 @@ struct bind_empty_request
                   urls::url_view target,
                   detail::request_type<Connection> req = {}) const -> response
   {
-    return request(conn, Method, target, http::empty_body::value_type{}, std::move(req));
+    return request(conn, Method, target, beast::http::empty_body::value_type{}, std::move(req));
   };
 
   template<typename Connection>
@@ -297,7 +297,7 @@ struct bind_empty_request
                   detail::request_type<Connection> req,
                   system::error_code & ec) const -> response
   {
-    return request(conn, Method, target, http::empty_body::value_type{}, std::move(req), ec);
+    return request(conn, Method, target, beast::http::empty_body::value_type{}, std::move(req), ec);
   }
 
   inline auto operator()(urls::url_view target, http::fields req = {}) const -> response

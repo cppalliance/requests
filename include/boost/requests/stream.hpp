@@ -161,7 +161,7 @@ struct stream
   executor_type executor_;
   std::shared_ptr<detail::connection_impl> impl_;
 
-  std::unique_ptr<http::response_parser<http::buffer_body>> parser_;
+  std::unique_ptr<beast::http::response_parser<beast::http::buffer_body>> parser_;
 
   template<typename DynamicBuffer>
   struct async_read_op;

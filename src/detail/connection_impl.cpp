@@ -80,7 +80,7 @@ auto connection_impl::ropen(beast::http::verb method,
     return stream{get_executor(), nullptr};
 
   stream str{get_executor(), shared_from_this()};
-  str.parser_ = std::make_unique<http::response_parser<http::buffer_body>>(http::response_header{http::fields(headers.get_allocator())});
+  str.parser_ = std::make_unique<beast::http::response_parser<beast::http::buffer_body>>(http::response_header{http::fields(headers.get_allocator())});
   str.parser_->body_limit(boost::none);
   str.parser_->on_chunk_body(handle_chunked_);
 
@@ -203,7 +203,7 @@ void connection_impl::async_ropen_op::operator()(
       break;
 
     str.emplace(this_->get_executor(), this_); // , req.get_allocator().resource()
-    str->parser_ = std::make_unique<http::response_parser<http::buffer_body>>(http::response_header{http::fields(headers.get_allocator())});
+    str->parser_ = std::make_unique<beast::http::response_parser<beast::http::buffer_body>>(http::response_header{http::fields(headers.get_allocator())});
     str->parser_->body_limit(boost::none);
     str->parser_->on_chunk_body(this_->handle_chunked_);
 

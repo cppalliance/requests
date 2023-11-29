@@ -46,7 +46,7 @@ BOOST_AUTO_TEST_CASE(sync)
       }};
 
 
-  requests::http::request<beast::http::string_body> req;
+  beast::http::request<beast::http::string_body> req;
   beast::flat_buffer buf;
   system::error_code ec;
   beast::http::read(rp, buf, req, ec);
@@ -57,7 +57,7 @@ BOOST_AUTO_TEST_CASE(sync)
   BOOST_CHECK(json::parse(req.body()) == json::value{"foobaria"});
 
 
-  requests::http::request<beast::http::empty_body> re2;
+  beast::http::request<beast::http::empty_body> re2;
   beast::http::read(rp, buf, re2, ec);
   BOOST_CHECK(ec == system::error_code{});
   BOOST_CHECK(re2.method() == requests::http::verb::get);

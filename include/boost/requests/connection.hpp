@@ -293,17 +293,6 @@ struct connection::defaulted : connection
   {
     return this->async_ropen(method, path, std::forward<RequestBody>(body), std::move(req), default_token());
   }
-
-  template<typename RequestBody>
-  auto async_ropen(http::request<RequestBody> & req,
-                   request_options opt,
-                   cookie_jar * jar = nullptr)
-  {
-    return this->async_ropen(req, std::move(opt), jar, default_token());
-  }
-
-
-
 };
 
 }

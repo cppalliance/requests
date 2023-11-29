@@ -1,0 +1,111 @@
+## request.hpp
+[#reference::request]
+
+
+
+[source,cpp]
+----
+namespace boost::request
+{
+
+// Open a stream after following redirects
+template<typename Connection, typename RequestBody>
+auto request_stream(
+    Connection & conn,
+    http::verb method,
+    /* target type of Connection */ path, // pct_string_view when connection
+    RequestBody && body,
+    /* request type of Connection */ req, // headers for conn,
+    system::error_code & ec) -> std::pair<stream, history>;
+
+template<typename Connection, typename RequestBody>
+auto request_stream(
+    Connection & conn,
+    http::verb method,
+    /* target type of Connection */ path, // pct_string_view when connection
+    RequestBody && body,
+    /* request type of Connection */ req /* headers for conn*/ ) -> std::pair<stream, history>;
+
+template<typename RequestBody,
+          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code, stream, history)) CompletionToken>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken,
+                                   void (boost::system::error_code, stream, history))
+                                   void (boost::system::error_code, stream, history))
+async_request_stream(
+    http::verb method,
+    core::string_view path,
+    RequestBody && body,
+    http::fields req,
+    CompletionToken && completion_token);
+
+template<typename Connection,
+          typename RequestBody,
+          BOOST_ASIO_COMPLETION_TOKEN_FOR( void (system::error_code, stream, history)) CompletionToken
+          = typename Connection::default_token>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (system::error_code, stream, history))
+async_request_stream(
+    Connection & conn,
+    http::verb method,
+    /* target type of Connection */ path,
+    RequestBody && body,
+    /* request type of Connection */ req,
+    CompletionToken && completion_token = typename Connection::default_token());
+
+
+// Execute a request by using `request_stream` and read the body as raw memory.
+template<typename Connection, typename RequestBody>
+auto request(Connection & conn,
+             http::verb method,
+             urls::url_view path,
+             RequestBody && body,
+             /* request type of Connection */ req,
+             system::error_code & ec) -> response;
+
+template<typename Connection, typename RequestBody>
+auto request(Connection & conn,
+             http::verb method,
+             urls::url_view path,
+             RequestBody && body,
+             /* request type of Connection */ req) -> response;
+
+
+template<typename RequestBody>
+auto request(http::verb method,
+             urls::url_view path,
+             RequestBody && body,
+             http::fields req,
+             system::error_code & ec) -> response;
+
+template<typename RequestBody>
+auto request(http::verb method,
+             urls::url_view path,
+             RequestBody && body,
+             http::fields req) -> response;
+
+template<typename Connection,
+          typename RequestBody,
+          BOOST_ASIO_COMPLETION_TOKEN_FOR(void (error_code, response)) CompletionToken
+            = typename Connection::default_token>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (error_code, response))
+async_request(Connection & conn,
+              http::verb method,
+              /* target type of Connection */ target,
+              RequestBody && body,
+              /* request type of Connection */ req,
+              CompletionToken && completion_token = typename Connection::default_token());
+
+template<typename RequestBody,
+         BOOST_ASIO_COMPLETION_TOKEN_FOR(void (error_code, response)) CompletionToken>
+BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(CompletionToken, void (error_code, response))
+async_request(http::verb method,
+              urls::url_view target,
+              RequestBody && body,
+              http::headers req,
+              CompletionToken && completion_token);
+
+
+}
+----
+
+The target type is `urls::url_view` for sessions, otherwise `urls::pct_string_view`.
+The request type is `requests::http::headers` for sessions, otherwise `request_parameters`.

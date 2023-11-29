@@ -10,16 +10,16 @@ namespace boost::requests
 template<typename Connection, typename RequestBody>
 auto ~method~(
         Connection & conn,
-        urls::url_view target,
+        /* target type of Connection */ target,
         RequestBody && request_body, // omitted if not required
-        typename Connection::request_type req = {}) -> response;
+       /* request type of Connection */  req = {}) -> response;
 
 template<typename Connection, typename RequestBody>
 auto ~method~(
         Connection & conn,
-        urls::url_view target,
+        /* target type of Connection */ target,
         RequestBody && request_body, // omitted if not required
-        typename Connection::request_type req,
+        /* request type of Connection */  req,
         system::error_code & ec) -> response;
 
 template<typename Connection,
@@ -29,9 +29,9 @@ template<typename Connection,
 auto
 async_~method~(
         Connection & conn,
-        urls::url_view target,
+        /* target type of Connection */ target,
         RequestBody && request_body,
-        typename Connection::request_type req  = {},
+       /* request type of Connection */  req  = {},
         CompletionToken && completion_token asio::default_token_t<executor_type>());
 
 template<typename RequestBody>
@@ -79,3 +79,10 @@ Methods with an optional request body are overloaded.
 | *CONNECT* | `connect` | `async_connect` | never    | always   | Can only be used on a `<<connection>>`
 
 |===
+
+NOTE: The above functions are function objects, not functions.
+
+
+The target type is `urls::url_view` for sessions, otherwise `urls::pct_string_view`.
+The request type is `requests::http::headers` for sessions, otherwise `request_parameters`.
+
